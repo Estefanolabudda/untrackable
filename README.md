@@ -86,10 +86,13 @@ The full list lives in [`rules/rules.json`](rules/rules.json).
 
 - **Not anonymity.** Cookies, IP addresses, fingerprinting and tracking
   scripts are unaffected.
-- Navigation cleaning uses Chromium's `declarativeNetRequest`, which matches
-  parameter names exactly: mixed-case spellings (`Utm_Source`), unlisted
-  `utm_*` variants and percent-encoded names are only cleaned when copying,
-  not while navigating. Only top-level navigations are cleaned.
+- Navigation cleaning uses Chromium's `declarativeNetRequest`. Mixed-case
+  spellings (`Utm_Source`) and unlisted `utm_*` names are handled; mixed-case
+  _domain-specific_ parameters and percent-encoded names are only cleaned when
+  copying. Only top-level navigations are cleaned.
+- If a site redirects back to a tracking link, Chromium reports "too many
+  redirects". Enable _automatic recovery_ in the settings (optional
+  permission) or use a site exception.
 - Protection of sign-in/payment/signed links is heuristic. If a site
   misbehaves, add an exception or use _Open link without cleaning_.
 - Copy cleaning only applies when the copied selection is exactly one link,

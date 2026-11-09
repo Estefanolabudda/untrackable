@@ -10,6 +10,8 @@ function $(id: string): HTMLElement {
 const enabledBox = $('enabled') as HTMLInputElement;
 const modeRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mode"]')];
 const copyBox = $('copy-cleaning') as HTMLInputElement;
+const loopBox = $('loop-recovery') as HTMLInputElement;
+const LOOP_PERMISSION: chrome.permissions.Permissions = { permissions: ['webNavigation'] };
 const pauseStatus = $('pause-status');
 const form = $('add-exception') as HTMLFormElement;
 const input = $('exception-input') as HTMLInputElement;
@@ -88,6 +90,16 @@ for (const r of modeRadios) {
   });
 }
 copyBox.addEventListener('change', () => void saveSettings({ copyCleaning: copyBox.checked }));
+
+// The permission itself is the setting: granted = recovery on.
+void chrome.permissions.contains(LOOP_PERMISSION).then((granted) => (loopBox.checked = granted));
+loopBox.addEventListener('change', () => {
+  const op = loopBox.checked ? chrome.permissions.request(LOOP_PERMISSION) : chrome.permissions.remove(LOOP_PERMISSION);
+  void op
+    .then(() => chrome.permissions.contains(LOOP_PERMISSION))
+    .then((granted) => (loopBox.checked = granted))
+    .catch(() => (loopBox.checked = false));
+});
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();

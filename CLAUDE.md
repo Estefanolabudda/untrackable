@@ -23,6 +23,7 @@ npm test                 # vitest: fixtures, unit, property, DNR tests
 npm run typecheck && npm run lint && npm run format:check
 npm run test:e2e         # builds, then Playwright + real Chromium (needs Chromium)
 cargo test --all && cargo clippy --all-targets -- -D warnings && cargo fmt --all -- --check
+npm run test:conformance # TS vs Rust differential test (corpus generated from rules.json)
 npm run package -w apps/browser-extension   # reproducible zip in artifacts/
 ```
 
@@ -36,7 +37,7 @@ to 1.63.0 to match it.
 - Never log URLs; never add network requests or telemetry; settings are the only stored data.
 - Extension pages render user data with `textContent` only. No eval / dynamic code.
 - Privileged runtime messages are authorised by `sender.url` (extension origin), not `sender.tab`.
-- DNR `removeParams` is exact + case-sensitive; prefix rules need explicit `params` for navigation.
+- DNR `removeParams` is exact + case-sensitive; case-insensitive regexSubstitution fallback rules (chunks of 4 names – larger case-insensitive regexes exceed Chromium's 2 KB limit) handle mixed case. Every compiled rule must install (e2e asserts it).
 - Pin dependency versions exactly; GitHub Actions pinned by SHA.
 
 ## Status (v0.1.0 release candidate)

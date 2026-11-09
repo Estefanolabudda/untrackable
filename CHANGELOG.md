@@ -6,6 +6,20 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Navigation cleaning of mixed-case spellings (`Utm_Source`) and unlisted
+  `utm_*` names via case-insensitive declarativeNetRequest fallback rules.
+- Optional automatic recovery from tracker redirect loops (optional
+  `webNavigation` permission, off by default).
+- Differential conformance test generating >50,000 URLs from `rules.json`
+  and requiring identical TypeScript and Rust results (CI job).
+
+### Fixed
+
+- A rule Chromium cannot compile no longer blocks the whole rule update;
+  unsupported protection rules disable redirects (fail safe).
+
 ## [0.1.0] – release candidate
 
 ### Added

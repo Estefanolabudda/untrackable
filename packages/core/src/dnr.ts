@@ -4,8 +4,12 @@
  *
  * DNR cannot run the engine's algorithm, so this is a deliberately
  * conservative approximation (see docs/architecture/overview.md):
- *  - removal uses queryTransform.removeParams (exact key names; prefix rules
- *    are only covered through their explicit `params` lists),
+ *  - removal uses queryTransform.removeParams (exact key names) for the
+ *    common case, plus lower-priority case-insensitive regexSubstitution
+ *    fallback rules that remove one remaining tracker per internal redirect
+ *    (mixed-case spellings, global prefix rules such as utm_*). Chromium
+ *    skips redirect rules whose result equals the request URL and falls
+ *    through to the next matching rule, so the exact rules always run first,
  *  - protection signals become higher-priority `allow` rules,
  *  - fragments are never part of HTTP requests and are not touched.
  *
@@ -22,7 +26,7 @@ export interface DnrRule {
     | { type: 'allow' }
     | {
         type: 'redirect';
-        redirect: { transform: { queryTransform: { removeParams: string[] } } };
+        redirect: { transform: { queryTransform: { removeParams: string[] } } } | { regexSubstitution: string };
       };
   condition: {
     resourceTypes: ['main_frame'];
@@ -39,21 +43,26 @@ export interface DnrSettings {
 }
 
 export const PRIORITY = {
-  globalRedirect: 1,
-  domainRedirect: 2,
-  protection: 3,
-  userException: 4,
+  caseInsensitiveFallback: 1,
+  globalRedirect: 2,
+  domainRedirect: 3,
+  protection: 4,
+  userException: 5,
   /** Reserved for per-tab session rules created by the extension. */
-  tabPause: 5,
+  tabPause: 6,
 } as const;
 
 /** Rule id ranges, so callers can recognise rule kinds. */
 export const ID_BASE = {
   globalRedirect: 1,
   domainRedirect: 100,
+  caseInsensitiveFallback: 500,
   protection: 1000,
   userException: 2000,
 } as const;
+
+/** Names per fallback regex. Case-insensitive RE2 programs grow fast; 4 stays well below Chromium's 2 KB limit (8 already fails for some names). */
+const FALLBACK_CHUNK = 4;
 
 const REGEX_CHUNK = 6;
 
@@ -138,6 +147,37 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
       condition: { resourceTypes: ['main_frame'], requestDomains: [domain] },
     });
   });
+
+  // 2b. Case-insensitive fallback for global rules: removes one remaining
+  //     tracker per redirect (mixed case such as Utm_Source, unlisted utm_*).
+  //     Every hop strictly shortens the URL, so the chain terminates; the
+  //     exact rules above have already removed all common spellings.
+  const keyPatterns = uniq([
+    ...active
+      .filter((r) => r.domains === undefined)
+      .flatMap((r) => (r.prefixes ?? []).map((x) => `${escapeRe2(x)}[^=&#]*`)),
+    ...globalParams.map(escapeRe2),
+  ]);
+  let fid: number = ID_BASE.caseInsensitiveFallback;
+  for (const group of chunk(keyPatterns, FALLBACK_CHUNK)) {
+    const names = `(?:${group.join('|')})`;
+    const variants: [string, string][] = [
+      // tracker followed by more parameters: drop it and its '&'
+      [`^([^?#]*\\?(?:[^&#]*&)*?)${names}(?:=[^&#]*)?&(.*)$`, '\\1\\2'],
+      // last parameter after others: drop it and the preceding '&'
+      [`^([^?#]*\\?[^#]*?)&${names}(?:=[^&#]*)?$`, '\\1'],
+      // the only parameter: drop it and the '?'
+      [`^([^?#]*)\\?${names}(?:=[^&#]*)?$`, '\\1'],
+    ];
+    for (const [regexFilter, regexSubstitution] of variants) {
+      rules.push({
+        id: fid++,
+        priority: PRIORITY.caseInsensitiveFallback,
+        action: { type: 'redirect', redirect: { regexSubstitution } },
+        condition: { resourceTypes: ['main_frame'], regexFilter, isUrlFilterCaseSensitive: false },
+      });
+    }
+  }
 
   // 3. Protection allow rules.
   const p = ruleSet.protection;

@@ -12,7 +12,10 @@ on http(s) pages. It uses that access only for:
   (the extension's own code never sees these navigations),
 - a content script that reacts to `copy` events, reading the current
   selection only at the moment you copy,
-- reading the active tab's URL when **you** choose "Copy clean link".
+- reading the active tab's URL when **you** choose "Copy clean link",
+- only if you enable automatic redirect-loop recovery: receiving navigation
+  error events (optional `webNavigation` permission). Untrackable reacts only
+  to "too many redirects" errors of the top-level page and stores nothing.
 
 ## What is processed
 

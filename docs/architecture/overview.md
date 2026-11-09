@@ -61,9 +61,13 @@ for the extension and chose TypeScript there:
 | Build/CI      | wasm-pack/wasm-bindgen toolchain.                                                                                                                       | esbuild only.                             |
 
 The Rust crate still exists because the desktop app (Phase 2) needs a native
-engine. Divergence risk is controlled by the shared rule file **and** the
-shared fixture file that both test suites execute in CI; the spec is the
-tie-breaker. A WASM build of the Rust crate remains possible later.
+engine. Divergence risk is controlled by the shared rule file, the shared
+fixture file that both test suites execute, and a differential test
+(`npm run test:conformance`) that generates tens of thousands of URLs from
+`rules.json` – every rule, domain and protection signal plus random spelling,
+encoding and structure – and requires byte-identical results from both
+engines in CI. New rules are covered without writing new tests; the spec is
+the tie-breaker. A WASM build of the Rust crate remains possible later.
 
 ## Browser extension
 
@@ -98,9 +102,17 @@ there are no redirect loops (verified by e2e test).
 **Known differences from the engine** (documented, tested in
 `packages/core/test/dnr.test.ts`):
 
-- `removeParams` matches keys exactly and case-sensitively. Lower-case and
-  ALL-UPPER-CASE spellings are covered; mixed case (`Utm_Source`) and prefix
-  rules (`utm_*`) are only covered for the explicitly listed names.
+- `removeParams` matches keys exactly and case-sensitively, so it handles the
+  listed lower-case and ALL-UPPER-CASE spellings in one redirect. Mixed case
+  (`Utm_Source`) and unlisted names of **global** prefix rules (`utm_*`) are
+  removed by lower-priority, case-insensitive `regexSubstitution` fallback
+  rules – one parameter per internal redirect. This relies on Chromium
+  skipping a redirect rule whose result equals the request URL and falling
+  through to the next matching rule (verified in the e2e suite). Each hop
+  shortens the URL, so the chain terminates; a URL with more than about 18
+  _mixed-case_ trackers would hit Chromium's redirect limit. Mixed-case
+  spellings of **domain-specific** parameters (e.g. `SI` on YouTube) are only
+  removed when copying.
 - DNR cannot percent-decode. URLs whose path or parameter keys contain a
   percent-encoded letter, `-`, `.` or `_` are therefore left completely alone
   during navigation (e.g. `utm%5Fsource` is not removed, `/%6Cogin` is not
@@ -122,8 +134,20 @@ keeps.
 
 **Redirect loops:** if a server insists on a tracking parameter and redirects
 back to a URL containing it, Chromium aborts with `ERR_TOO_MANY_REDIRECTS`.
-DNR cannot detect this; the user resolves it with a site exception, the tab
-pause or "Open link without cleaning".
+DNR cannot observe this. Users can enable _automatic recovery_ in the
+settings, which requests the optional `webNavigation` permission; the failed
+top-level load is then retried once, unmodified, in the same tab (one-time
+bypass). Without the permission the user resolves it with a site exception,
+the tab pause or "Open link without cleaning". Recovery is off by default
+because the permission adds an install-time-like prompt ("Read your browsing
+history").
+
+**Rule installation safety:** `updateDynamicRules` is atomic, so one rule
+Chromium cannot compile would block the whole update. The service worker
+checks every regex with `isRegexSupported`, drops unsupported fallback rules,
+installs **no** redirects if any protection rule is unsupported (fail safe),
+and retries without the optional fallback rules if an update still fails. An
+e2e test asserts that every compiled rule is actually installed.
 
 ### Copy cleaning limits
 

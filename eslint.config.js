@@ -12,7 +12,7 @@ export default tseslint.config(
       'no-eval': 'error',
       'no-implied-eval': 'error',
       'no-new-func': 'error',
-      'no-console': ['error', { allow: ['log'] }],
+      'no-console': ['error', { allow: ['log', 'error'] }],
     },
   },
   {

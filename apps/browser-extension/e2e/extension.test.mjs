@@ -6,7 +6,7 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,6 +78,12 @@ async function extensionPage(file) {
 before(async () => {
   server = http.createServer((req, res) => {
     if (req.url !== '/favicon.ico') seen.push(req.url);
+    // A server that insists on its tracking parameter (redirect loop when cleaned).
+    if (req.url.startsWith('/loop') && !/utm_source=/i.test(req.url)) {
+      res.writeHead(302, { location: '/loop?utm_source=forced' });
+      res.end();
+      return;
+    }
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(PAGE);
   });
@@ -85,11 +91,17 @@ before(async () => {
   port = server.address().port;
 
   userDataDir = mkdtempSync(join(tmpdir(), 'untrackable-e2e-'));
+  ({ context, sw } = await launchWith(dist, userDataDir));
+  extensionId = new URL(sw.url()).host;
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+});
+
+async function launchWith(extensionDir, profileDir) {
   const launch = {
     headless: true,
     args: [
-      `--disable-extensions-except=${dist}`,
-      `--load-extension=${dist}`,
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
       // Route every test host name to the local server.
       '--host-resolver-rules=MAP * 127.0.0.1',
       // Keep http:// test URLs from being upgraded to https.
@@ -98,12 +110,11 @@ before(async () => {
   };
   if (process.env.CHROMIUM_PATH) launch.executablePath = process.env.CHROMIUM_PATH;
   else launch.channel = 'chromium';
-  context = await chromium.launchPersistentContext(userDataDir, launch);
-  [sw] = context.serviceWorkers();
-  sw ??= await context.waitForEvent('serviceworker');
-  extensionId = new URL(sw.url()).host;
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-});
+  const ctx = await chromium.launchPersistentContext(profileDir, launch);
+  let [worker] = ctx.serviceWorkers();
+  worker ??= await ctx.waitForEvent('serviceworker');
+  return { context: ctx, sw: worker };
+}
 
 after(async () => {
   await context?.close();
@@ -129,17 +140,35 @@ describe('installation', () => {
       'storage',
     ]);
     assert.deepEqual(manifest.host_permissions, ['http://*/*', 'https://*/*']);
+    assert.deepEqual(manifest.optional_permissions, ['webNavigation']);
   });
 
-  test('installs dynamic rules with default settings', async () => {
-    const rules = await sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules());
-    assert.ok(rules.length > 10);
-    for (const r of rules.filter((x) => x.condition.regexFilter)) {
-      const ok = await sw.evaluate(
-        (regex) => chrome.declarativeNetRequest.isRegexSupported({ regex }),
-        r.condition.regexFilter,
+  test('installs every compiled rule in both modes (none silently dropped)', async () => {
+    const bundle = await build({
+      entryPoints: [fileURLToPath(new URL('../../../packages/core/src/index.ts', import.meta.url))],
+      bundle: true,
+      format: 'esm',
+      platform: 'node',
+      write: false,
+      logLevel: 'silent',
+    });
+    const core = await import(
+      `data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`
+    );
+    for (const mode of ['clean', 'strict']) {
+      await setSettings({ mode, exceptions: ['a.example'] });
+      const expected = core
+        .compileDnrRules({ mode, exceptions: ['a.example'] })
+        .map((r) => r.id)
+        .sort((a, b) => a - b);
+      const installed = (await sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules()))
+        .map((r) => r.id)
+        .sort((a, b) => a - b);
+      assert.deepEqual(installed, expected, mode);
+      assert.ok(
+        installed.some((id) => id >= 500 && id < 1000),
+        'case-insensitive fallback rules installed',
       );
-      assert.equal(ok.isSupported, true, r.condition.regexFilter);
     }
   });
 });
@@ -160,6 +189,12 @@ describe('automatic navigation cleaning (Clean mode)', () => {
 
   test('removes upper-case spellings', async () => {
     assert.equal(await visit('/a?UTM_SOURCE=x&id=1'), '/a?id=1');
+  });
+
+  test('removes mixed-case spellings and unlisted utm_* names', async () => {
+    assert.equal(await visit('/a?Utm_Source=x&id=1&FbClid=y&uTm_NewThing=z'), '/a?id=1');
+    assert.deepEqual(seen, ['/a?id=1'], 'tracker never reached the server');
+    assert.equal(await visit('/a?myUtm_source=1&GclidX=2'), '/a?myUtm_source=1&GclidX=2');
   });
 
   test('leaves URLs without tracking parameters alone (no redirect loop)', async () => {
@@ -471,6 +506,47 @@ describe('user interface', () => {
     const stored = await sw.evaluate(() => chrome.storage.local.get('exceptions'));
     assert.deepEqual(stored.exceptions, ['shop.example']);
     await options.close();
+  });
+});
+
+describe('redirect loops', () => {
+  test('without the optional permission a forced tracker loop fails as documented', async () => {
+    const page = await context.newPage();
+    await assert.rejects(page.goto(`http://news.test:${port}/loop`), /ERR_TOO_MANY_REDIRECTS/);
+    await page.close();
+  });
+
+  test('with the optional webNavigation permission the page is retried unmodified', async () => {
+    // Optional permissions cannot be granted through the permission prompt in
+    // automation, so this test loads a copy whose manifest pre-grants it.
+    const dir = mkdtempSync(join(tmpdir(), 'untrackable-e2e-loop-ext-'));
+    cpSync(dist, dir, { recursive: true });
+    const manifestPath = join(dir, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.permissions.push('webNavigation');
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    const profile = mkdtempSync(join(tmpdir(), 'untrackable-e2e-loop-'));
+    const second = await launchWith(dir, profile);
+    try {
+      await waitFor(
+        async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).length > 0,
+        'rules',
+      );
+      const page = await second.context.newPage();
+      await page.goto(`http://news.test:${port}/loop`).catch(() => {});
+      await page.waitForURL(/\/loop\?utm_source=forced$/, { timeout: 10_000 });
+      // The one-time bypass is consumed afterwards: normal pages are cleaned again.
+      await waitFor(
+        async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,
+        'bypass removed',
+      );
+      await page.goto(`http://news.test:${port}/after-loop?utm_source=x`);
+      assert.match(page.url(), /\/after-loop$/);
+    } finally {
+      await second.context.close();
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(profile, { recursive: true, force: true });
+    }
   });
 });
 

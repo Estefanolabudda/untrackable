@@ -7,11 +7,56 @@
 //!
 //! With URL arguments each one is cleaned; otherwise every stdin line is.
 //! Prints one cleaned URL per line (or one JSON result per line with `--json`).
+//!
+//! `--jsonl` reads one JSON request per stdin line,
+//! `{"input": "...", "mode": "clean|strict|bypass", "exceptions": [...]}`,
+//! and prints one JSON result per line. Used by `scripts/differential.mjs`
+//! to compare this engine with the TypeScript engine.
 
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 
+use serde::Deserialize;
 use untrackable_core::{default_engine, CleanOptions, Mode};
+
+#[derive(Deserialize)]
+struct Request {
+    input: String,
+    #[serde(default)]
+    mode: Mode,
+    #[serde(default)]
+    exceptions: Vec<String>,
+}
+
+fn run_jsonl() -> ExitCode {
+    let engine = default_engine();
+    let stdout = io::stdout();
+    let mut out = stdout.lock();
+    for line in io::stdin().lock().lines() {
+        let Ok(line) = line else {
+            return ExitCode::FAILURE;
+        };
+        let request: Request = match serde_json::from_str(&line) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("error: bad request line: {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+        let opts = CleanOptions {
+            mode: request.mode,
+            exceptions: request.exceptions,
+        };
+        let result = engine.clean(&request.input, &opts);
+        let Ok(text) = serde_json::to_string(&result) else {
+            return ExitCode::FAILURE;
+        };
+        if writeln!(out, "{text}").is_err() {
+            return ExitCode::FAILURE;
+        }
+    }
+    ExitCode::SUCCESS
+}
 
 fn main() -> ExitCode {
     let mut opts = CleanOptions::default();
@@ -21,6 +66,7 @@ fn main() -> ExitCode {
         match arg.as_str() {
             "--strict" => opts.mode = Mode::Strict,
             "--json" => json = true,
+            "--jsonl" => return run_jsonl(),
             "-h" | "--help" => {
                 println!(
                     "usage: clean [--strict] [--json] [URL ...]  (reads stdin lines if no URL)"

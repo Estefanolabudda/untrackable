@@ -33,18 +33,57 @@ function applyRules(): Promise<void> {
   return applyQueue;
 }
 
+/**
+ * Drop rules Chromium cannot compile. A protection (`allow`) rule that cannot
+ * be installed makes cleaning unsafe, so in that case no redirect is installed
+ * at all (fail safe: leave URLs alone rather than risk breaking them).
+ */
+async function supportedRules(
+  rules: chrome.declarativeNetRequest.Rule[],
+): Promise<chrome.declarativeNetRequest.Rule[]> {
+  const kept: chrome.declarativeNetRequest.Rule[] = [];
+  let protectionBroken = false;
+  for (const rule of rules) {
+    const regex = rule.condition.regexFilter;
+    if (regex !== undefined) {
+      const { isSupported } = await chrome.declarativeNetRequest.isRegexSupported({
+        regex,
+        isCaseSensitive: rule.condition.isUrlFilterCaseSensitive !== false,
+        requireCapturing: rule.action.redirect?.regexSubstitution !== undefined,
+      });
+      if (!isSupported) {
+        if (rule.action.type === chrome.declarativeNetRequest.RuleActionType.ALLOW) protectionBroken = true;
+        continue;
+      }
+    }
+    kept.push(rule);
+  }
+  return protectionBroken
+    ? kept.filter((r) => r.action.type !== chrome.declarativeNetRequest.RuleActionType.REDIRECT)
+    : kept;
+}
+
 async function applyRulesNow(): Promise<void> {
   const settings = await loadSettings();
   const mode = effectiveMode(settings);
-  const addRules =
+  const compiled =
     mode === 'bypass'
       ? []
-      : (compileDnrRules({ mode, exceptions: settings.exceptions }) as chrome.declarativeNetRequest.Rule[]);
+      : await supportedRules(
+          compileDnrRules({ mode, exceptions: settings.exceptions }) as chrome.declarativeNetRequest.Rule[],
+        );
   const existing = await chrome.declarativeNetRequest.getDynamicRules();
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: existing.map((r) => r.id),
-    addRules,
-  });
+  const removeRuleIds = existing.map((r) => r.id);
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: compiled });
+  } catch {
+    // An update is atomic: one bad rule would leave the previous rule set in
+    // place. Retry without the optional regex fallback rules.
+    const essential = compiled.filter((r) => r.action.redirect?.regexSubstitution === undefined);
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: essential }).catch(() => {
+      /* keep previous rules; nothing else is safe to do */
+    });
+  }
   await scheduleResume(settings);
   await updateBadge(settings);
 }
@@ -177,6 +216,54 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || tab.url === undefined || tab.url === 'about:blank') return;
   void endOnce(tabId);
 });
+
+// ---------------------------------------------------------------------------
+// Redirect-loop recovery (optional permission "webNavigation", off by default)
+// ---------------------------------------------------------------------------
+//
+// If a server insists on a tracking parameter and redirects back to it, the
+// cleaned navigation loops until Chromium aborts with ERR_TOO_MANY_REDIRECTS.
+// DNR cannot observe this. When the user grants the optional webNavigation
+// permission, the failed top-level load is retried once, unmodified, in the
+// same tab. Only the error event is used; nothing is stored or logged.
+
+const REDIRECT_LOOP_ERROR = 'net::ERR_TOO_MANY_REDIRECTS';
+
+async function waitForTabComplete(tabId: number, timeoutMs = 3000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const tab = await chrome.tabs.get(tabId).catch(() => undefined);
+    if (tab === undefined || tab.status === 'complete') return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+async function recoverFromRedirectLoop(tabId: number, url: string): Promise<void> {
+  if (!/^https?:/i.test(url) || effectiveMode(await loadSettings()) === 'bypass') return;
+  // Already retried without cleaning (or paused): the loop is not ours – give up.
+  if (await isTabPaused(tabId)) return;
+  // Let the error page finish first, so its "complete" event cannot end the bypass early.
+  await waitForTabComplete(tabId);
+  await serialised(() => setTabRule(tabId, 'once', true));
+  await chrome.alarms.create(ONCE_ALARM_PREFIX + tabId, { delayInMinutes: ONCE_TIMEOUT_MINUTES });
+  await chrome.tabs.update(tabId, { url });
+}
+
+function onNavigationError(details: { tabId: number; frameId: number; url: string; error: string }): void {
+  if (details.frameId !== 0 || details.tabId < 0 || details.error !== REDIRECT_LOOP_ERROR) return;
+  void recoverFromRedirectLoop(details.tabId, details.url);
+}
+
+function registerLoopRecovery(): void {
+  // chrome.webNavigation only exists while the optional permission is granted.
+  const nav = (chrome as { webNavigation?: typeof chrome.webNavigation }).webNavigation;
+  if (nav !== undefined && !nav.onErrorOccurred.hasListener(onNavigationError)) {
+    nav.onErrorOccurred.addListener(onNavigationError);
+  }
+}
+
+registerLoopRecovery();
+chrome.permissions.onAdded.addListener(registerLoopRecovery);
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void serialised(async () => {

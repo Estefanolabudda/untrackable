@@ -27,6 +27,7 @@
     "service_worker": "background.js"
   },
   "permissions": ["declarativeNetRequest", "storage", "contextMenus", "offscreen", "alarms", "clipboardWrite"],
+  "optional_permissions": ["webNavigation"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "content_scripts": [
     {
