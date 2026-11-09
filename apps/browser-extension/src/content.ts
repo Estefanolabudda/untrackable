@@ -50,30 +50,29 @@ const SINGLE_URL = /^https?:\/\/\S+$/i;
 
 /**
  * Copy events triggered by page scripts (document.execCommand('copy') inside
- * any click handler) are also "trusted". To stop pages from using the copy
- * result as an oracle for settings and exception domains, only act right
- * after a genuine copy gesture – Ctrl/Cmd+C, Ctrl+Insert or the context menu –
- * and at most once per gesture. Page scripts cannot synthesise trusted
- * keyboard or contextmenu events.
+ * any click or contextmenu handler) are also "trusted". To stop pages from
+ * using the copy result as an oracle for settings and exception domains, only
+ * act on a copy that directly follows a genuine keyboard copy gesture
+ * (Ctrl/Cmd+C or Ctrl+Insert; matched by physical key so non-Latin layouts
+ * work) and only if the selection is still the one the user had when pressing
+ * the keys – a page that swaps in its own probe URL gets nothing. At most one
+ * copy is cleaned per gesture. The browser's own "Copy" menu entry is not
+ * covered; Untrackable's "Copy clean link" menu item is the alternative.
  */
 const GESTURE_WINDOW_MS = 1000;
-let gestureAt = -Infinity;
+let gesture: { at: number; selection: string } | undefined;
 
 function onKeyDown(e: KeyboardEvent): void {
   if (!e.isTrusted) return;
-  const key = e.key.toLowerCase();
-  if (((e.ctrlKey || e.metaKey) && key === 'c') || (e.ctrlKey && key === 'insert')) gestureAt = performance.now();
-}
-function onContextMenu(e: MouseEvent): void {
-  if (e.isTrusted) gestureAt = performance.now();
+  const isCopy = ((e.ctrlKey || e.metaKey) && e.code === 'KeyC') || (e.ctrlKey && e.code === 'Insert');
+  if (isCopy) gesture = { at: performance.now(), selection: selectedText() };
 }
 window.addEventListener('keydown', onKeyDown, true);
-window.addEventListener('contextmenu', onContextMenu, true);
 
-function consumeGesture(): boolean {
-  const ok = performance.now() - gestureAt <= GESTURE_WINDOW_MS;
-  gestureAt = -Infinity;
-  return ok;
+function consumeGesture(currentSelection: string): boolean {
+  const g = gesture;
+  gesture = undefined;
+  return g !== undefined && performance.now() - g.at <= GESTURE_WINDOW_MS && g.selection === currentSelection;
 }
 
 function selectedText(): string {
@@ -92,11 +91,12 @@ document.addEventListener(
   (event: ClipboardEvent) => {
     // Ignore synthetic and script-initiated copies: otherwise a page could probe
     // settings and exceptions by triggering copies and inspecting the result.
-    if (!event.isTrusted || !consumeGesture()) return;
+    const selection = selectedText();
+    if (!event.isTrusted || !consumeGesture(selection)) return;
     if (!settingsLoaded || !settings.copyCleaning || tabPaused || event.clipboardData === null) return;
     const mode = effectiveMode(settings);
     if (mode === 'bypass') return;
-    const text = selectedText().trim();
+    const text = selection.trim();
     if (text.length > 8192 || !SINGLE_URL.test(text)) return;
     const result = cleanUrl(text, { mode, exceptions: settings.exceptions });
     if (result.status !== 'cleaned') return;

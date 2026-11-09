@@ -77,7 +77,11 @@ Exception entries are normalised before matching:
 So `bücher.example`, `*.Bücher.example.` and `https://bücher.example/x` all
 normalise to `xn--bcher-kva.example`.
 
-Rule-set validation rejects: empty strings, entries containing ASCII upper
+Rule files are parsed as JSON first; JSON-level edge cases (duplicate keys,
+`1.0` vs `1`, lone surrogates in strings) are handled by each platform's JSON
+parser and are not part of the parity guarantee – the shipped rule file and
+CI keep to plain JSON. Rule-set validation rejects: unknown fields, `null`
+lists, missing protection lists (when `protection` is present), empty strings, entries containing ASCII upper
 case `A-Z` (non-ASCII is allowed), empty `paramCombinations` entries, an empty
 `domains` array (omit the key instead), empty or duplicate rule ids.
 

@@ -88,13 +88,18 @@ The full list lives in [`rules/rules.json`](rules/rules.json).
   scripts are unaffected.
 - Navigation cleaning uses Chromium's `declarativeNetRequest`. Mixed-case
   spellings (`Utm_Source`) and unlisted `utm_*` names are handled;
-  percent-encoded names are only cleaned when copying. When Chromium removes
-  a parameter it may write a valueless parameter as `edit=` instead of
-  `edit`. URLs with very many unknown trackers (16+ parameters) are only
-  partly cleaned. Only top-level navigations are cleaned.
+  URLs with percent-encoded letters, digits or `-._/` in the path or in any
+  parameter name are left alone while navigating (copy cleaning handles
+  them). When Chromium removes a parameter it may write a valueless parameter
+  as `edit=` instead of `edit`. Mixed-case or unknown trackers in URLs with 7+
+  parameters are only cleaned when copying. Only top-level navigations are
+  cleaned.
 - If a site redirects back to a tracking link, Chromium reports "too many
-  redirects". Enable _automatic recovery_ in the settings (optional
-  permission) or use a site exception.
+  redirects". Enable the _retry offer_ in the settings (optional permission;
+  then click "Retry once without cleaning" in the popup) or use a site
+  exception.
+- Copy cleaning works with the keyboard shortcut (Ctrl/Cmd+C). Copying via
+  the browser's menus is not cleaned – use "Copy clean link" instead.
 - Protection of sign-in/payment/signed links is heuristic. If a site
   misbehaves, add an exception or use _Open link without cleaning_.
 - Copy cleaning only applies when the copied selection is exactly one link,

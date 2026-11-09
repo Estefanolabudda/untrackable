@@ -10,8 +10,9 @@ All notable changes are documented here. The format follows
 
 - Navigation cleaning of mixed-case spellings (`Utm_Source`) and unlisted
   `utm_*` names via case-insensitive declarativeNetRequest fallback rules.
-- Optional automatic recovery from tracker redirect loops (optional
-  `webNavigation` permission, off by default).
+- Optional redirect-loop helper (optional `webNavigation` permission, off by
+  default): a `↻` badge and a "Retry once without cleaning" button in the
+  popup. Never retries automatically.
 - Differential conformance test generating >50,000 URLs from `rules.json`
   (incl. control characters, `+`/non-ASCII/invalid-UTF-8 keys, encoded path
   words, fragments) and requiring identical TypeScript and Rust results, plus
@@ -30,8 +31,13 @@ All notable changes are documented here. The format follows
 
 ### Fixed
 
-- Redirect-loop recovery could retry forever and could be abused to forward
-  trackers to another site; copy cleaning could be probed by page scripts.
+- Redirect-loop recovery could retry forever, could forward trackers to
+  another site, and – being automatic – let pages trigger browser-initiated
+  requests that bypass SameSite/Referer CSRF defences; now explicit only.
+- Copy cleaning could be probed by page scripts (execCommand after a click or
+  right-click); now requires a keyboard copy with unchanged selection.
+- Navigation: `code`+`state` protection also matches valueless adjacent keys;
+  fallback guard lowered to 6 `&` so redirect chains stay below the limit.
 - A rule Chromium cannot compile no longer blocks the whole rule update;
   unsupported protection rules disable redirects (fail safe).
 

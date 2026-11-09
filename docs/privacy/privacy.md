@@ -18,7 +18,9 @@ on http(s) pages. It uses that access only for:
   error events (optional `webNavigation` permission). Chromium then delivers
   error events, including their URLs, for all frames to the extension.
   Untrackable reacts only to "too many redirects" errors of the top-level
-  page, by reloading that page once without cleaning; it stores no URL.
+  page: it keeps that page's URL in memory (`chrome.storage.session`) for up
+  to 10 minutes so the popup can offer "Retry once without cleaning", and
+  forgets it when used, when the tab closes or when it expires.
 
 ## What is processed
 
@@ -46,9 +48,8 @@ verified by an end-to-end test that inspects storage after browsing.
 
 - No telemetry, analytics or crash reporting.
 - The extension makes no network requests of its own. (The only
-  navigation it ever triggers is the one-time reload of a page you were
-  opening, if you enable redirect-loop recovery, or a link you explicitly
-  open via "Open link without cleaning".)
+  navigations it ever triggers are ones you ask for: "Retry once without
+  cleaning" after a redirect loop, or "Open link without cleaning".)
 - No remote rule updates.
 - No cookies, form data, credentials or page content.
 

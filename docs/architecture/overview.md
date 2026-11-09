@@ -88,14 +88,15 @@ MV3 extensions cannot run their own code synchronously for navigations
 (blocking `webRequest` is unavailable). `compileDnrRules` therefore turns the
 rule set into DNR rules:
 
-| Priority | Rule                                                                                                       | Ids           |
-| -------- | ---------------------------------------------------------------------------------------------------------- | ------------- |
-| 1        | case-insensitive `regexSubstitution` fallback (one remaining tracker per internal redirect)                | 500–999       |
-| 2        | global `redirect` removing all globally applicable parameters                                              | 1             |
-| 3        | per-domain `redirect` (domain + global parameters, since only one redirect can win)                        | 100–499       |
-| 4        | protection `allow` rules (domains, path keywords/substrings, parameters, combinations, encoded characters) | 1000+         |
-| 5        | user exception `allow` rule                                                                                | 2000          |
-| 6        | per-tab session `allow` rules (pause, one-time bypass, loop-recovery retry scoped to one host)             | session rules |
+| Priority | Rule                                                                                                                    | Ids           |
+| -------- | ----------------------------------------------------------------------------------------------------------------------- | ------------- |
+| 1        | case-insensitive `regexSubstitution` fallback, global and per domain rule (one remaining tracker per internal redirect) | 500–998       |
+| 2        | fallback guard `allow` (6+ `&` after `?`): stops the fallback chain, exact rules still run                              | 999           |
+| 3        | global `redirect` (`removeParams`)                                                                                      | 1             |
+| 4        | per-domain `redirect` (domain + global parameters, since only one redirect can win)                                     | 100–499       |
+| 5        | protection `allow` rules (domains, path keywords/substrings, parameters, combinations, encoded characters)              | 1000+         |
+| 6        | user exception `allow` rule                                                                                             | 2000          |
+| 7        | per-tab session `allow` rules (pause, one-time bypass, loop retry scoped to one host)                                   | session rules |
 
 Chromium does not redirect when the transformed URL equals the original, so
 there are no redirect loops (verified by e2e test).
@@ -115,10 +116,13 @@ there are no redirect loops (verified by e2e test).
   redirect that would not change the URL, the other kind's candidate is
   tried. The exact rules are therefore kept regex-free, so the regex fallback
   can run after them.
-- **Redirect limit:** Chromium aborts after 20 redirects. A guard `allow`
-  rule disables the one-per-hop fallback once a URL has 16 or more `&` after
-  its `?` (exact rules still run), so many unlisted trackers are simply left
-  in place instead of breaking the page (e2e: 25 unlisted `utm_*`).
+- **Redirect limit:** Chromium aborts after 20 redirects, counted over the
+  whole chain including the server's own redirects. A guard `allow` rule
+  disables the one-per-hop fallback once a URL has 6 or more `&` after its
+  `?` (exact rules still run), so at most 6 fallback hops happen per URL;
+  beyond that, mixed-case or unlisted trackers are left in place instead of
+  breaking the page (e2e: 25 unlisted `utm_*`; two server hops each adding
+  five unlisted trackers).
 - **Valueless and empty segments:** when an exact rule removes something,
   Chromium re-serialises the query – `?edit&utm_source=1` becomes
   `?edit=`, an empty segment in the middle becomes `=`, a trailing `&` is
@@ -126,9 +130,9 @@ there are no redirect loops (verified by e2e test).
   is not byte-identical to the engine (copy cleaning is). Avoiding this would
   require regex conditions on the exact rules, which disables the fallback
   (see above), so it is documented instead.
-- DNR cannot percent-decode. URLs whose path or parameter keys contain a
-  percent-encoded letter, `-`, `.` or `_` are therefore left completely alone
-  during navigation (e.g. `utm%5Fsource` is not removed, `/%6Cogin` is not
+- DNR cannot percent-decode. URLs whose path or any parameter key contains a
+  percent-encoded letter, digit, `-`, `.`, `/` or `_` are therefore left
+  completely alone during navigation (e.g. `utm%5Fsource` is not removed, `/%6Cogin` is not
   cleaned). Encoded non-ASCII paths (`/stra%C3%9Fe`) are still cleaned.
 - Fragments are never sent to servers; navigation cleaning does not touch
   them and **cannot see fragment-based protection signals**. Example:
@@ -147,17 +151,18 @@ keeps.
 
 **Redirect loops:** if a server insists on a tracking parameter and redirects
 back to a URL containing it, Chromium aborts with `ERR_TOO_MANY_REDIRECTS`.
-DNR cannot observe this. Users can enable _automatic recovery_ in the
-settings, which requests the optional `webNavigation` permission; the failed
-top-level load is then retried once, unmodified, in the same tab (one-time
-bypass). Without the permission the user resolves it with a site exception,
-the tab pause or "Open link without cleaning". Recovery is off by default
-because the permission adds a prompt ("Read your browsing history").
-
-Recovery safeguards (each covered by an e2e test): at most one retry per tab
-per minute, so a server that loops even without cleaning costs exactly one
-extra attempt; the retry bypass is limited to the failing URL's host in that
-tab, so a redirector cannot use it to forward trackers to another site.
+DNR cannot observe this. Users can enable a _retry offer_ in the settings,
+which requests the optional `webNavigation` permission ("Read your browsing
+history"). Untrackable then marks such a tab with a `↻` badge, and the popup
+offers **Retry once without cleaning**. The retry is never automatic: a
+navigation started by an extension is treated by the browser like a typed URL
+(no Referer, SameSite=Strict cookies sent), so an automatic retry would let
+any page trigger such a request to a URL of its choosing (found in review).
+Safeguards, each covered by e2e tests: explicit click only; at most one retry
+per tab per minute; the retry bypass covers only the failing URL's host in
+that tab, so a redirector cannot forward trackers to another site. Without
+the permission the user resolves a loop with a site exception, the tab pause
+or "Open link without cleaning".
 
 **Rule installation safety:** `updateDynamicRules` is atomic, so one rule
 Chromium cannot compile would block the whole update. The service worker
@@ -169,7 +174,11 @@ e2e test asserts that every compiled rule is actually installed.
 ### Copy cleaning limits
 
 - Works for selections in web pages (including `<input>`/`<textarea>`) when
-  the selection is exactly one link. Text that merely _contains_ links is
+  the selection is exactly one link and the copy follows a real keyboard
+  shortcut (Ctrl/Cmd+C, Ctrl+Insert) with the selection unchanged – so page
+  scripts cannot use copies as an oracle for settings. Copying via the
+  browser's own Edit/context menu or touch gestures is not cleaned; use the
+  "Copy clean link" menu item instead. Text that merely _contains_ links is
   copied unchanged to avoid altering what the user meant to copy.
 - Cannot intercept the browser's own UI (address bar, native "Copy link
   address"); use the context-menu item "Copy clean link" instead. The URL in

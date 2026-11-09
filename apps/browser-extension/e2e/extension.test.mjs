@@ -86,6 +86,21 @@ before(async () => {
       res.end();
       return;
     }
+    // Two server redirects, each adding five unlisted trackers.
+    if (req.url.startsWith('/chain') && !req.url.startsWith('/chain-end')) {
+      const step = Number(new URL(req.url, 'http://x').searchParams.get('step') ?? '0');
+      const extra = Array.from({ length: 5 }, (_, i) => `Utm_S${step}x${i}=1`).join('&');
+      if (step < 2) {
+        res.writeHead(302, { location: `/chain?step=${step + 1}&${extra}` });
+        res.end();
+        return;
+      }
+      if (req.url.startsWith('/chain?')) {
+        res.writeHead(302, { location: `/chain-end?${extra}` });
+        res.end();
+        return;
+      }
+    }
     // A broken server that loops no matter what (must not cause endless retries).
     if (req.url.startsWith('/selfloop')) {
       selfLoopHits++;
@@ -221,7 +236,7 @@ describe('automatic navigation cleaning (Clean mode)', () => {
   test('many unlisted trackers never exceed the redirect limit', async () => {
     const unlisted = Array.from({ length: 25 }, (_, i) => `utm_z${i}=1`).join('&');
     assert.equal(await visit(`/a?${unlisted}&utm_source=x&id=1`), `/a?${unlisted}&id=1`);
-    const some = Array.from({ length: 10 }, (_, i) => `Utm_Z${i}=1`).join('&');
+    const some = Array.from({ length: 4 }, (_, i) => `Utm_Z${i}=1`).join('&');
     assert.equal(await visit(`/b?${some}&id=1`), '/b?id=1');
   });
 
@@ -505,6 +520,52 @@ describe('copy cleaning', () => {
     await page.close();
   });
 
+  test('a right-click cannot be used to probe settings', async () => {
+    await setSettings({ exceptions: ['bank.example'] });
+    const page = await context.newPage();
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      window.results = [];
+      document.addEventListener('copy', (e) => window.results.push(e.defaultPrevented));
+      document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const t = document.createElement('textarea');
+        t.value = 'https://other.example/?utm_source=x';
+        document.body.append(t);
+        t.select();
+        document.execCommand('copy');
+        t.remove();
+      });
+    });
+    await page.click('body', { button: 'right' });
+    assert.deepEqual(await page.evaluate(() => window.results), [false]);
+    await page.close();
+  });
+
+  test('a page swapping the selection in the copy keystroke gets no cleaning result', async () => {
+    const page = await context.newPage();
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      window.results = [];
+      document.addEventListener('copy', (e) => window.results.push(e.defaultPrevented));
+      const p = document.getElementById('para');
+      p.textContent = 'harmless text';
+      getSelection().selectAllChildren(p);
+      document.addEventListener('keydown', (e) => {
+        if (e.code !== 'KeyC') return;
+        const f = document.getElementById('field');
+        f.value = 'https://probe.example/?utm_source=x';
+        f.focus();
+        f.select();
+      });
+    });
+    await page.keyboard.press('ControlOrMeta+C');
+    assert.deepEqual(await page.evaluate(() => window.results), [false]);
+    await page.close();
+  });
+
   test('copy cleaning can be switched off', async () => {
     await setSettings({ copyCleaning: false });
     const page = await context.newPage();
@@ -574,7 +635,7 @@ describe('redirect loops', () => {
     await page.close();
   });
 
-  test('with the optional webNavigation permission the page is retried unmodified', async () => {
+  test('with the optional webNavigation permission a loop is offered for an explicit retry', async () => {
     // Optional permissions cannot be granted through the permission prompt in
     // automation, so this test loads a copy whose manifest pre-grants it.
     const dir = mkdtempSync(join(tmpdir(), 'untrackable-e2e-loop-ext-'));
@@ -585,15 +646,40 @@ describe('redirect loops', () => {
     writeFileSync(manifestPath, JSON.stringify(manifest));
     const profile = mkdtempSync(join(tmpdir(), 'untrackable-e2e-loop-'));
     const second = await launchWith(dir, profile);
+    const extId = new URL(second.sw.url()).host;
+    const tabIdOf = (fragment) =>
+      second.sw.evaluate(async (f) => (await chrome.tabs.query({})).find((t) => t.url?.includes(f))?.id, fragment);
+    const offerFor = (tabId) =>
+      second.sw.evaluate(async (id) => {
+        const offers = (await chrome.storage.session.get('loopOffers')).loopOffers ?? {};
+        return { offered: id in offers, badge: await chrome.action.getBadgeText({ tabId: id }) };
+      }, tabId);
+    const retry = async (tabId) => {
+      const ext = await second.context.newPage();
+      await ext.goto(`chrome-extension://${extId}/options.html`);
+      const ok = await ext.evaluate((id) => chrome.runtime.sendMessage({ type: 'retryLoop', tabId: id }), tabId);
+      await ext.close();
+      return ok;
+    };
     try {
       await waitFor(
         async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).length > 0,
         'rules',
       );
       const page = await second.context.newPage();
+      seen.length = 0;
       await page.goto(`http://news.test:${port}/loop`).catch(() => {});
+      const tabId = await waitFor(() => tabIdOf('/loop'), 'loop tab');
+      await waitFor(async () => (await offerFor(tabId)).offered, 'retry offered');
+      assert.equal((await offerFor(tabId)).badge, '↻');
+      // Nothing happens automatically (no extension-initiated navigation).
+      await new Promise((r) => setTimeout(r, 1000));
+      const before = seen.length;
+      await new Promise((r) => setTimeout(r, 1500));
+      assert.deepEqual(seen.slice(before), [], 'no automatic retry');
+      // Explicit retry: loads once without cleaning, then normal cleaning resumes.
+      assert.equal(await retry(tabId), true);
       await page.waitForURL(/\/loop\?utm_source=forced$/, { timeout: 10_000 });
-      // The one-time bypass is consumed afterwards: normal pages are cleaned again.
       await waitFor(
         async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,
         'bypass removed',
@@ -601,21 +687,22 @@ describe('redirect loops', () => {
       await page.goto(`http://news.test:${port}/after-loop?utm_source=x`);
       assert.match(page.url(), /\/after-loop$/);
 
-      // A server that loops even without cleaning: exactly one retry, then give up.
-      selfLoopHits = 0;
-      await page.goto(`http://news.test:${port}/selfloop?utm_source=x`).catch(() => {});
-      await new Promise((r) => setTimeout(r, 4000));
-      const hits = selfLoopHits;
-      assert.ok(hits > 0 && hits <= 50, `bounded retries (${hits} requests)`);
-      await new Promise((r) => setTimeout(r, 2000));
-      assert.equal(selfLoopHits, hits, 'no further retries');
+      // A server that loops even without cleaning: a second retry within a minute is refused.
+      const self = await second.context.newPage();
+      await self.goto(`http://news.test:${port}/selfloop?utm_source=x`).catch(() => {});
+      const selfTab = await waitFor(() => tabIdOf('/selfloop'), 'selfloop tab');
+      await waitFor(async () => (await offerFor(selfTab)).offered, 'offer');
+      assert.equal(await retry(selfTab), true);
+      await waitFor(async () => (await offerFor(selfTab)).offered, 'offered again after failed retry', 10_000);
+      assert.equal(await retry(selfTab), false, 'only one retry per tab per minute');
 
-      // A redirector cannot use the recovery to forward trackers to another site.
+      // A redirector cannot use the retry to forward trackers to another site.
       launderHits = 0;
       const tab = await second.context.newPage();
       await tab.goto(`http://attacker.test:${port}/launder?n=0&utm_source=loop`).catch(() => {});
-      // The loop triggers one retry (bypass scoped to attacker.test), the
-      // redirector then forwards to victim.test – which must still be cleaned.
+      const launderTab = await waitFor(() => tabIdOf('attacker.test'), 'launder tab');
+      await waitFor(async () => (await offerFor(launderTab)).offered, 'offer');
+      assert.equal(await retry(launderTab), true);
       await tab.waitForURL(/victim\.test/, { timeout: 10_000 });
       assert.match(tab.url(), /\/landing\?id=1$/);
       assert.ok(!seen.some((u) => u.startsWith('/landing') && u.includes('gclid')), 'tracker never reached victim');
@@ -624,6 +711,10 @@ describe('redirect loops', () => {
       rmSync(dir, { recursive: true, force: true });
       rmSync(profile, { recursive: true, force: true });
     }
+  });
+
+  test('server redirect chains adding unlisted trackers still load', async () => {
+    assert.match(await visit('/chain?step=0'), /^\/chain-end/);
   });
 });
 

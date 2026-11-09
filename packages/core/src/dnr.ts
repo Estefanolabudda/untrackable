@@ -70,13 +70,16 @@ const FALLBACK_CHUNK = 4;
 const REGEX_CHUNK = 6;
 
 /**
- * Chromium aborts after 20 redirects. The fallback removes one parameter per
- * redirect, so it is disabled (exact rules still run) once the URL has 16 or
- * more '&' after its first '?' (fragment included – errs towards not cleaning).
+ * Chromium aborts after 20 redirects – counted across the whole chain,
+ * including the server's own redirects. The fallback removes one parameter
+ * per redirect, so it is disabled (exact rules still run) once the URL has 6
+ * or more '&' after its first '?' (fragment included – errs towards not
+ * cleaning). At most 6 fallback hops per URL leaves room for typical
+ * redirect chains (e2e: two server hops each adding unlisted trackers).
  * Written without '#'-exclusion on purpose: `[^&#]` repeated 16 times exceeds
  * Chromium's 2 KB regex memory limit, `[^&]` does not (verified).
  */
-const MAX_FALLBACK_SEGMENTS = 16;
+const MAX_FALLBACK_SEGMENTS = 6;
 
 function escapeRe2(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
@@ -261,8 +264,11 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
   }
   for (const combo of p.paramCombinations) {
     if (combo.length !== 2) continue; // only pairs are expressible compactly
-    const [a, b] = combo.map((k) => `[?&]${escapeRe2(k)}(?:[=&#]|$)`);
-    allow({ regexFilter: `${a}.*${b}|${b}.*${a}`, isUrlFilterCaseSensitive: false });
+    // Key `a` (with optional value), then optionally more segments, then key `b`.
+    // The '&' between them must not be consumed twice (e.g. `?code&state`).
+    const [x, y] = combo.map(escapeRe2) as [string, string];
+    const pair = (p: string, q: string) => `[?&]${p}(?:=[^&#]*)?&(?:[^#]*&)?${q}(?:[=&#]|$)`;
+    allow({ regexFilter: `${pair(x, y)}|${pair(y, x)}`, isUrlFilterCaseSensitive: false });
   }
 
   // 4. User exceptions.

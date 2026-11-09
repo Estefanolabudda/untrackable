@@ -127,6 +127,8 @@ describe('DNR approximation vs engine (shared fixtures)', () => {
       'https://e.example/x%2Fsso?utm_source=1',
       'https://e.example/%32fa?utm_source=1',
       'https://e.example/go/https%3A%2F%2Fidp.example%2Fauthorize?utm_source=1',
+      'https://e.example/a?utm_source=1&code&state',
+      'https://e.example/a?state=1&utm_source=1&code=2',
     ]) {
       expect(simulate(rules, url)).toBe(url);
     }
@@ -172,8 +174,11 @@ describe('DNR approximation vs engine (shared fixtures)', () => {
 
   it('terminates for many mixed-case trackers (each hop shortens the URL)', () => {
     const rules = compileDnrRules({ mode: 'clean', exceptions: [] });
-    const params = Array.from({ length: 15 }, (_, i) => `Utm_X${i}=1`).join('&');
+    const params = Array.from({ length: 5 }, (_, i) => `Utm_X${i}=1`).join('&');
     expect(simulate(rules, `https://e.example/?${params}&id=1`)).toBe('https://e.example/?id=1');
+    // Beyond the guard, mixed-case trackers are left in place rather than looping.
+    const many = Array.from({ length: 15 }, (_, i) => `Utm_X${i}=1`).join('&');
+    expect(simulate(rules, `https://e.example/?${many}&id=1`)).toBe(`https://e.example/?${many}&id=1`);
   });
 
   it('matches the engine exactly for common lower-case tracking URLs', () => {
@@ -200,12 +205,23 @@ describe('DNR vs engine (property, random case)', () => {
       );
       fc.assert(
         fc.property(
-          fc.array(fc.tuple(key, fc.stringMatching(/^[a-z0-9]{0,4}$/)), { minLength: 1, maxLength: 8 }),
+          fc.array(fc.tuple(key, fc.stringMatching(/^[a-z0-9]{0,4}$/)), { minLength: 1, maxLength: 10 }),
           (params) => {
             const url = `https://shop.example/item?${params.map(([k, v]) => `${k}=${v}`).join('&')}`;
             const engine = cleanUrl(url, { mode });
             if (engine.status === 'protected') return;
-            expect(simulate(rules, url)).toBe(engine.url);
+            const dnr = simulate(rules, url);
+            if (params.length <= 6) {
+              // Below the fallback guard: identical to the engine.
+              expect(dnr).toBe(engine.url);
+            } else {
+              // Above it: may remove less, never more (every kept segment survives, in order).
+              const kept = engine.url.split('?')[1]?.split('&') ?? [];
+              const dnrSegments = dnr.split('?')[1]?.split('&') ?? [];
+              let i = 0;
+              for (const seg of dnrSegments) if (seg === kept[i]) i++;
+              expect(i).toBe(kept.length);
+            }
           },
         ),
         { numRuns: 1500 },

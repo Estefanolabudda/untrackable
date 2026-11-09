@@ -74,11 +74,14 @@ export type Message =
   | { type: 'getTabState'; tabId?: number }
   | { type: 'setTabPaused'; tabId: number; paused: boolean }
   | { type: 'copyText'; text: string }
-  | { type: 'openUnmodified'; url: string };
+  | { type: 'openUnmodified'; url: string }
+  | { type: 'retryLoop'; tabId: number };
 
 export interface TabState {
   /** Cleaning is off in this tab (user pause or a running one-time bypass). */
   paused: boolean;
   /** The user switched on "Pause in this tab" (what the popup checkbox shows). */
   pausedByUser?: boolean;
+  /** Host of a page in this tab that failed with a redirect loop (extension pages only). */
+  loopHost?: string;
 }

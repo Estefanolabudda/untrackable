@@ -19,6 +19,9 @@ const siteException = $('site-exception') as HTMLInputElement;
 const tabPausedBox = $('tab-paused') as HTMLInputElement;
 const copyBtn = $('copy') as HTMLButtonElement;
 const copyResult = $('copy-result');
+const loopSection = $('loop-section');
+const loopHostEl = $('loop-host');
+const loopRetry = $('loop-retry') as HTMLButtonElement;
 
 let tab: chrome.tabs.Tab | undefined;
 let host = '';
@@ -69,6 +72,10 @@ async function init(): Promise<void> {
   if (tab?.id !== undefined && host !== '') {
     const state = (await chrome.runtime.sendMessage({ type: 'getTabState', tabId: tab.id })) as TabState | undefined;
     tabPausedBox.checked = state?.pausedByUser === true;
+    if (state?.loopHost !== undefined) {
+      loopHostEl.textContent = state.loopHost;
+      loopSection.hidden = false;
+    }
   }
 }
 
@@ -106,6 +113,12 @@ copyBtn.addEventListener('click', async () => {
     : result.removed.length > 0
       ? `Copied – removed ${result.removed.length} tracker${result.removed.length === 1 ? '' : 's'}`
       : 'Copied';
+});
+loopRetry.addEventListener('click', async () => {
+  if (tab?.id === undefined) return;
+  loopRetry.disabled = true;
+  await chrome.runtime.sendMessage({ type: 'retryLoop', tabId: tab.id });
+  window.close();
 });
 $('open-options').addEventListener('click', () => void chrome.runtime.openOptionsPage());
 
