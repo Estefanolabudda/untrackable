@@ -34,6 +34,12 @@ published in the Chrome Web Store.
   removed from a link and why.
 - **Local only** – no telemetry, no network requests, no browsing data stored.
 
+## Screenshots
+
+| Settings with link preview               | Popup                           |
+| ---------------------------------------- | ------------------------------- |
+| ![Options page](docs/images/options.png) | ![Popup](docs/images/popup.png) |
+
 ## Installation (developer build)
 
 ```sh
