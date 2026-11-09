@@ -38,6 +38,7 @@ impl CompiledRule {
 struct CompiledProtection {
     domains: Vec<String>,
     path_keywords: Vec<(String, Regex)>,
+    path_substrings: Vec<String>,
     params: HashSet<String>,
     param_prefixes: Vec<String>,
     param_suffixes: Vec<String>,
@@ -106,6 +107,7 @@ impl Engine {
             protection: CompiledProtection {
                 domains: p.domains,
                 path_keywords,
+                path_substrings: p.path_substrings,
                 params: p.params.into_iter().collect(),
                 param_prefixes: p.param_prefixes,
                 param_suffixes: p.param_suffixes,
@@ -218,6 +220,7 @@ impl Engine {
                 url.push_str(&f);
             }
         }
+        let url = encode_trailing_controls(url);
         let changed = url != input;
         CleanResult {
             url,
@@ -240,6 +243,14 @@ impl Engine {
         let path = percent_decode_or_raw(pathname).to_ascii_lowercase();
         if let Some((kw, _)) = p.path_keywords.iter().find(|(_, re)| re.is_match(&path)) {
             return Some(format!("path:{kw}"));
+        }
+        // 2b. Path substrings (first entry in file order), only if no keyword matched.
+        if let Some(sub) = p
+            .path_substrings
+            .iter()
+            .find(|sub| path.contains(sub.as_str()))
+        {
+            return Some(format!("path:{sub}"));
         }
 
         // 3. Params (query keys first, then fragment keys when the fragment contains '=').
@@ -266,6 +277,22 @@ impl Engine {
             .find(|c| c.iter().all(|needed| keys.iter().any(|k| k == needed)));
         combo.map(|c| format!("combination:{}", c.join("+")))
     }
+}
+
+/// Trailing whitespace guard: replaces every trailing char `<= U+0020` with its
+/// `%HH` encoding (upper-case hex) so a WHATWG parser cannot strip it.
+fn encode_trailing_controls(mut url: String) -> String {
+    let kept_len = url.trim_end_matches(|c: char| c <= '\u{20}').len();
+    if kept_len == url.len() {
+        return url;
+    }
+    let tail: String = url[kept_len..]
+        .bytes()
+        .map(|b| format!("%{b:02X}"))
+        .collect();
+    url.truncate(kept_len);
+    url.push_str(&tail);
+    url
 }
 
 /// Splits `s` on `&`, removes tracking segments, records them and returns the rest joined.

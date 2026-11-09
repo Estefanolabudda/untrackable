@@ -57,4 +57,7 @@ prevent:
 - tracking information encoded in the URL path or in parameter names we do
   not know.
 
+Websites can notice that their own tracking parameters arrive stripped and
+may infer that a cleaner is in use.
+
 **Untrackable does not make you anonymous.**

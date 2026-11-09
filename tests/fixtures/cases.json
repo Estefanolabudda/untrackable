@@ -831,6 +831,84 @@
       "expected": "https://example.com/",
       "status": "cleaned",
       "removed": ["utm_source"]
+    },
+    {
+      "name": "camelCase password reset path protected",
+      "input": "https://example.com/account/resetPassword?t=1&utm_source=mail",
+      "expected": "https://example.com/account/resetPassword?t=1&utm_source=mail",
+      "status": "protected",
+      "reason": "path:password"
+    },
+    {
+      "name": "Marketo unsubscribe page keeps mkt_tok",
+      "input": "https://go.example.com/UnsubscribePage.html?mkt_unsubscribe=1&mkt_tok=MzI3",
+      "expected": "https://go.example.com/UnsubscribePage.html?mkt_unsubscribe=1&mkt_tok=MzI3",
+      "status": "protected",
+      "reason": "path:unsubscribe"
+    },
+    {
+      "name": "preference center protected",
+      "input": "https://info.example.com/PreferenceCenter.html?mkt_tok=MzI3",
+      "expected": "https://info.example.com/PreferenceCenter.html?mkt_tok=MzI3",
+      "status": "protected",
+      "reason": "path:preference"
+    },
+    {
+      "name": "joined verify-email path protected",
+      "input": "https://example.com/verifyEmail?id=1&utm_source=x",
+      "expected": "https://example.com/verifyEmail?id=1&utm_source=x",
+      "status": "protected",
+      "reason": "path:verif"
+    },
+    {
+      "name": "short signature with expiry protected",
+      "input": "https://example.com/dl?expires=1999999999&utm_source=newsletter&s=abcdef0123",
+      "expected": "https://example.com/dl?expires=1999999999&utm_source=newsletter&s=abcdef0123",
+      "status": "protected",
+      "reason": "combination:expires+s"
+    },
+    {
+      "name": "Akamai token protected",
+      "input": "https://media.example.com/v.mp4?hdnts=exp%3D1~acl%3D~hmac%3Dab&utm_source=x",
+      "expected": "https://media.example.com/v.mp4?hdnts=exp%3D1~acl%3D~hmac%3Dab&utm_source=x",
+      "status": "protected",
+      "reason": "param:hdnts"
+    },
+    {
+      "name": "API path protected in strict mode",
+      "input": "https://git.example.com/api/v4/projects/1/repository/files/f/raw?ref=release",
+      "mode": "strict",
+      "expected": "https://git.example.com/api/v4/projects/1/repository/files/f/raw?ref=release",
+      "status": "protected",
+      "reason": "path:api"
+    },
+    {
+      "name": "Omeda encrypted id only removed in strict mode",
+      "input": "https://news.example.com/a?oly_enc_id=1234&oly_anon_id=5",
+      "expected": "https://news.example.com/a?oly_enc_id=1234",
+      "status": "cleaned",
+      "removed": ["oly_anon_id"]
+    },
+    {
+      "name": "trailing space before removed segment is encoded in path",
+      "input": "https://example.com/download%20 ?utm_source=1",
+      "expected": "https://example.com/download%20%20",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "trailing space in kept value is encoded",
+      "input": "https://example.com/?b=1 &utm_source=1",
+      "expected": "https://example.com/?b=1%20",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "neutral words containing protected substrings stay protected (false negative accepted)",
+      "input": "https://blog.example/confirmed-speakers?utm_source=x",
+      "expected": "https://blog.example/confirmed-speakers?utm_source=x",
+      "status": "protected",
+      "reason": "path:confirm"
     }
   ]
 }

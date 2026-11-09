@@ -220,4 +220,60 @@ proptest! {
         // The part before the query is always preserved.
         prop_assert!(r.url.starts_with(url.split(['?', '#']).next().unwrap_or("")));
     }
+
+    /// (e) Raw string surgery never changes scheme, host, port or path: for
+    /// cleaned results, re-parsing the output yields the same components as
+    /// parsing the trimmed input (catches trailing-whitespace / delimiter bugs).
+    #[test]
+    fn cleaning_preserves_scheme_authority_and_path(
+        lead in "[ \u{0}\u{1f}]{0,2}",
+        scheme in prop_oneof![Just("http"), Just("https"), Just("HTTPS")],
+        authority in prop_oneof![
+            Just("example.com"),
+            Just("Example.COM:8080"),
+            Just("user:pw@example.com"),
+            Just("[::1]:3000"),
+            Just("192.168.1.10"),
+            Just("bücher.example"),
+            Just("youtube.com.."),
+        ],
+        path in "(/([a-zA-Z0-9.]|%20|%2F|%2e| |ß|\\\\){0,6}){0,3}",
+        path_tail in "[ \u{1}]{0,2}",
+        pre in proptest::collection::vec("[a-z]{1,3}(=[a-z %]{0,3})?", 0..3),
+        value_tail in "[ \u{1}]{0,2}",
+        post in proptest::collection::vec("[a-z]{1,3}(=[a-z %]{0,3})?[ ]{0,1}", 0..3),
+        tracking in proptest::sample::select(vec!["utm_source=x", "fbclid", "gclid=1 ", "UTM_X="]),
+        fragment in proptest::option::of("[a-z=& ]{0,6}"),
+        trail in "[ \u{0}]{0,2}",
+        strict in any::<bool>(),
+    ) {
+        let mut segments: Vec<String> = pre;
+        if let Some(last) = segments.last_mut() {
+            last.push_str(&value_tail);
+        }
+        segments.push(tracking.to_owned());
+        segments.extend(post);
+        let mut input = format!("{lead}{scheme}://{authority}{path}{path_tail}?{}", segments.join("&"));
+        if let Some(f) = &fragment {
+            input.push('#');
+            input.push_str(f);
+        }
+        input.push_str(&trail);
+
+        let mode = if strict { Mode::Strict } else { Mode::Clean };
+        let r = clean(&input, &CleanOptions::new(mode));
+        if r.status == Status::Cleaned {
+            let trimmed = input.trim_matches(|c: char| c <= '\u{20}');
+            let a = url::Url::parse(trimmed).expect("input parsed by engine");
+            let b = url::Url::parse(&r.url);
+            prop_assert!(b.is_ok(), "output does not parse: {:?}", r.url);
+            let b = b.expect("checked");
+            prop_assert_eq!(a.scheme(), b.scheme(), "scheme changed for {:?}", input);
+            prop_assert_eq!(a.host_str(), b.host_str(), "host changed for {:?}", input);
+            prop_assert_eq!(a.port(), b.port(), "port changed for {:?}", input);
+            prop_assert_eq!(a.username(), b.username(), "username changed for {:?}", input);
+            prop_assert_eq!(a.password(), b.password(), "password changed for {:?}", input);
+            prop_assert_eq!(a.path(), b.path(), "path changed for {:?} -> {:?}", input, r.url);
+        }
+    }
 }

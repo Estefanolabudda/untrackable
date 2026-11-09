@@ -107,10 +107,7 @@ describe('compileDnrRules', () => {
  * Documented divergences (docs/architecture/overview.md, "Navigation cleaning"):
  * DNR never sees URL fragments and matches the raw, still percent-encoded URL.
  */
-const KNOWN_DNR_DIVERGENCES = new Set([
-  'OIDC implicit flow token in fragment is protected',
-  'percent-encoded protected path detected',
-]);
+const KNOWN_DNR_DIVERGENCES = new Set(['OIDC implicit flow token in fragment is protected']);
 
 describe('DNR approximation vs engine (shared fixtures)', () => {
   const navigable = cases.filter(
@@ -139,6 +136,19 @@ describe('DNR approximation vs engine (shared fixtures)', () => {
     // Cleaned: DNR may be weaker (prefix rules, case variants, fragments) but never removes more.
     const dnrKeys = new URL(viaDnr).searchParams;
     for (const [k] of new URL(engine.url).searchParams) expect(dnrKeys.has(k), `${k} lost`).toBe(true);
+  });
+
+  it('leaves percent-encoded paths and keys alone (DNR cannot decode)', () => {
+    const rules = compileDnrRules({ mode: 'clean', exceptions: [] });
+    for (const url of [
+      'https://e.example/%6Fauth/x?utm_source=a',
+      'https://e.example/my%2Dlogin?utm_source=a',
+      'https://e.example/dl?%73ig=abc&utm_source=a',
+    ]) {
+      expect(simulate(rules, url)).toBe(url);
+    }
+    // Encoded non-ASCII paths (e.g. umlauts) are still cleaned.
+    expect(simulate(rules, 'https://e.example/stra%C3%9Fe?utm_source=a')).toBe('https://e.example/stra%C3%9Fe');
   });
 
   it('matches the engine exactly for common lower-case tracking URLs', () => {

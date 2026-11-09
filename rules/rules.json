@@ -70,7 +70,6 @@
         "vero_id",
         "vero_conv",
         "oly_anon_id",
-        "oly_enc_id",
         "_openstat",
         "wickedid",
         "rb_clickid",
@@ -156,7 +155,8 @@
         "itm_medium",
         "itm_campaign",
         "itm_content",
-        "itm_term"
+        "itm_term",
+        "oly_enc_id"
       ],
       "prefixes": ["pk_", "mtm_", "piwik_", "hsa_", "itm_", "ns_"]
     },
@@ -346,7 +346,28 @@
       "otp",
       "mfa",
       "2fa",
-      "consent"
+      "consent",
+      "api"
+    ],
+    "pathSubstrings": [
+      "password",
+      "passwort",
+      "resetpw",
+      "unsubscribe",
+      "abmelden",
+      "optout",
+      "opt-out",
+      "preference",
+      "verif",
+      "confirm",
+      "activat",
+      "checkout",
+      "oauth",
+      "saml",
+      "signin",
+      "login",
+      "logon",
+      "magiclink"
     ],
     "params": [
       "sig",
@@ -376,13 +397,19 @@
       "redirect_uri",
       "response_type",
       "relaystate",
-      "sigalg"
+      "sigalg",
+      "hdnts",
+      "hdntl"
     ],
     "paramPrefixes": ["x-amz-", "x-goog-", "oauth_", "openid.", "saml", "__cf_chl"],
     "paramSuffixes": ["token", "signature", "_code"],
     "paramCombinations": [
       ["code", "state"],
-      ["code", "session_state"]
+      ["code", "session_state"],
+      ["expires", "s"],
+      ["exp", "s"],
+      ["expires", "h"],
+      ["exp", "h"]
     ]
   }
 }

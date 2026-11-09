@@ -211,15 +211,22 @@ async function ensureOffscreen(): Promise<void> {
   await creatingOffscreen;
 }
 
-async function copyToClipboard(text: string): Promise<boolean> {
-  await ensureOffscreen();
-  try {
-    const ok: unknown = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'copy', text });
-    return ok === true;
-  } finally {
-    // Do not keep a clipboard-capable document alive longer than needed.
-    await chrome.offscreen.closeDocument().catch(() => {});
-  }
+let clipboardQueue: Promise<unknown> = Promise.resolve();
+
+/** Serialised so concurrent copies cannot create or close the document under each other. */
+function copyToClipboard(text: string): Promise<boolean> {
+  const run = clipboardQueue.then(async () => {
+    await ensureOffscreen();
+    try {
+      const ok: unknown = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'copy', text });
+      return ok === true;
+    } finally {
+      // Do not keep a clipboard-capable document alive longer than needed.
+      await chrome.offscreen.closeDocument().catch(() => {});
+    }
+  });
+  clipboardQueue = run.catch(() => {});
+  return run.catch(() => false);
 }
 
 /**

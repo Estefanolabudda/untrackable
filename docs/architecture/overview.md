@@ -101,18 +101,29 @@ there are no redirect loops (verified by e2e test).
 - `removeParams` matches keys exactly and case-sensitively. Lower-case and
   ALL-UPPER-CASE spellings are covered; mixed case (`Utm_Source`) and prefix
   rules (`utm_*`) are only covered for the explicitly listed names.
-- Percent-encoded keys/paths are matched raw (`utm%5Fsource` is not removed
-  during navigation; `/%6Cogin` is not recognised as a login path).
+- DNR cannot percent-decode. URLs whose path or parameter keys contain a
+  percent-encoded letter, `-`, `.` or `_` are therefore left completely alone
+  during navigation (e.g. `utm%5Fsource` is not removed, `/%6Cogin` is not
+  cleaned). Encoded non-ASCII paths (`/stra%C3%9Fe`) are still cleaned.
 - Fragments are never sent to servers; navigation cleaning does not touch
-  them and cannot see fragment-based protection signals (OIDC implicit flow
-  tokens in `#id_token=` are preserved by the browser anyway).
+  them and **cannot see fragment-based protection signals**. Example:
+  `/a?utm_source=x#access_token=…` becomes `/a#access_token=…` (the engine
+  would leave it unchanged). The fragment itself is preserved by the browser,
+  so implicit-flow tokens still reach the page.
 - Only `main_frame` navigations are cleaned. Sub-frames, `fetch`/XHR and
   links rewritten by page scripts after load (e.g. `history.replaceState`)
   are not modified.
 
-The safety property is enforced by tests: DNR never modifies a fixture URL
-that the engine reports as protected, excepted or unchanged, and never
-removes a parameter the engine keeps.
+The safety property is enforced by tests (simulated in
+`dnr.test.ts`, spot-checked in real Chromium in the e2e suite): apart from the
+fragment case above, DNR never modifies a fixture URL that the engine reports
+as protected, excepted or unchanged, and never removes a parameter the engine
+keeps.
+
+**Redirect loops:** if a server insists on a tracking parameter and redirects
+back to a URL containing it, Chromium aborts with `ERR_TOO_MANY_REDIRECTS`.
+DNR cannot detect this; the user resolves it with a site exception, the tab
+pause or "Open link without cleaning".
 
 ### Copy cleaning limits
 

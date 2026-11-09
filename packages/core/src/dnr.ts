@@ -157,6 +157,17 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
       isUrlFilterCaseSensitive: false,
     });
   }
+  for (const group of chunk(p.pathSubstrings, REGEX_CHUNK)) {
+    allow({
+      regexFilter: `^https?://[^/?#]*/[^?#]*(?:${group.map(escapeRe2).join('|')})`,
+      isUrlFilterCaseSensitive: false,
+    });
+  }
+  // DNR cannot percent-decode. Leave URLs alone whose path or parameter keys
+  // contain an encoded letter, '-', '.' or '_' (could hide a protection signal).
+  const encodedWordChar = '%(?:[46][1-9a-f]|[57][0-9a]|2[de]|5f)';
+  allow({ regexFilter: `^https?://[^/?#]*/[^?#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
+  allow({ regexFilter: `[?&][^=&#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   for (const group of chunk(p.params, REGEX_CHUNK)) {
     allow({
       regexFilter: `[?&](?:${group.map(escapeRe2).join('|')})(?:[=&#]|$)`,

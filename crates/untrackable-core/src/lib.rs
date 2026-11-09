@@ -183,7 +183,13 @@ mod tests {
     fn rule_set_validation_rejects_bad_entries() {
         let with_rule =
             |rule: &str| Engine::from_json(&format!(r#"{{"schemaVersion":1,"rules":[{rule}]}}"#));
+        // Adds the required (empty) `pathSubstrings` unless the test sets it.
         let with_protection = |prot: &str| {
+            let prot = if prot.contains("pathSubstrings") {
+                prot.to_owned()
+            } else {
+                prot.replacen('{', r#"{"pathSubstrings":[],"#, 1)
+            };
             Engine::from_json(&format!(
                 r#"{{"schemaVersion":1,"rules":[],"protection":{prot}}}"#
             ))
@@ -246,12 +252,91 @@ mod tests {
             "protection.paramSuffixes",
             "not lower-case",
         );
-        // Non-ASCII lower-case-irrelevant characters and an empty list are fine.
-        assert!(
-            with_rule(r#"{"id":"a","mode":"clean","domains":[],"params":["__cft__[0]","ß"]}"#)
-                .is_ok()
+        invalid(
+            with_protection(r#"{"pathSubstrings":["resetPw"]}"#),
+            "protection.pathSubstrings",
+            "not lower-case",
         );
+        invalid(
+            with_protection(r#"{"pathSubstrings":[""]}"#),
+            "protection.pathSubstrings",
+            "empty string",
+        );
+        // `pathSubstrings` is a required field.
+        assert!(matches!(
+            Engine::from_json(r#"{"schemaVersion":1,"rules":[],"protection":{"params":[]}}"#),
+            Err(RuleSetError::Json(_))
+        ));
+        // Empty `domains` array (absent is fine).
+        invalid(
+            with_rule(r#"{"id":"a","mode":"clean","domains":[],"params":["x"]}"#),
+            "rules[a].domains",
+            "empty domains array",
+        );
+        // Empty and duplicate rule ids.
+        invalid(
+            with_rule(r#"{"id":"","mode":"clean","params":["x"]}"#),
+            "rules[].id",
+            "empty rule id",
+        );
+        invalid(
+            with_rule(
+                r#"{"id":"a","mode":"clean","params":["x"]},{"id":"a","mode":"strict","params":["y"]}"#,
+            ),
+            "rules[].id",
+            "duplicate rule id",
+        );
+        // "Lower-case" means no ASCII A-Z; non-ASCII (even upper-case) is allowed.
+        assert!(with_rule(r#"{"id":"a","mode":"clean","params":["__cft__[0]","ß","Ä"]}"#).is_ok());
+        assert!(
+            with_rule(r#"{"id":"A","mode":"clean","domains":["x.com"],"params":["x"]}"#).is_ok()
+        );
+        assert!(with_protection(r#"{"pathSubstrings":["abmelden","é"]}"#).is_ok());
         assert!(RuleSet::from_json(EMBEDDED_RULES_JSON).is_ok());
+    }
+
+    #[test]
+    fn path_substrings_after_keywords() {
+        let engine = Engine::from_json(
+            r#"{"schemaVersion":1,"rules":[{"id":"u","mode":"clean","prefixes":["utm_"]}],
+               "protection":{"pathKeywords":["login"],"pathSubstrings":["verif","login","pass"]}}"#,
+        )
+        .expect("valid");
+        let reason = |u: &str| engine.clean(u, &CleanOptions::default()).reason;
+        // Keyword wins over substring when both match.
+        assert_eq!(
+            reason("https://e.com/login?utm_a=1").as_deref(),
+            Some("path:login")
+        );
+        // Substring: first entry in file order wins.
+        assert_eq!(
+            reason("https://e.com/PassVerify?utm_a=1").as_deref(),
+            Some("path:verif")
+        );
+        // Decoded + lower-cased path.
+        assert_eq!(
+            reason("https://e.com/my%4Cogin?utm_a=1").as_deref(),
+            Some("path:login")
+        );
+        assert_eq!(reason("https://e.com/other?utm_a=1"), None);
+    }
+
+    #[test]
+    fn trailing_whitespace_guard() {
+        let r = clean(
+            "https://example.com/download%20 ?utm_source=x",
+            &CleanOptions::default(),
+        );
+        assert_eq!(r.url, "https://example.com/download%20%20");
+        let r = clean(
+            "https://example.com/?b=1 \u{1}&utm_source=x",
+            &CleanOptions::default(),
+        );
+        assert_eq!(r.url, "https://example.com/?b=1%20%01");
+        // Unchanged results are returned verbatim, untrimmed.
+        let r = clean("https://example.com/?b=1 ", &CleanOptions::default());
+        assert_eq!(r.url, "https://example.com/?b=1 ");
+        assert_eq!(r.status, Status::Unchanged);
     }
 
     #[test]

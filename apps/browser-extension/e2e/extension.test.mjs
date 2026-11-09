@@ -11,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { build } from 'esbuild';
+import { readFileSync } from 'node:fs';
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 assert.ok(existsSync(join(dist, 'manifest.json')), 'run `npm run build` first');
@@ -469,6 +471,48 @@ describe('user interface', () => {
     const stored = await sw.evaluate(() => chrome.storage.local.get('exceptions'));
     assert.deepEqual(stored.exceptions, ['shop.example']);
     await options.close();
+  });
+});
+
+describe('engine inside Chromium', () => {
+  test("all shared fixtures pass with Chromium's URL parser", async () => {
+    const bundle = await build({
+      entryPoints: [fileURLToPath(new URL('../../../packages/core/src/index.ts', import.meta.url))],
+      bundle: true,
+      format: 'iife',
+      globalName: 'UntrackableCore',
+      write: false,
+      logLevel: 'silent',
+    });
+    const { cases } = JSON.parse(readFileSync(new URL('../../../tests/fixtures/cases.json', import.meta.url), 'utf8'));
+    const page = await context.newPage();
+    await page.goto(`http://news.test:${port}/engine`);
+    await page.addScriptTag({ content: bundle.outputFiles[0].text });
+    const failures = await page.evaluate((cases) => {
+      const out = [];
+      for (const c of cases) {
+        const r = globalThis.UntrackableCore.cleanUrl(c.input, {
+          mode: c.mode ?? 'clean',
+          exceptions: c.exceptions ?? [],
+        });
+        if (r.url !== c.expected || r.status !== c.status) out.push(`${c.name}: ${r.status} ${r.url}`);
+      }
+      return out;
+    }, cases);
+    assert.deepEqual(failures, []);
+    await page.close();
+  });
+
+  test('navigation leaves percent-encoded protected paths and keys alone', async () => {
+    for (const path of ['/%6Fauth/x?utm_source=a', '/my%2Dlogin?utm_source=a', '/dl?%73ig=abc&utm_source=a']) {
+      assert.equal(await visit(path), path);
+    }
+    assert.equal(await visit('/stra%C3%9Fe?utm_source=a'), '/stra%C3%9Fe');
+  });
+
+  test('camelCase protected paths are left alone during navigation', async () => {
+    assert.equal(await visit('/account/resetPassword?utm_source=a'), '/account/resetPassword?utm_source=a');
+    assert.equal(await visit('/UnsubscribePage.html?mkt_tok=a'), '/UnsubscribePage.html?mkt_tok=a');
   });
 });
 

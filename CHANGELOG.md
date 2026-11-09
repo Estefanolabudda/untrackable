@@ -13,8 +13,8 @@ All notable changes are documented here. The format follows
 - Shared tracker rule set with Clean and Strict rules and domain-specific rules.
 - Protection heuristics for OAuth/OIDC/SAML, password reset, verification,
   invitation, signed/expiring download and payment URLs.
-- TypeScript cleaning engine and Rust cleaning engine with 119 shared
-  conformance fixtures and property-based tests.
+- TypeScript cleaning engine and Rust cleaning engine with 130 shared
+  conformance fixtures and property-based tests (fixtures also run inside Chromium).
 - Chromium MV3 extension: automatic navigation cleaning, copy cleaning,
   "Copy clean link" / "Copy clean page link" / "Open link without cleaning"
   context menu items, Alt+Shift+U shortcut, Clean/Strict modes, global off,

@@ -52,6 +52,8 @@ pub struct Protection {
     /// Path keywords (see the spec for the matching regex).
     #[serde(default)]
     pub path_keywords: Vec<String>,
+    /// Plain substrings of the decoded, lower-cased path (required field).
+    pub path_substrings: Vec<String>,
     /// Exact protected keys.
     #[serde(default)]
     pub params: Vec<String>,
@@ -74,7 +76,8 @@ pub struct RuleSet {
     pub schema_version: u64,
     /// Removal rules in file order (order is significant for `ruleId`).
     pub rules: Vec<Rule>,
-    /// Protection signals.
+    /// Protection signals. Omitting the whole object means "no protection";
+    /// when present, every list is required.
     #[serde(default)]
     pub protection: Protection,
 }
@@ -90,8 +93,9 @@ impl RuleSet {
         Ok(set)
     }
 
-    /// Validates list entries: no empty strings, no non-lower-case entries
-    /// (ASCII `A-Z`), and no empty `paramCombinations` entries.
+    /// Validates the rule set: no empty strings and no ASCII upper-case `A-Z`
+    /// in any list (non-ASCII is allowed), no empty `paramCombinations` entry,
+    /// no empty `domains` array (omit the key instead), no empty or duplicate rule ids.
     pub fn validate(&self) -> Result<(), RuleSetError> {
         fn check(field: String, values: &[String]) -> Result<(), RuleSetError> {
             for v in values {
@@ -111,8 +115,30 @@ impl RuleSet {
             Ok(())
         }
 
+        let mut seen_ids = std::collections::HashSet::new();
         for r in &self.rules {
+            if r.id.is_empty() {
+                return Err(RuleSetError::InvalidEntry {
+                    field: "rules[].id".into(),
+                    value: String::new(),
+                    problem: "empty rule id",
+                });
+            }
+            if !seen_ids.insert(r.id.as_str()) {
+                return Err(RuleSetError::InvalidEntry {
+                    field: "rules[].id".into(),
+                    value: r.id.clone(),
+                    problem: "duplicate rule id",
+                });
+            }
             if let Some(domains) = &r.domains {
+                if domains.is_empty() {
+                    return Err(RuleSetError::InvalidEntry {
+                        field: format!("rules[{}].domains", r.id),
+                        value: String::new(),
+                        problem: "empty domains array",
+                    });
+                }
                 check(format!("rules[{}].domains", r.id), domains)?;
             }
             check(format!("rules[{}].params", r.id), &r.params)?;
@@ -121,6 +147,7 @@ impl RuleSet {
         let p = &self.protection;
         check("protection.domains".into(), &p.domains)?;
         check("protection.pathKeywords".into(), &p.path_keywords)?;
+        check("protection.pathSubstrings".into(), &p.path_substrings)?;
         check("protection.params".into(), &p.params)?;
         check("protection.paramPrefixes".into(), &p.param_prefixes)?;
         check("protection.paramSuffixes".into(), &p.param_suffixes)?;

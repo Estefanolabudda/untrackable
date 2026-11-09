@@ -64,7 +64,8 @@ function percentDecodeOr(raw: string): string {
 
 /** Normalise a raw query key for matching: `+` → space, percent-decode, ASCII lower-case. */
 export function normaliseKey(rawKey: string): string {
-  return asciiLower(percentDecodeOr(rawKey.replace(/\+/g, ' ')));
+  const spaced = rawKey.replace(/\+/g, ' ');
+  return asciiLower(spaced.includes('%') ? percentDecodeOr(spaced) : spaced);
 }
 
 /** `host` equals `domain` or is a subdomain of it. */
@@ -103,6 +104,21 @@ function stripTrailingDots(host: string): string {
   let h = host;
   while (h.endsWith('.')) h = h.slice(0, -1);
   return h;
+}
+
+/**
+ * A parser strips trailing characters <= U+0020, which would silently change
+ * the path or a value once the segment after them was removed. Encode them.
+ */
+function encodeTrailingWhitespace(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) <= 0x20) end--;
+  if (end === url.length) return url;
+  let tail = '';
+  for (let i = end; i < url.length; i++) {
+    tail += '%' + url.charCodeAt(i).toString(16).toUpperCase().padStart(2, '0');
+  }
+  return url.slice(0, end) + tail;
 }
 
 /** Strip leading/trailing characters <= U+0020 (WHATWG URL trimming). */
@@ -219,6 +235,7 @@ export class Cleaner {
     let url = prefix;
     if (newQuery !== undefined && !(newQuery === '' && removedFromQuery > 0)) url += '?' + newQuery;
     if (newFragment !== undefined && !(newFragment === '' && removedFromFragment > 0)) url += '#' + newFragment;
+    url = encodeTrailingWhitespace(url);
     return { url, changed: url !== input, status: 'cleaned', removed };
   }
 
@@ -235,6 +252,8 @@ export class Cleaner {
     const path = asciiLower(percentDecodeOr(pathname));
     const kw = this.pathKeywordRes.find(({ re }) => re.test(path));
     if (kw !== undefined) return `path:${kw.kw}`;
+    const sub = p.pathSubstrings.find((x) => path.includes(x));
+    if (sub !== undefined) return `path:${sub}`;
 
     const keys: string[] = [];
     if (query !== undefined) for (const seg of query.split('&')) keys.push(normaliseKey(rawKeyOf(seg)));

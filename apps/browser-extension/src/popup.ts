@@ -33,7 +33,7 @@ function hostOf(url: string | undefined): string {
   }
 }
 
-/** The configured exception that covers `host`, if any. */
+/** The first configured exception that covers `host`, if any. */
 function coveringException(s: Settings): string | undefined {
   return s.exceptions.find((d) => host === d || host.endsWith(`.${d}`));
 }
@@ -85,10 +85,11 @@ pauseBtn.addEventListener('click', async () => {
 });
 siteException.addEventListener('change', async () => {
   const s = await loadSettings();
-  const covering = coveringException(s);
+  // Unchecking removes every exception that covers this host (e.g. both
+  // example.com and sub.example.com), otherwise the box would flip back on.
   const exceptions = siteException.checked
     ? [...s.exceptions, host]
-    : s.exceptions.filter((d) => d !== covering && d !== host);
+    : s.exceptions.filter((d) => !(host === d || host.endsWith(`.${d}`)));
   await saveSettings({ exceptions });
 });
 tabPausedBox.addEventListener('change', async () => {

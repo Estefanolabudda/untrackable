@@ -47,6 +47,11 @@ Evaluation order (first match wins):
    bracketed IPv6 literal (`[` hex digits, `:`, `.` `]`), otherwise →
    `invalid`. (Guards against parsers more lenient than WHATWG, e.g.
    Chromium percent-encodes spaces in hosts.)
+   _Implementation-defined:_ hosts that are invalid under IDNA/UTS #46 (e.g.
+   undecodable `xn--` labels) may be accepted by some parsers (Chromium) and
+   rejected by others. Such inputs are not part of the conformance fixtures;
+   the safety property – scheme, authority and path are never changed –
+   holds regardless.
 4. `mode == bypass` → `bypassed`.
 5. **Host** = parsed host (ASCII / punycode, lower-case), all trailing `.` removed.
    If host _domain-matches_ any user exception → `excepted`.
@@ -72,8 +77,9 @@ Exception entries are normalised before matching:
 So `bücher.example`, `*.Bücher.example.` and `https://bücher.example/x` all
 normalise to `xn--bcher-kva.example`.
 
-Rule-set validation rejects empty strings, non-lower-case entries and empty
-`paramCombinations` entries.
+Rule-set validation rejects: empty strings, entries containing ASCII upper
+case `A-Z` (non-ASCII is allowed), empty `paramCombinations` entries, an empty
+`domains` array (omit the key instead), empty or duplicate rule ids.
 
 ### Raw string surgery (encoding preservation)
 
@@ -95,6 +101,12 @@ emitted whenever it existed in the input, **except** that `?` (resp. `#`) is
 dropped when at least one parameter was removed from that part _and_ the part
 became empty. A part that was already empty (`https://e.example/?#`) keeps its
 delimiter. A fragment is only rewritten in strict mode.
+
+**Trailing whitespace guard:** if the resulting string ends with one or more
+characters `<= U+0020` (possible when such a character preceded a removed
+segment, e.g. `/download%20 ?utm_source=x`), each of those trailing
+characters is replaced by its `%HH` encoding (upper-case hex). A WHATWG
+parser would otherwise strip them and change the path or a value.
 
 ### Parameter splitting and key normalisation
 
@@ -135,7 +147,10 @@ string is the first signal found, in this order:
 2. `path:<kw>` – the percent-decoded (fallback: raw), ASCII-lower-cased
    pathname matches `(^|[/_.-])(kw)($|[/_.0-9-])` for some `kw` in
    `protection.pathKeywords` (keywords are regex-escaped; first keyword in
-   file order wins).
+   file order wins). Then, if no keyword matched: the same decoded path
+   **contains** some entry of `protection.pathSubstrings` as a plain
+   substring (catches `resetPassword`, `UnsubscribePage.html`, …); the reason
+   is `path:<substring>`, first entry in file order wins.
 3. `param:<key>` – any normalised key of the **query or the fragment**
    (fragment split on `&` whenever it contains `=`, regardless of shape)
    equals a `protection.params` entry, starts with a `paramPrefixes` entry or
@@ -155,7 +170,9 @@ compiles `rules.json` + settings into declarativeNetRequest rules
 - Parameter removal uses `queryTransform.removeParams`, which matches keys
   exactly. Prefix rules are expanded to the explicit `params` lists only.
 - Protection is compiled into higher-priority `allow` rules using equivalent
-  RE2 regular expressions over the raw URL.
+  RE2 regular expressions over the raw URL. Because DNR cannot decode, any
+  URL whose path or a parameter key contains a percent-encoded letter, `-`,
+  `_` or `.` is additionally allowed (left alone) during navigation.
 - Fragments are never sent in HTTP requests and are not touched by navigation
   cleaning.
 

@@ -13,11 +13,13 @@ import { cleanUrl } from '@untrackable/core';
 import { effectiveMode, sanitizeSettings, SETTINGS_KEYS, type Settings, type TabState } from './settings.js';
 
 let settings: Settings = sanitizeSettings({});
+let settingsLoaded = false;
 let tabPaused = false;
 
 chrome.storage.local.get(SETTINGS_KEYS).then(
   (stored) => {
     settings = sanitizeSettings({ ...settings, ...stored });
+    settingsLoaded = true; // never act on defaults: the user may have turned cleaning off
   },
   () => {
     /* extension context invalidated (e.g. after update) – keep defaults */
@@ -62,7 +64,8 @@ document.addEventListener(
   (event: ClipboardEvent) => {
     // Ignore synthetic events: otherwise a page could probe settings and exceptions
     // by dispatching its own copy events and inspecting the result.
-    if (!event.isTrusted || !settings.copyCleaning || tabPaused || event.clipboardData === null) return;
+    if (!event.isTrusted || !settingsLoaded || !settings.copyCleaning || tabPaused || event.clipboardData === null)
+      return;
     const mode = effectiveMode(settings);
     if (mode === 'bypass') return;
     const text = selectedText().trim();

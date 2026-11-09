@@ -18,6 +18,8 @@ export interface Rule {
 export interface ProtectionRules {
   readonly domains: readonly string[];
   readonly pathKeywords: readonly string[];
+  /** Plain substrings of the decoded, lower-cased path (catches camelCase / joined words). */
+  readonly pathSubstrings: readonly string[];
   readonly params: readonly string[];
   readonly paramPrefixes: readonly string[];
   readonly paramSuffixes: readonly string[];
@@ -29,6 +31,16 @@ export interface RuleSet {
   readonly rules: readonly Rule[];
   readonly protection: ProtectionRules;
 }
+
+const EMPTY_PROTECTION: ProtectionRules = Object.freeze({
+  domains: [],
+  pathKeywords: [],
+  pathSubstrings: [],
+  params: [],
+  paramPrefixes: [],
+  paramSuffixes: [],
+  paramCombinations: [],
+});
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'string');
@@ -47,33 +59,47 @@ export function validateRuleSet(value: unknown): RuleSet {
   for (const r of v.rules as unknown[]) {
     if (typeof r !== 'object' || r === null) throw new Error('rule must be an object');
     const rule = r as Record<string, unknown>;
-    if (typeof rule.id !== 'string' || rule.id === '') throw new Error('rule.id must be a string');
+    if (typeof rule.id !== 'string' || rule.id === '') throw new Error('rule.id must be a non-empty string');
     if (ids.has(rule.id)) throw new Error(`duplicate rule id ${rule.id}`);
     ids.add(rule.id);
     if (rule.mode !== 'clean' && rule.mode !== 'strict') throw new Error(`invalid mode in ${rule.id}`);
+    if (Array.isArray(rule.domains) && rule.domains.length === 0) {
+      throw new Error(`${rule.id}.domains must not be empty (omit it for a global rule)`);
+    }
     for (const key of ['domains', 'params', 'prefixes'] as const) {
       if (rule[key] !== undefined && !isStringArray(rule[key])) {
         throw new Error(`${rule.id}.${key} must be a string array`);
       }
-      if (isStringArray(rule[key]) && (rule[key] as string[]).some((s) => s !== s.toLowerCase() || s === '')) {
+      if (isStringArray(rule[key]) && (rule[key] as string[]).some((s) => /[A-Z]/.test(s) || s === '')) {
         throw new Error(`${rule.id}.${key} entries must be non-empty lower-case strings`);
       }
     }
   }
+  // Omitting the whole protection object means "no protection" (same as Rust).
+  if (v.protection === undefined) v.protection = EMPTY_PROTECTION;
   const p = v.protection as Record<string, unknown> | undefined;
   if (typeof p !== 'object' || p === null) throw new Error('protection must be an object');
-  for (const key of ['domains', 'pathKeywords', 'params', 'paramPrefixes', 'paramSuffixes'] as const) {
+  for (const key of [
+    'domains',
+    'pathKeywords',
+    'pathSubstrings',
+    'params',
+    'paramPrefixes',
+    'paramSuffixes',
+  ] as const) {
     if (!isStringArray(p[key])) throw new Error(`protection.${key} must be a string array`);
   }
   if (!Array.isArray(p.paramCombinations) || !p.paramCombinations.every(isStringArray)) {
     throw new Error('protection.paramCombinations must be an array of string arrays');
   }
   const lists = [
-    ...(['domains', 'pathKeywords', 'params', 'paramPrefixes', 'paramSuffixes'] as const).map((k) => p[k] as string[]),
+    ...(['domains', 'pathKeywords', 'pathSubstrings', 'params', 'paramPrefixes', 'paramSuffixes'] as const).map(
+      (k) => p[k] as string[],
+    ),
     ...(p.paramCombinations as string[][]),
   ];
   for (const list of lists) {
-    if (list.some((s) => s === '' || s !== s.toLowerCase())) {
+    if (list.some((s) => s === '' || /[A-Z]/.test(s))) {
       throw new Error('protection entries must be non-empty lower-case strings');
     }
   }

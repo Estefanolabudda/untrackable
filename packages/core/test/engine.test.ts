@@ -52,6 +52,12 @@ describe('rule set', () => {
     const bad = JSON.parse(JSON.stringify(defaultRuleSet));
     bad.rules[0].params = ['UTM_SOURCE'];
     expect(() => validateRuleSet(bad)).toThrow(/lower-case/);
+    const emptyDomains = JSON.parse(JSON.stringify(defaultRuleSet));
+    emptyDomains.rules[0].domains = [];
+    expect(() => validateRuleSet(emptyDomains)).toThrow(/domains/);
+    const nonAscii = JSON.parse(JSON.stringify(defaultRuleSet));
+    nonAscii.rules[0].params = ['äfoo'];
+    expect(() => validateRuleSet(nonAscii)).not.toThrow();
     const dup = JSON.parse(JSON.stringify(defaultRuleSet));
     dup.rules.push(dup.rules[0]);
     expect(() => validateRuleSet(dup)).toThrow(/duplicate/);
@@ -107,6 +113,14 @@ describe('engine behaviour', () => {
     expect(cleanUrl(undefined as unknown as string).status).toBe('invalid');
   });
 
+  it('treats a missing protection object as no protection', () => {
+    const rs = validateRuleSet({
+      schemaVersion: 1,
+      rules: [{ id: 'x', description: '', mode: 'clean', params: ['foo'] }],
+    });
+    expect(new Cleaner(rs).clean('https://e.example/login?foo=1').url).toBe('https://e.example/login');
+  });
+
   it('supports custom rule sets', () => {
     const custom = validateRuleSet({
       schemaVersion: 1,
@@ -114,6 +128,7 @@ describe('engine behaviour', () => {
       protection: {
         domains: [],
         pathKeywords: [],
+        pathSubstrings: [],
         params: [],
         paramPrefixes: [],
         paramSuffixes: [],
@@ -126,6 +141,25 @@ describe('engine behaviour', () => {
 });
 
 describe('properties', () => {
+  it('never changes scheme, host, port or path (including whitespace edge cases)', () => {
+    const piece = fc.constantFrom('a', ' ', '%20', 'utm_source=1', 'x=1', '&', '=', '?', '#', '/', 'é', '%');
+    fc.assert(
+      fc.property(
+        fc.array(piece, { maxLength: 12 }),
+        fc.constantFrom('clean', 'strict') as fc.Arbitrary<'clean' | 'strict'>,
+        (parts, mode) => {
+          const input = `https://example.com/p${parts.join('')}`;
+          const r = cleanUrl(input, { mode });
+          if (r.status !== 'cleaned') return;
+          const before = new URL(input.trim());
+          const after = new URL(r.url);
+          expect([after.protocol, after.host, after.pathname]).toEqual([before.protocol, before.host, before.pathname]);
+        },
+      ),
+      { numRuns: 3000 },
+    );
+  });
+
   const trackingKeys = defaultRuleSet.rules
     .filter((r) => r.domains === undefined && r.mode === 'clean')
     .flatMap((r) => r.params ?? []);
