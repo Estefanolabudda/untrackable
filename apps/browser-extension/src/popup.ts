@@ -96,7 +96,7 @@ tabPausedBox.addEventListener('change', async () => {
   await chrome.runtime.sendMessage({ type: 'setTabPaused', tabId: tab.id, paused: tabPausedBox.checked });
 });
 copyBtn.addEventListener('click', async () => {
-  if (tab?.url === undefined) return;
+  if (tab?.url === undefined || tab.url.length > 32_768) return;
   const s = await loadSettings();
   const result = cleanUrl(tab.url, { mode: s.mode, exceptions: s.exceptions });
   const ok = (await chrome.runtime.sendMessage({ type: 'copyText', text: result.url })) === true;

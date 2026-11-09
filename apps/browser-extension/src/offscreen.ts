@@ -3,7 +3,16 @@
  * explicit user action (context menu, keyboard shortcut, popup button).
  */
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || typeof message !== 'object' || message === null) return false;
+  // Only the service worker may write to the clipboard (content scripts share sender.id).
+  if (
+    sender.id !== chrome.runtime.id ||
+    sender.tab !== undefined ||
+    sender.url !== chrome.runtime.getURL('background.js') ||
+    typeof message !== 'object' ||
+    message === null
+  ) {
+    return false;
+  }
   const m = message as { target?: unknown; type?: unknown; text?: unknown };
   if (m.target !== 'offscreen' || m.type !== 'copy' || typeof m.text !== 'string') return false;
   const area = document.createElement('textarea');

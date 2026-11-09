@@ -13,6 +13,8 @@ import { cleanUrl, compileDnrRules, PRIORITY } from '@untrackable/core';
 import { effectiveMode, loadSettings, saveSettings, type Message, type Settings, type TabState } from './settings.js';
 
 const RESUME_ALARM = 'untrackable-resume';
+/** Longest URL the extension cleans on explicit actions (Chromium's own limit is 2 MB). */
+const MAX_URL_LENGTH = 32_768;
 const MENU = {
   copyLink: 'copy-clean-link',
   openUnmodified: 'open-link-unmodified',
@@ -72,52 +74,89 @@ async function updateBadge(settings: Settings): Promise<void> {
 // Per-tab session rules (pause on tab, one-time bypass)
 // ---------------------------------------------------------------------------
 
-/** Session rule ids: tabId + offset, so each tab has at most one rule. */
-const TAB_RULE_OFFSET = 1;
-const ONCE_KEY = 'onceTabs';
+/**
+ * Per-tab session rules. The rules themselves are the only state:
+ *   - kind is encoded in the id range (pause: [1, ONCE_BASE), one-time: [ONCE_BASE, 2^31)),
+ *   - the tab is condition.tabIds[0].
+ * Tab ids can be close to 2^31 in Chromium, so ids are allocated, not derived
+ * from the tab id. All mutations go through one queue → no lost updates.
+ */
+const ONCE_BASE = 1_000_000_000;
+const ONCE_ALARM_PREFIX = 'untrackable-once-';
+/** A one-time bypass that never completes (e.g. the link was a download) expires after this. */
+const ONCE_TIMEOUT_MINUTES = 1;
 
-function tabRuleId(tabId: number): number {
-  return tabId + TAB_RULE_OFFSET;
+type TabRuleKind = 'pause' | 'once';
+
+let sessionQueue: Promise<unknown> = Promise.resolve();
+function serialised<T>(fn: () => Promise<T>): Promise<T> {
+  const run = sessionQueue.then(fn, fn);
+  sessionQueue = run.catch(() => {});
+  return run;
+}
+
+function kindOf(id: number): TabRuleKind {
+  return id >= ONCE_BASE ? 'once' : 'pause';
+}
+
+async function tabRules(tabId: number): Promise<chrome.declarativeNetRequest.Rule[]> {
+  return (await chrome.declarativeNetRequest.getSessionRules()).filter((r) => r.condition.tabIds?.includes(tabId));
 }
 
 async function isTabPaused(tabId: number): Promise<boolean> {
-  const rules = await chrome.declarativeNetRequest.getSessionRules();
-  return rules.some((r) => r.id === tabRuleId(tabId));
+  return (await tabRules(tabId)).length > 0;
 }
 
-async function setTabPaused(tabId: number, paused: boolean): Promise<void> {
-  const id = tabRuleId(tabId);
-  await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [id],
-    addRules: paused
-      ? [
-          {
-            id,
-            priority: PRIORITY.tabPause,
-            action: { type: chrome.declarativeNetRequest.RuleActionType.ALLOW },
-            condition: {
-              tabIds: [tabId],
-              resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
-            },
-          },
-        ]
-      : [],
-  });
-  if (!paused) await forgetOnce(tabId);
+/** Replace the tab's rules of `kind` (remove all, optionally add one). Must run inside `serialised`. */
+async function setTabRule(tabId: number, kind: TabRuleKind, present: boolean): Promise<void> {
+  const all = await chrome.declarativeNetRequest.getSessionRules();
+  const remove = all.filter((r) => kindOf(r.id) === kind && r.condition.tabIds?.includes(tabId)).map((r) => r.id);
+  const addRules: chrome.declarativeNetRequest.Rule[] = [];
+  if (present) {
+    const base = kind === 'once' ? ONCE_BASE : 1;
+    const used = new Set(all.map((r) => r.id));
+    let id = base;
+    while (used.has(id)) id++;
+    addRules.push({
+      id,
+      priority: PRIORITY.tabPause,
+      action: { type: chrome.declarativeNetRequest.RuleActionType.ALLOW },
+      condition: { tabIds: [tabId], resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME] },
+    });
+  }
+  if (remove.length > 0 || addRules.length > 0) {
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: remove, addRules });
+  }
+}
+
+function notifyTab(tabId: number, paused: boolean): void {
   // Tell the tab's content script so copy cleaning follows the tab state.
   chrome.tabs.sendMessage(tabId, { type: 'tabState', paused } satisfies { type: string } & TabState).catch(() => {
     /* no content script in this tab (e.g. chrome:// page) */
   });
 }
 
-async function getOnceTabs(): Promise<number[]> {
-  const v = (await chrome.storage.session.get(ONCE_KEY))[ONCE_KEY];
-  return Array.isArray(v) ? v.filter((x): x is number => Number.isInteger(x)) : [];
+function setTabPaused(tabId: number, paused: boolean): Promise<void> {
+  return serialised(async () => {
+    await setTabRule(tabId, 'pause', paused);
+    // Un-pausing also ends a pending one-time bypass in that tab.
+    if (!paused) await setTabRule(tabId, 'once', false);
+    if (!paused) await chrome.alarms.clear(ONCE_ALARM_PREFIX + tabId);
+    notifyTab(tabId, paused);
+  });
 }
 
-async function forgetOnce(tabId: number): Promise<void> {
-  const once = await getOnceTabs();
-  if (once.includes(tabId)) await chrome.storage.session.set({ [ONCE_KEY]: once.filter((t) => t !== tabId) });
+function endOnce(tabId: number): Promise<void> {
+  return serialised(async () => {
+    const rules = await tabRules(tabId);
+    if (!rules.some((r) => kindOf(r.id) === 'once')) return;
+    await setTabRule(tabId, 'once', false);
+    await chrome.alarms.clear(ONCE_ALARM_PREFIX + tabId);
+    notifyTab(
+      tabId,
+      rules.some((r) => kindOf(r.id) === 'pause'),
+    );
+  });
 }
 
 /** One-time bypass: open `url` in a new tab with cleaning disabled for that single page load. */
@@ -128,21 +167,23 @@ async function openUnmodified(url: string, openerTab?: chrome.tabs.Tab): Promise
   if (openerTab?.index !== undefined) createProps.index = openerTab.index + 1;
   const tab = await chrome.tabs.create(createProps);
   if (tab.id === undefined) return;
-  await setTabPaused(tab.id, true);
-  await chrome.storage.session.set({ [ONCE_KEY]: [...(await getOnceTabs()), tab.id] });
+  const tabId = tab.id;
+  await serialised(() => setTabRule(tabId, 'once', true));
+  await chrome.alarms.create(ONCE_ALARM_PREFIX + tab.id, { delayInMinutes: ONCE_TIMEOUT_MINUTES });
   await chrome.tabs.update(tab.id, { url });
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete' || tab.url === undefined || tab.url === 'about:blank') return;
-  void getOnceTabs().then(async (once) => {
-    if (once.includes(tabId)) await setTabPaused(tabId, false);
-  });
+  void endOnce(tabId);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  void chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [tabRuleId(tabId)] });
-  void forgetOnce(tabId);
+  void serialised(async () => {
+    await setTabRule(tabId, 'pause', false);
+    await setTabRule(tabId, 'once', false);
+  });
+  void chrome.alarms.clear(ONCE_ALARM_PREFIX + tabId);
 });
 
 // ---------------------------------------------------------------------------
@@ -172,8 +213,13 @@ async function ensureOffscreen(): Promise<void> {
 
 async function copyToClipboard(text: string): Promise<boolean> {
   await ensureOffscreen();
-  const ok: unknown = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'copy', text });
-  return ok === true;
+  try {
+    const ok: unknown = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'copy', text });
+    return ok === true;
+  } finally {
+    // Do not keep a clipboard-capable document alive longer than needed.
+    await chrome.offscreen.closeDocument().catch(() => {});
+  }
 }
 
 /**
@@ -182,6 +228,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
  * Domain exceptions are still honoured.
  */
 async function copyClean(url: string): Promise<void> {
+  if (url.length > MAX_URL_LENGTH) return; // hostile pages can craft huge hrefs
   const settings = await loadSettings();
   const result = cleanUrl(url, { mode: settings.mode, exceptions: settings.exceptions });
   await copyToClipboard(result.url);
@@ -214,6 +261,10 @@ chrome.storage.onChanged.addListener((_changes, area) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === RESUME_ALARM) void saveSettings({ pausedUntil: 0 });
+  else if (alarm.name.startsWith(ONCE_ALARM_PREFIX)) {
+    const tabId = Number(alarm.name.slice(ONCE_ALARM_PREFIX.length));
+    if (Number.isInteger(tabId)) void endOnce(tabId);
+  }
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {

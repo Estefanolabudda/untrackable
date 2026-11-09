@@ -60,7 +60,9 @@ function selectedText(): string {
 document.addEventListener(
   'copy',
   (event: ClipboardEvent) => {
-    if (!settings.copyCleaning || tabPaused || event.clipboardData === null) return;
+    // Ignore synthetic events: otherwise a page could probe settings and exceptions
+    // by dispatching its own copy events and inspecting the result.
+    if (!event.isTrusted || !settings.copyCleaning || tabPaused || event.clipboardData === null) return;
     const mode = effectiveMode(settings);
     if (mode === 'bypass') return;
     const text = selectedText().trim();

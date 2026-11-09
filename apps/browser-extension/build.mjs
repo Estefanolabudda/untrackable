@@ -3,7 +3,7 @@
 import { build } from 'esbuild';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -43,7 +43,11 @@ if (process.argv.includes('--zip')) {
     utimesSync(join(entry.parentPath, entry.name), epoch, epoch);
   }
   // -X: omit extra file attributes; files sorted for reproducibility.
-  execFileSync('sh', ['-c', `cd "${dist}" && find . -type f | LC_ALL=C sort | TZ=UTC zip -X -q "${zip}" -@`]);
+  const files = readdirSync(dist, { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile())
+    .map((e) => relative(dist, join(e.parentPath, e.name)))
+    .sort();
+  execFileSync('zip', ['-X', '-q', zip, ...files], { cwd: dist, env: { ...process.env, TZ: 'UTC' } });
   console.log(`packaged ${zip}`);
 }
 console.log('built', dist);

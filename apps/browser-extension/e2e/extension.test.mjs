@@ -75,7 +75,7 @@ async function extensionPage(file) {
 
 before(async () => {
   server = http.createServer((req, res) => {
-    seen.push(req.url);
+    if (req.url !== '/favicon.ico') seen.push(req.url);
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(PAGE);
   });
@@ -145,7 +145,8 @@ describe('installation', () => {
 describe('automatic navigation cleaning (Clean mode)', () => {
   test('removes utm parameters before the request leaves the browser', async () => {
     assert.equal(await visit('/article?utm_source=newsletter&utm_medium=email&id=123'), '/article?id=123');
-    assert.deepEqual(seen, ['/article?id=123']);
+    await waitFor(() => seen.length > 0, 'request', 2000).catch(() => {});
+    assert.deepEqual(seen, ['/article?id=123'], JSON.stringify(seen));
   });
 
   test('removes click ids and keeps functional parameters in order', async () => {
@@ -278,6 +279,38 @@ describe('per-tab controls', () => {
     await ext.close();
   });
 
+  test('concurrent one-time bypasses are all consumed (regression)', async () => {
+    const ext = await extensionPage('options.html');
+    const pages = [];
+    const onPage = (p) => pages.push(p);
+    context.on('page', onPage);
+    await ext.evaluate(
+      (port) =>
+        Promise.all(
+          ['x', 'y', 'z'].map((v) =>
+            chrome.runtime.sendMessage({
+              type: 'openUnmodified',
+              url: `http://news.test:${port}/multi-${v}?utm_source=${v}`,
+            }),
+          ),
+        ),
+      port,
+    );
+    await waitFor(() => pages.filter((p) => p.url().includes('/multi-')).length === 3, 'three tabs');
+    await waitFor(
+      async () => (await sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,
+      'all bypass rules removed',
+    );
+    for (const p of pages.filter((x) => x.url().includes('/multi-'))) {
+      assert.match(p.url(), /utm_source=/, 'original link was opened');
+      await p.goto(`http://news.test:${port}/after?utm_source=x`);
+      assert.match(p.url(), /\/after$/, 'tab is cleaned again');
+      await p.close();
+    }
+    context.off('page', onPage);
+    await ext.close();
+  });
+
   test('one-time bypass opens the original link once', async () => {
     const ext = await extensionPage('options.html');
     const opened = context.waitForEvent('page', (p) => p.url().includes('/once') || p.url() === 'about:blank');
@@ -355,6 +388,25 @@ describe('copy cleaning', () => {
       }),
       'https://a.example/oauth/authorize?utm_source=x',
     );
+    await page.close();
+  });
+
+  test('synthetic copy events from the page are ignored (no settings oracle)', async () => {
+    await setSettings({ exceptions: ['private.example'] });
+    const page = await context.newPage();
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    const probe = await page.evaluate(() => {
+      const f = document.getElementById('field');
+      f.value = 'https://public.example/?utm_source=x';
+      f.focus();
+      f.select();
+      const dt = new DataTransfer();
+      const ev = new ClipboardEvent('copy', { clipboardData: dt, bubbles: true, cancelable: true });
+      document.dispatchEvent(ev);
+      return { data: dt.getData('text/plain'), prevented: ev.defaultPrevented };
+    });
+    assert.deepEqual(probe, { data: '', prevented: false });
     await page.close();
   });
 
