@@ -48,6 +48,34 @@ chrome.runtime.onMessage.addListener((message: unknown, sender) => {
 
 const SINGLE_URL = /^https?:\/\/\S+$/i;
 
+/**
+ * Copy events triggered by page scripts (document.execCommand('copy') inside
+ * any click handler) are also "trusted". To stop pages from using the copy
+ * result as an oracle for settings and exception domains, only act right
+ * after a genuine copy gesture – Ctrl/Cmd+C, Ctrl+Insert or the context menu –
+ * and at most once per gesture. Page scripts cannot synthesise trusted
+ * keyboard or contextmenu events.
+ */
+const GESTURE_WINDOW_MS = 1000;
+let gestureAt = -Infinity;
+
+function onKeyDown(e: KeyboardEvent): void {
+  if (!e.isTrusted) return;
+  const key = e.key.toLowerCase();
+  if (((e.ctrlKey || e.metaKey) && key === 'c') || (e.ctrlKey && key === 'insert')) gestureAt = performance.now();
+}
+function onContextMenu(e: MouseEvent): void {
+  if (e.isTrusted) gestureAt = performance.now();
+}
+window.addEventListener('keydown', onKeyDown, true);
+window.addEventListener('contextmenu', onContextMenu, true);
+
+function consumeGesture(): boolean {
+  const ok = performance.now() - gestureAt <= GESTURE_WINDOW_MS;
+  gestureAt = -Infinity;
+  return ok;
+}
+
 function selectedText(): string {
   const active = document.activeElement;
   if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
@@ -62,10 +90,10 @@ function selectedText(): string {
 document.addEventListener(
   'copy',
   (event: ClipboardEvent) => {
-    // Ignore synthetic events: otherwise a page could probe settings and exceptions
-    // by dispatching its own copy events and inspecting the result.
-    if (!event.isTrusted || !settingsLoaded || !settings.copyCleaning || tabPaused || event.clipboardData === null)
-      return;
+    // Ignore synthetic and script-initiated copies: otherwise a page could probe
+    // settings and exceptions by triggering copies and inspecting the result.
+    if (!event.isTrusted || !consumeGesture()) return;
+    if (!settingsLoaded || !settings.copyCleaning || tabPaused || event.clipboardData === null) return;
     const mode = effectiveMode(settings);
     if (mode === 'bypass') return;
     const text = selectedText().trim();

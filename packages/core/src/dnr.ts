@@ -165,9 +165,9 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
       // tracker followed by more parameters: drop it and its '&'
       [`^([^?#]*\\?(?:[^&#]*&)*?)${names}(?:=[^&#]*)?&(.*)$`, '\\1\\2'],
       // last parameter after others: drop it and the preceding '&'
-      [`^([^?#]*\\?[^#]*?)&${names}(?:=[^&#]*)?$`, '\\1'],
+      [`^([^?#]*\\?[^#]*?)&${names}(?:=[^&#]*)?(#.*)?$`, '\\1\\2'],
       // the only parameter: drop it and the '?'
-      [`^([^?#]*)\\?${names}(?:=[^&#]*)?$`, '\\1'],
+      [`^([^?#]*)\\?${names}(?:=[^&#]*)?(#.*)?$`, '\\1\\2'],
     ];
     for (const [regexFilter, regexSubstitution] of variants) {
       rules.push({
@@ -204,8 +204,9 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
     });
   }
   // DNR cannot percent-decode. Leave URLs alone whose path or parameter keys
-  // contain an encoded letter, '-', '.' or '_' (could hide a protection signal).
-  const encodedWordChar = '%(?:[46][1-9a-f]|[57][0-9a]|2[de]|5f)';
+  // contain an encoded letter, digit, '-', '.', '/' or '_' (could hide a
+  // protection signal such as /x%2Fsso or /%32fa).
+  const encodedWordChar = '%(?:[46][1-9a-f]|[57][0-9a]|2[def]|3[0-9]|5f)';
   allow({ regexFilter: `^https?://[^/?#]*/[^?#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   allow({ regexFilter: `[?&][^=&#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   for (const group of chunk(p.params, REGEX_CHUNK)) {

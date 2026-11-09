@@ -25,6 +25,8 @@ let context;
 let sw;
 let extensionId;
 let userDataDir;
+let selfLoopHits = 0;
+let launderHits = 0;
 
 const PAGE = `<!doctype html><html><body>
 <input id="field" value="">
@@ -81,6 +83,24 @@ before(async () => {
     // A server that insists on its tracking parameter (redirect loop when cleaned).
     if (req.url.startsWith('/loop') && !/utm_source=/i.test(req.url)) {
       res.writeHead(302, { location: '/loop?utm_source=forced' });
+      res.end();
+      return;
+    }
+    // A broken server that loops no matter what (must not cause endless retries).
+    if (req.url.startsWith('/selfloop')) {
+      selfLoopHits++;
+      res.writeHead(302, { location: `/selfloop?utm_source=x&n=${selfLoopHits}` });
+      res.end();
+      return;
+    }
+    // A redirector that loops on purpose, then forwards to another site with trackers.
+    if (req.url.startsWith('/launder')) {
+      launderHits++;
+      const location =
+        launderHits <= 24
+          ? `/launder?n=${launderHits}&utm_source=loop`
+          : `http://victim.test:${port}/landing?gclid=TRACKED&id=1`;
+      res.writeHead(302, { location });
       res.end();
       return;
     }
@@ -447,6 +467,30 @@ describe('copy cleaning', () => {
     await page.close();
   });
 
+  test('script-initiated copies after a click are not cleaned (no settings oracle)', async () => {
+    await setSettings({ exceptions: ['private.example'] });
+    const page = await context.newPage();
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      window.results = [];
+      document.addEventListener('copy', (e) => window.results.push(e.defaultPrevented));
+      document.body.addEventListener('click', () => {
+        for (const host of ['private.example', 'public.example']) {
+          const t = document.createElement('textarea');
+          t.value = `https://${host}/?utm_source=x`;
+          document.body.append(t);
+          t.select();
+          document.execCommand('copy');
+          t.remove();
+        }
+      });
+    });
+    await page.click('body');
+    assert.deepEqual(await page.evaluate(() => window.results), [false, false]);
+    await page.close();
+  });
+
   test('copy cleaning can be switched off', async () => {
     await setSettings({ copyCleaning: false });
     const page = await context.newPage();
@@ -542,6 +586,25 @@ describe('redirect loops', () => {
       );
       await page.goto(`http://news.test:${port}/after-loop?utm_source=x`);
       assert.match(page.url(), /\/after-loop$/);
+
+      // A server that loops even without cleaning: exactly one retry, then give up.
+      selfLoopHits = 0;
+      await page.goto(`http://news.test:${port}/selfloop?utm_source=x`).catch(() => {});
+      await new Promise((r) => setTimeout(r, 4000));
+      const hits = selfLoopHits;
+      assert.ok(hits > 0 && hits <= 50, `bounded retries (${hits} requests)`);
+      await new Promise((r) => setTimeout(r, 2000));
+      assert.equal(selfLoopHits, hits, 'no further retries');
+
+      // A redirector cannot use the recovery to forward trackers to another site.
+      launderHits = 0;
+      const tab = await second.context.newPage();
+      await tab.goto(`http://attacker.test:${port}/launder?n=0&utm_source=loop`).catch(() => {});
+      // The loop triggers one retry (bypass scoped to attacker.test), the
+      // redirector then forwards to victim.test – which must still be cleaned.
+      await tab.waitForURL(/victim\.test/, { timeout: 10_000 });
+      assert.match(tab.url(), /\/landing\?id=1$/);
+      assert.ok(!seen.some((u) => u.startsWith('/landing') && u.includes('gclid')), 'tracker never reached victim');
     } finally {
       await second.context.close();
       rmSync(dir, { recursive: true, force: true });

@@ -24,28 +24,30 @@ function applyRedirect(rule: DnrRule, url: string): string {
   const redirect = rule.action.redirect;
   if ('regexSubstitution' in redirect) {
     const re = new RegExp(rule.condition.regexFilter!, rule.condition.isUrlFilterCaseSensitive === false ? 'i' : '');
+    // RE2 substitutes an unmatched group with the empty string, like JS does.
     return url.replace(re, redirect.regexSubstitution.replace(/\\(\d)/g, '$$$1'));
   }
   const remove = new Set(redirect.transform.queryTransform.removeParams);
-  const qIdx = url.indexOf('?');
+  const hashIdx = url.indexOf('#');
+  const fragment = hashIdx === -1 ? '' : url.slice(hashIdx);
+  const base = hashIdx === -1 ? url : url.slice(0, hashIdx);
+  const qIdx = base.indexOf('?');
   if (qIdx === -1) return url;
-  const segments = url.slice(qIdx + 1).split('&');
+  const segments = base.slice(qIdx + 1).split('&');
   const kept = segments.filter((seg) => !remove.has(seg.split('=')[0]!));
   if (kept.length === segments.length) return url;
-  return url.slice(0, qIdx) + (kept.join('&') ? `?${kept.join('&')}` : '');
+  return base.slice(0, qIdx) + (kept.join('&') ? `?${kept.join('&')}` : '') + fragment;
 }
 
 /**
  * Model of Chromium's DNR evaluation for main_frame requests: highest
  * priority first, `allow` beats `redirect` at equal priority, a redirect whose
  * result equals the request URL is skipped (verified in Chromium), and every
- * redirect starts a new request (max 20 hops). Fragments are not sent and are
- * re-attached by the browser. The real browser is exercised by the e2e suite.
+ * redirect starts a new request (max 20 hops). Like Chromium, the URL matched
+ * by rules includes the fragment. The real browser is exercised by e2e tests.
  */
 function simulate(rules: DnrRule[], input: string): string {
-  const hashIdx = input.indexOf('#');
-  const fragment = hashIdx === -1 ? '' : input.slice(hashIdx);
-  let url = hashIdx === -1 ? input : input.slice(0, hashIdx);
+  let url = input;
   for (let hop = 0; hop < 20; hop++) {
     const host = new URL(url).hostname.toLowerCase().replace(/\.+$/, '');
     const matching = rules
@@ -63,7 +65,7 @@ function simulate(rules: DnrRule[], input: string): string {
       next = applyRedirect(rule, url);
       if (next !== url) break;
     }
-    if (next === url) return url + fragment;
+    if (next === url) return url;
     url = next;
   }
   throw new Error('redirect limit exceeded');
@@ -179,6 +181,9 @@ describe('DNR approximation vs engine (shared fixtures)', () => {
       'https://e.example/%6Fauth/x?utm_source=a',
       'https://e.example/my%2Dlogin?utm_source=a',
       'https://e.example/dl?%73ig=abc&utm_source=a',
+      'https://e.example/x%2Fsso?utm_source=1',
+      'https://e.example/%32fa?utm_source=1',
+      'https://e.example/go/https%3A%2F%2Fidp.example%2Fauthorize?utm_source=1',
     ]) {
       expect(simulate(rules, url)).toBe(url);
     }
@@ -196,6 +201,8 @@ describe('DNR approximation vs engine (shared fixtures)', () => {
       ['https://e.example/a?utm=1&Utm_Source=2', 'https://e.example/a?utm=1'],
       ['https://e.example/a?myutm_source=1&xgclid=2', 'https://e.example/a?myutm_source=1&xgclid=2'],
       ['https://e.example/login?Utm_Source=x', 'https://e.example/login?Utm_Source=x'],
+      ['https://e.example/a?x=1&Utm_Source=a#frag', 'https://e.example/a?x=1#frag'],
+      ['https://e.example/a?Utm_Source=a#frag', 'https://e.example/a#frag'],
     ];
     for (const [input, expected] of cases) {
       expect(simulate(rules, input)).toBe(expected);

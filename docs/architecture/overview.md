@@ -88,13 +88,14 @@ MV3 extensions cannot run their own code synchronously for navigations
 (blocking `webRequest` is unavailable). `compileDnrRules` therefore turns the
 rule set into DNR rules:
 
-| Priority | Rule                                                                                       | Ids           |
-| -------- | ------------------------------------------------------------------------------------------ | ------------- |
-| 1        | global `redirect` removing all globally applicable parameters                              | 1             |
-| 2        | per-domain `redirect` (domain + global parameters, since only one redirect can win)        | 100–999       |
-| 3        | protection `allow` rules (domains, path keywords, parameters, combinations as RE2 regexes) | 1000+         |
-| 4        | user exception `allow` rule                                                                | 2000          |
-| 5        | per-tab session `allow` rules (pause / one-time bypass)                                    | session rules |
+| Priority | Rule                                                                                                       | Ids           |
+| -------- | ---------------------------------------------------------------------------------------------------------- | ------------- |
+| 1        | case-insensitive `regexSubstitution` fallback (one remaining tracker per internal redirect)                | 500–999       |
+| 2        | global `redirect` removing all globally applicable parameters                                              | 1             |
+| 3        | per-domain `redirect` (domain + global parameters, since only one redirect can win)                        | 100–499       |
+| 4        | protection `allow` rules (domains, path keywords/substrings, parameters, combinations, encoded characters) | 1000+         |
+| 5        | user exception `allow` rule                                                                                | 2000          |
+| 6        | per-tab session `allow` rules (pause, one-time bypass, loop-recovery retry scoped to one host)             | session rules |
 
 Chromium does not redirect when the transformed URL equals the original, so
 there are no redirect loops (verified by e2e test).
@@ -139,8 +140,12 @@ settings, which requests the optional `webNavigation` permission; the failed
 top-level load is then retried once, unmodified, in the same tab (one-time
 bypass). Without the permission the user resolves it with a site exception,
 the tab pause or "Open link without cleaning". Recovery is off by default
-because the permission adds an install-time-like prompt ("Read your browsing
-history").
+because the permission adds a prompt ("Read your browsing history").
+
+Recovery safeguards (each covered by an e2e test): at most one retry per tab
+per minute, so a server that loops even without cleaning costs exactly one
+extra attempt; the retry bypass is limited to the failing URL's host in that
+tab, so a redirector cannot use it to forward trackers to another site.
 
 **Rule installation safety:** `updateDynamicRules` is atomic, so one rule
 Chromium cannot compile would block the whole update. The service worker

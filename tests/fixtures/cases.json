@@ -455,7 +455,7 @@
       "reason": "param:login_token"
     },
     {
-      "name": "verification code suffix protected",
+      "name": "verification code parameter protected",
       "input": "https://example.com/welcome?verification_code=123456&utm_source=x",
       "expected": "https://example.com/welcome?verification_code=123456&utm_source=x",
       "status": "protected",
@@ -851,14 +851,14 @@
       "input": "https://info.example.com/PreferenceCenter.html?mkt_tok=MzI3",
       "expected": "https://info.example.com/PreferenceCenter.html?mkt_tok=MzI3",
       "status": "protected",
-      "reason": "path:preference"
+      "reason": "path:preferencecenter"
     },
     {
       "name": "joined verify-email path protected",
       "input": "https://example.com/verifyEmail?id=1&utm_source=x",
       "expected": "https://example.com/verifyEmail?id=1&utm_source=x",
       "status": "protected",
-      "reason": "path:verif"
+      "reason": "path:verifyemail"
     },
     {
       "name": "short signature with expiry protected",
@@ -904,11 +904,67 @@
       "removed": ["utm_source"]
     },
     {
-      "name": "neutral words containing protected substrings stay protected (false negative accepted)",
+      "name": "ordinary words that merely start with a keyword are cleaned",
       "input": "https://blog.example/confirmed-speakers?utm_source=x",
-      "expected": "https://blog.example/confirmed-speakers?utm_source=x",
+      "expected": "https://blog.example/confirmed-speakers",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "over-protection guard: designing contains signin",
+      "input": "https://news.example/2026/designing-cities-for-people?utm_source=x&utm_medium=social",
+      "expected": "https://news.example/2026/designing-cities-for-people",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: signing contains sign",
+      "input": "https://news.example/politics/treaty-signing-ceremony?utm_campaign=x",
+      "expected": "https://news.example/politics/treaty-signing-ceremony",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: assigning tasks",
+      "input": "https://blog.example/assigning-tasks-in-teams?fbclid=1",
+      "expected": "https://blog.example/assigning-tasks-in-teams",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: payday article",
+      "input": "https://news.example/money/payday-loans-explained?utm_source=x",
+      "expected": "https://news.example/money/payday-loans-explained",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: country_code is functional and not protected",
+      "input": "https://shop.example/stores?country_code=de&utm_source=x",
+      "expected": "https://shop.example/stores?country_code=de",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: reset in an ordinary path",
+      "input": "https://news.example/tech/the-great-reset-of-2026?utm_source=x",
+      "expected": "https://news.example/tech/the-great-reset-of-2026",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: preferences page of a shop",
+      "input": "https://shop.example/preferences/shoes?gclid=1",
+      "expected": "https://shop.example/preferences/shoes",
+      "status": "cleaned"
+    },
+    {
+      "name": "Django style password reset still protected",
+      "input": "https://example.com/accounts/password/reset/key/1-set-password/?utm_source=x",
+      "expected": "https://example.com/accounts/password/reset/key/1-set-password/?utm_source=x",
       "status": "protected",
-      "reason": "path:confirm"
+      "reason": "path:password"
+    },
+    {
+      "name": "camelCase checkouts path protected",
+      "input": "https://shop.example/checkouts/abc123?utm_source=x",
+      "expected": "https://shop.example/checkouts/abc123?utm_source=x",
+      "status": "protected",
+      "reason": "path:checkouts"
     }
   ]
 }

@@ -9,13 +9,16 @@ Because of its host permissions, the extension _could_ read and change data
 on http(s) pages. It uses that access only for:
 
 - letting Chromium's `declarativeNetRequest` engine rewrite navigation URLs
-  (the extension's own code never sees these navigations),
+  (the extension's own code does not see these navigations – unless you
+  enable redirect-loop recovery, see below),
 - a content script that reacts to `copy` events, reading the current
   selection only at the moment you copy,
 - reading the active tab's URL when **you** choose "Copy clean link",
 - only if you enable automatic redirect-loop recovery: receiving navigation
-  error events (optional `webNavigation` permission). Untrackable reacts only
-  to "too many redirects" errors of the top-level page and stores nothing.
+  error events (optional `webNavigation` permission). Chromium then delivers
+  error events, including their URLs, for all frames to the extension.
+  Untrackable reacts only to "too many redirects" errors of the top-level
+  page, by reloading that page once without cleaning; it stores no URL.
 
 ## What is processed
 
@@ -30,11 +33,11 @@ All processing happens locally, synchronously, in memory.
 
 ## What is stored
 
-| Where                                                              | Content                                                                                                           |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `chrome.storage.local`                                             | Your settings only: on/off, mode, pause end time, copy-cleaning switch, the list of exception domains you entered |
-| `chrome.storage.session` (memory, cleared when the browser closes) | Ids of tabs that have a pending one-time bypass                                                                   |
-| DNR session rules (memory)                                         | Tab ids you paused                                                                                                |
+| Where                                                              | Content                                                                                                                  |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `chrome.storage.local`                                             | Your settings only: on/off, mode, pause end time, copy-cleaning switch, the list of exception domains you entered        |
+| `chrome.storage.session` (memory, cleared when the browser closes) | Only with loop recovery: tab id → time of the last retry (no URLs)                                                       |
+| DNR session rules and alarms (memory)                              | Tab ids you paused or opened without cleaning; for a loop-recovery retry, the host name of that page until it has loaded |
 
 No URLs, page titles, history, counters or statistics are stored. This is
 verified by an end-to-end test that inspects storage after browsing.
@@ -42,7 +45,10 @@ verified by an end-to-end test that inspects storage after browsing.
 ## What is never collected
 
 - No telemetry, analytics or crash reporting.
-- No network requests of any kind are made by the extension.
+- The extension makes no network requests of its own. (The only
+  navigation it ever triggers is the one-time reload of a page you were
+  opening, if you enable redirect-loop recovery, or a link you explicitly
+  open via "Open link without cleaning".)
 - No remote rule updates.
 - No cookies, form data, credentials or page content.
 

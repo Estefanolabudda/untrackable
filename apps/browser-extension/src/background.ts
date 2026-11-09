@@ -6,8 +6,9 @@
  * - Keyboard command: copy clean link of the current page.
  * - Per-tab pause and one-time bypass via DNR session rules.
  *
- * Privacy: nothing here stores or transmits URLs. Tab state lives only in
- * memory/chrome.storage.session and disappears with the browser session.
+ * Privacy: nothing here stores or transmits URLs. Per-tab state lives only in
+ * DNR session rules, alarms and chrome.storage.session (retry timestamps, no
+ * URLs) and disappears with the browser session.
  */
 import { cleanUrl, compileDnrRules, PRIORITY } from '@untrackable/core';
 import { effectiveMode, loadSettings, saveSettings, type Message, type Settings, type TabState } from './settings.js';
@@ -15,6 +16,9 @@ import { effectiveMode, loadSettings, saveSettings, type Message, type Settings,
 const RESUME_ALARM = 'untrackable-resume';
 /** Longest URL the extension cleans on explicit actions (Chromium's own limit is 2 MB). */
 const MAX_URL_LENGTH = 32_768;
+
+/** True when navigation cleaning had to be disabled because protection rules could not be installed. */
+let rulesDegraded = false;
 const MENU = {
   copyLink: 'copy-clean-link',
   openUnmodified: 'open-link-unmodified',
@@ -58,12 +62,14 @@ async function supportedRules(
     }
     kept.push(rule);
   }
+  rulesDegraded = protectionBroken;
   return protectionBroken
     ? kept.filter((r) => r.action.type !== chrome.declarativeNetRequest.RuleActionType.REDIRECT)
     : kept;
 }
 
 async function applyRulesNow(): Promise<void> {
+  rulesDegraded = false;
   const settings = await loadSettings();
   const mode = effectiveMode(settings);
   const compiled =
@@ -97,6 +103,14 @@ async function scheduleResume(settings: Settings): Promise<void> {
 
 async function updateBadge(settings: Settings): Promise<void> {
   const mode = effectiveMode(settings);
+  if (rulesDegraded && mode !== 'bypass') {
+    await chrome.action.setBadgeText({ text: '!' });
+    await chrome.action.setBadgeBackgroundColor({ color: '#8a3b12' });
+    await chrome.action.setTitle({
+      title: 'Untrackable – navigation cleaning disabled: this browser could not install the protection rules',
+    });
+    return;
+  }
   const text = mode === 'bypass' ? 'off' : mode === 'strict' ? 'S' : '';
   await chrome.action.setBadgeText({ text });
   await chrome.action.setBadgeBackgroundColor({ color: mode === 'bypass' ? '#8a3b12' : '#1f5f3a' });
@@ -147,7 +161,12 @@ async function isTabPaused(tabId: number): Promise<boolean> {
 }
 
 /** Replace the tab's rules of `kind` (remove all, optionally add one). Must run inside `serialised`. */
-async function setTabRule(tabId: number, kind: TabRuleKind, present: boolean): Promise<void> {
+async function setTabRule(
+  tabId: number,
+  kind: TabRuleKind,
+  present: boolean,
+  requestDomains?: string[],
+): Promise<void> {
   const all = await chrome.declarativeNetRequest.getSessionRules();
   const remove = all.filter((r) => kindOf(r.id) === kind && r.condition.tabIds?.includes(tabId)).map((r) => r.id);
   const addRules: chrome.declarativeNetRequest.Rule[] = [];
@@ -160,7 +179,11 @@ async function setTabRule(tabId: number, kind: TabRuleKind, present: boolean): P
       id,
       priority: PRIORITY.tabPause,
       action: { type: chrome.declarativeNetRequest.RuleActionType.ALLOW },
-      condition: { tabIds: [tabId], resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME] },
+      condition: {
+        tabIds: [tabId],
+        resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
+        ...(requestDomains === undefined ? {} : { requestDomains }),
+      },
     });
   }
   if (remove.length > 0 || addRules.length > 0) {
@@ -225,9 +248,18 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // cleaned navigation loops until Chromium aborts with ERR_TOO_MANY_REDIRECTS.
 // DNR cannot observe this. When the user grants the optional webNavigation
 // permission, the failed top-level load is retried once, unmodified, in the
-// same tab. Only the error event is used; nothing is stored or logged.
+// same tab – at most once per tab per LOOP_RETRY_WINDOW_MS, so a site that
+// loops even without cleaning costs exactly one extra attempt. (Whether the
+// URL Chromium reports still carries a tracker depends on where the redirect
+// limit hit, so it cannot tell "our" loops apart reliably.)
+// The retry bypass only covers the failing URL's host in that tab, so a
+// redirector cannot use it to launder trackers into another site's URL.
+// Only the error event is used; the per-tab retry time lives in
+// chrome.storage.session (memory only) and contains no URL.
 
 const REDIRECT_LOOP_ERROR = 'net::ERR_TOO_MANY_REDIRECTS';
+const LOOP_RETRY_KEY = 'loopRetries';
+const LOOP_RETRY_WINDOW_MS = 60_000;
 
 async function waitForTabComplete(tabId: number, timeoutMs = 3000): Promise<void> {
   const start = Date.now();
@@ -238,13 +270,37 @@ async function waitForTabComplete(tabId: number, timeoutMs = 3000): Promise<void
   }
 }
 
+/** Atomically claim the single retry for this tab. Returns false if one happened recently. */
+function claimLoopRetry(tabId: number): Promise<boolean> {
+  return serialised(async () => {
+    const now = Date.now();
+    const raw = (await chrome.storage.session.get(LOOP_RETRY_KEY))[LOOP_RETRY_KEY];
+    const retries: Record<string, number> = {};
+    if (typeof raw === 'object' && raw !== null) {
+      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof v === 'number' && now - v < LOOP_RETRY_WINDOW_MS) retries[k] = v; // prune old entries
+      }
+    }
+    const claimed = retries[String(tabId)] === undefined;
+    if (claimed) retries[String(tabId)] = now;
+    await chrome.storage.session.set({ [LOOP_RETRY_KEY]: retries });
+    return claimed;
+  });
+}
+
 async function recoverFromRedirectLoop(tabId: number, url: string): Promise<void> {
-  if (!/^https?:/i.test(url) || effectiveMode(await loadSettings()) === 'bypass') return;
-  // Already retried without cleaning (or paused): the loop is not ours – give up.
-  if (await isTabPaused(tabId)) return;
+  const mode = effectiveMode(await loadSettings());
+  if (mode === 'bypass' || url.length > MAX_URL_LENGTH || !/^https?:/i.test(url)) return;
+  let host: string;
+  try {
+    host = new URL(url).hostname.replace(/\.+$/, '');
+  } catch {
+    return;
+  }
+  if (host === '' || host.startsWith('[') || !(await claimLoopRetry(tabId))) return;
   // Let the error page finish first, so its "complete" event cannot end the bypass early.
   await waitForTabComplete(tabId);
-  await serialised(() => setTabRule(tabId, 'once', true));
+  await serialised(() => setTabRule(tabId, 'once', true, [host]));
   await chrome.alarms.create(ONCE_ALARM_PREFIX + tabId, { delayInMinutes: ONCE_TIMEOUT_MINUTES });
   await chrome.tabs.update(tabId, { url });
 }
