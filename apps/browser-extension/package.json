@@ -1,0 +1,15 @@
+{
+  "name": "@untrackable/browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Untrackable Chromium Manifest V3 extension",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "package": "node build.mjs --zip"
+  },
+  "dependencies": {
+    "@untrackable/core": "0.1.0"
+  }
+}
