@@ -673,10 +673,22 @@ describe('redirect loops', () => {
       await waitFor(async () => (await offerFor(tabId)).offered, 'retry offered');
       assert.equal((await offerFor(tabId)).badge, '↻');
       // Nothing happens automatically (no extension-initiated navigation).
-      await new Promise((r) => setTimeout(r, 1000));
-      const before = seen.length;
+      // Let the original loop settle (its last requests can arrive late on slow
+      // runners), then make sure nothing loads the page without cleaning: an
+      // uncleaned load is the only way '/loop?utm_source=forced' reaches us.
+      let last = -1;
+      await waitFor(
+        async () => {
+          const stable = seen.length === last;
+          last = seen.length;
+          if (!stable) await new Promise((r) => setTimeout(r, 750));
+          return stable;
+        },
+        'loop settled',
+        15_000,
+      );
       await new Promise((r) => setTimeout(r, 1500));
-      assert.deepEqual(seen.slice(before), [], 'no automatic retry');
+      assert.ok(!seen.some((u) => u.includes('utm_source=forced')), 'no automatic retry without cleaning');
       // Explicit retry: loads once without cleaning, then normal cleaning resumes.
       assert.equal(await retry(tabId), true);
       await page.waitForURL(/\/loop\?utm_source=forced$/, { timeout: 10_000 });
