@@ -399,11 +399,15 @@ describe('per-tab controls', () => {
 
   test('one-time bypass opens the original link once', async () => {
     const ext = await extensionPage('options.html');
-    const opened = context.waitForEvent('page', (p) => p.url().includes('/once') || p.url() === 'about:blank');
     await ext.fill('#preview-input', `http://news.test:${port}/once?utm_source=x&id=1`);
     await ext.click('#open-unmodified');
-    const tab = await opened;
-    await tab.waitForURL(/\/once/);
+    // Poll instead of a 'page' event predicate: the new tab's URL may still be
+    // empty when the event fires on a slow machine.
+    const tab = await waitFor(
+      () => context.pages().find((p) => p.url().includes('/once')),
+      'tab opened without cleaning',
+      15_000,
+    );
     assert.match(tab.url(), /\/once\?utm_source=x&id=1$/);
     assert.ok(seen.includes('/once?utm_source=x&id=1'));
     // The bypass is consumed: the next navigation in the same tab is cleaned again.
@@ -423,7 +427,14 @@ describe('copy cleaning', () => {
     await page.evaluate(() => navigator.clipboard.writeText('sentinel'));
     await page.evaluate(setup);
     await page.keyboard.press('ControlOrMeta+C');
-    return page.evaluate(() => navigator.clipboard.readText());
+    // Every case copies something, so wait until the sentinel is replaced.
+    let text = 'sentinel';
+    await waitFor(
+      async () => (text = await page.evaluate(() => navigator.clipboard.readText())) !== 'sentinel',
+      'clipboard update',
+      3_000,
+    );
+    return text;
   }
 
   test('copying a selected link copies the cleaned link', async () => {
@@ -586,7 +597,13 @@ describe('copy cleaning', () => {
       chrome.runtime.sendMessage({ type: 'copyText', text: 'https://clean.example/' }),
     );
     assert.equal(ok, true);
-    assert.equal(await ext.evaluate(() => navigator.clipboard.readText()), 'https://clean.example/');
+    // The write happens in another renderer (offscreen document); the system
+    // clipboard can take a moment to reflect it on slow machines.
+    await waitFor(
+      async () => (await ext.evaluate(() => navigator.clipboard.readText())) === 'https://clean.example/',
+      'clipboard to contain the clean link',
+      5_000,
+    );
     await ext.close();
   });
 });

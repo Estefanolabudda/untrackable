@@ -220,15 +220,44 @@ function endOnce(tabId: number): Promise<void> {
 /** One-time bypass: open `url` in a new tab with cleaning disabled for that single page load. */
 async function openUnmodified(url: string, openerTab?: chrome.tabs.Tab): Promise<void> {
   if (!/^https?:/i.test(url)) return;
+  let host: string;
+  try {
+    host = new URL(url).hostname.replace(/\.+$/, '');
+  } catch {
+    return;
+  }
   const createProps: chrome.tabs.CreateProperties = { url: 'about:blank', active: true };
   if (openerTab?.id !== undefined) createProps.openerTabId = openerTab.id;
   if (openerTab?.index !== undefined) createProps.index = openerTab.index + 1;
   const tab = await chrome.tabs.create(createProps);
   if (tab.id === undefined) return;
   const tabId = tab.id;
-  await serialised(() => setTabRule(tabId, 'once', true));
-  await chrome.alarms.create(ONCE_ALARM_PREFIX + tab.id, { delayInMinutes: ONCE_TIMEOUT_MINUTES });
-  await chrome.tabs.update(tab.id, { url });
+  // A navigation requested while the new tab is still loading its initial
+  // about:blank can be swallowed (observed under load), so wait for it first.
+  await waitForTab(tabId, (t) => t.status === 'complete');
+  // The bypass is limited to this tab and the link's host (plus redirects
+  // within that host).
+  await serialised(() => setTabRule(tabId, 'once', true, host.startsWith('[') ? undefined : [host]));
+  await chrome.alarms.create(ONCE_ALARM_PREFIX + tabId, { delayInMinutes: ONCE_TIMEOUT_MINUTES });
+  await chrome.tabs.update(tabId, { url });
+  // Retry once if the navigation still did not start.
+  const started = await waitForTab(
+    tabId,
+    (t) => t.url !== undefined || t.pendingUrl !== undefined || t.status === 'loading',
+  );
+  if (!started) await chrome.tabs.update(tabId, { url }).catch(() => {});
+}
+
+/** Poll a tab until `done` holds (or it is gone / the timeout passes). Returns whether `done` held. */
+async function waitForTab(tabId: number, done: (t: chrome.tabs.Tab) => boolean, timeoutMs = 3000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const tab = await chrome.tabs.get(tabId).catch(() => undefined);
+    if (tab === undefined) return false;
+    if (done(tab)) return true;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return false;
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
