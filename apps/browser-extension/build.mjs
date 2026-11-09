@@ -1,7 +1,7 @@
 // Build the extension into dist/ (and optionally a zip in artifacts/).
 // Usage: node build.mjs [--zip]
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +37,11 @@ if (process.argv.includes('--zip')) {
   mkdirSync(out, { recursive: true });
   const zip = join(out, `untrackable-chromium-${pkg.version}.zip`);
   rmSync(zip, { force: true });
+  // Fixed timestamps make the archive byte-for-byte reproducible.
+  const epoch = new Date(Number(process.env.SOURCE_DATE_EPOCH ?? 946684800) * 1000);
+  for (const entry of readdirSync(dist, { recursive: true, withFileTypes: true })) {
+    utimesSync(join(entry.parentPath, entry.name), epoch, epoch);
+  }
   // -X: omit extra file attributes; files sorted for reproducibility.
   execFileSync('sh', ['-c', `cd "${dist}" && find . -type f | LC_ALL=C sort | TZ=UTC zip -X -q "${zip}" -@`]);
   console.log(`packaged ${zip}`);
