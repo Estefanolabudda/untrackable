@@ -170,7 +170,9 @@ mod tests {
         assert!(matches!(Engine::from_json(""), Err(RuleSetError::Json(_))));
         assert!(matches!(Engine::from_json("{"), Err(RuleSetError::Json(_))));
         assert!(matches!(
-            Engine::from_json(r#"{"schemaVersion":1,"rules":[{"id":"x","mode":"weird"}]}"#),
+            Engine::from_json(
+                r#"{"schemaVersion":1,"rules":[{"id":"x","description":"","mode":"weird"}]}"#
+            ),
             Err(RuleSetError::Json(_))
         ));
         assert!(matches!(
@@ -179,107 +181,130 @@ mod tests {
         ));
     }
 
+    /// A complete, empty `protection` object (all seven lists present).
+    const EMPTY_PROTECTION: &str = r#"{"domains":[],"pathKeywords":[],"pathSubstrings":[],
+        "params":[],"paramPrefixes":[],"paramSuffixes":[],"paramCombinations":[]}"#;
+
+    /// Builds a rule set from rule objects, adding `"description"` where missing.
+    fn rule_set_with_rules(rules: &str) -> String {
+        let mut rules: serde_json::Value =
+            serde_json::from_str(&format!("[{rules}]")).expect("test rules are valid JSON");
+        for r in rules.as_array_mut().into_iter().flatten() {
+            if let Some(obj) = r.as_object_mut() {
+                obj.entry("description").or_insert_with(|| "d".into());
+            }
+        }
+        format!(r#"{{"schemaVersion":1,"rules":{rules}}}"#)
+    }
+
+    /// Builds a rule set whose `protection` is the empty object overridden by `overrides`.
+    fn rule_set_with_protection(overrides: &str) -> String {
+        let mut prot: serde_json::Value =
+            serde_json::from_str(EMPTY_PROTECTION).expect("valid JSON");
+        let overrides: serde_json::Value =
+            serde_json::from_str(overrides).expect("test protection is valid JSON");
+        if let (Some(p), Some(o)) = (prot.as_object_mut(), overrides.as_object()) {
+            for (k, v) in o {
+                p.insert(k.clone(), v.clone());
+            }
+        }
+        format!(r#"{{"schemaVersion":1,"rules":[],"protection":{prot}}}"#)
+    }
+
+    fn assert_invalid(r: Result<Engine, RuleSetError>, want_field: &str, want_problem: &str) {
+        match r {
+            Err(RuleSetError::InvalidEntry { field, problem, .. }) => {
+                assert_eq!(field, want_field);
+                assert_eq!(problem, want_problem);
+            }
+            other => panic!("expected InvalidEntry, got {other:?}"),
+        }
+    }
+
+    fn assert_schema_error(json: &str) {
+        match Engine::from_json(json) {
+            Err(RuleSetError::Json(_)) => {}
+            other => panic!("expected schema (Json) error for {json}, got {other:?}"),
+        }
+    }
+
     #[test]
     fn rule_set_validation_rejects_bad_entries() {
-        let with_rule =
-            |rule: &str| Engine::from_json(&format!(r#"{{"schemaVersion":1,"rules":[{rule}]}}"#));
-        // Adds the required (empty) `pathSubstrings` unless the test sets it.
-        let with_protection = |prot: &str| {
-            let prot = if prot.contains("pathSubstrings") {
-                prot.to_owned()
-            } else {
-                prot.replacen('{', r#"{"pathSubstrings":[],"#, 1)
-            };
-            Engine::from_json(&format!(
-                r#"{{"schemaVersion":1,"rules":[],"protection":{prot}}}"#
-            ))
-        };
-        let invalid =
-            |r: Result<Engine, RuleSetError>, want_field: &str, want_problem: &str| match r {
-                Err(RuleSetError::InvalidEntry { field, problem, .. }) => {
-                    assert_eq!(field, want_field);
-                    assert_eq!(problem, want_problem);
-                }
-                other => panic!("expected InvalidEntry, got {other:?}"),
-            };
-        invalid(
+        let with_rule = |rule: &str| Engine::from_json(&rule_set_with_rules(rule));
+        let with_protection = |prot: &str| Engine::from_json(&rule_set_with_protection(prot));
+        assert_invalid(
             with_rule(r#"{"id":"a","mode":"clean","params":["ok",""]}"#),
             "rules[a].params",
             "empty string",
         );
-        invalid(
+        assert_invalid(
             with_rule(r#"{"id":"a","mode":"clean","prefixes":["Utm_"]}"#),
             "rules[a].prefixes",
             "not lower-case",
         );
-        invalid(
+        assert_invalid(
             with_rule(r#"{"id":"a","mode":"clean","domains":["Example.com"],"params":["x"]}"#),
             "rules[a].domains",
             "not lower-case",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"paramCombinations":[["code","state"],[]]}"#),
             "protection.paramCombinations[1]",
             "empty combination",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"paramCombinations":[["code",""]]}"#),
             "protection.paramCombinations[0]",
             "empty string",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"pathKeywords":["Login"]}"#),
             "protection.pathKeywords",
             "not lower-case",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"domains":[""]}"#),
             "protection.domains",
             "empty string",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"params":["SIG"]}"#),
             "protection.params",
             "not lower-case",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"paramPrefixes":[""]}"#),
             "protection.paramPrefixes",
             "empty string",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"paramSuffixes":["Token"]}"#),
             "protection.paramSuffixes",
             "not lower-case",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"pathSubstrings":["resetPw"]}"#),
             "protection.pathSubstrings",
             "not lower-case",
         );
-        invalid(
+        assert_invalid(
             with_protection(r#"{"pathSubstrings":[""]}"#),
             "protection.pathSubstrings",
             "empty string",
         );
-        // `pathSubstrings` is a required field.
-        assert!(matches!(
-            Engine::from_json(r#"{"schemaVersion":1,"rules":[],"protection":{"params":[]}}"#),
-            Err(RuleSetError::Json(_))
-        ));
         // Empty `domains` array (absent is fine).
-        invalid(
+        assert_invalid(
             with_rule(r#"{"id":"a","mode":"clean","domains":[],"params":["x"]}"#),
             "rules[a].domains",
             "empty domains array",
         );
         // Empty and duplicate rule ids.
-        invalid(
+        assert_invalid(
             with_rule(r#"{"id":"","mode":"clean","params":["x"]}"#),
             "rules[].id",
             "empty rule id",
         );
-        invalid(
+        assert_invalid(
             with_rule(
                 r#"{"id":"a","mode":"clean","params":["x"]},{"id":"a","mode":"strict","params":["y"]}"#,
             ),
@@ -296,10 +321,82 @@ mod tests {
     }
 
     #[test]
+    fn rule_set_schema_is_strict() {
+        // Minimal valid documents.
+        assert!(Engine::from_json(r#"{"schemaVersion":1,"rules":[]}"#).is_ok());
+        assert!(Engine::from_json(&rule_set_with_protection("{}")).is_ok());
+        assert!(Engine::from_json(&rule_set_with_protection(r#"{"description":"x"}"#)).is_ok());
+        assert!(Engine::from_json(&rule_set_with_rules(r#"{"id":"a","mode":"strict"}"#)).is_ok());
+
+        // Top level: required keys, integer schemaVersion 1, no unknown keys.
+        assert_schema_error(r#"{"rules":[]}"#);
+        assert_schema_error(r#"{"schemaVersion":1}"#);
+        assert_schema_error(r#"{"schemaVersion":"1","rules":[]}"#);
+        assert_schema_error(r#"{"schemaVersion":1.5,"rules":[]}"#);
+        assert_schema_error(r#"{"schemaVersion":-1,"rules":[]}"#);
+        assert_schema_error(r#"{"schemaVersion":1,"rules":{}}"#);
+        assert_schema_error(r#"{"schemaVersion":1,"rules":null}"#);
+        assert_schema_error(r#"{"schemaVersion":1,"rules":[],"extra":true}"#);
+        assert_schema_error(r#"{"schemaVersion":1,"rules":[],"protection":null}"#);
+        assert_schema_error("[]");
+        assert!(matches!(
+            Engine::from_json(r#"{"schemaVersion":0,"rules":[]}"#),
+            Err(RuleSetError::UnsupportedSchemaVersion(0))
+        ));
+
+        // Rule: required id/description/mode, valid mode, no unknown keys, no nulls.
+        let rule = |r: &str| format!(r#"{{"schemaVersion":1,"rules":[{r}]}}"#);
+        assert_schema_error(&rule(r#"{"id":"a","mode":"clean"}"#)); // no description
+        assert_schema_error(&rule(r#"{"description":"d","mode":"clean"}"#)); // no id
+        assert_schema_error(&rule(r#"{"id":"a","description":"d"}"#)); // no mode
+        assert_schema_error(&rule(r#"{"id":"a","description":"d","mode":"bypass"}"#));
+        assert_schema_error(&rule(r#"{"id":"a","description":"d","mode":"Clean"}"#));
+        assert_schema_error(&rule(r#"{"id":1,"description":"d","mode":"clean"}"#));
+        assert_schema_error(&rule(r#"{"id":"a","description":null,"mode":"clean"}"#));
+        assert_schema_error(&rule(
+            r#"{"id":"a","description":"d","mode":"clean","param":["x"]}"#,
+        ));
+        for list in ["domains", "params", "prefixes"] {
+            assert_schema_error(&rule(&format!(
+                r#"{{"id":"a","description":"d","mode":"clean","{list}":null}}"#
+            )));
+            assert_schema_error(&rule(&format!(
+                r#"{{"id":"a","description":"d","mode":"clean","{list}":"x"}}"#
+            )));
+            assert_schema_error(&rule(&format!(
+                r#"{{"id":"a","description":"d","mode":"clean","{list}":[1]}}"#
+            )));
+            assert_schema_error(&rule(&format!(
+                r#"{{"id":"a","description":"d","mode":"clean","{list}":[null]}}"#
+            )));
+        }
+
+        // Protection: when present all seven lists are required; no unknown keys.
+        let full: serde_json::Value = serde_json::from_str(EMPTY_PROTECTION).expect("valid");
+        for key in full.as_object().expect("object").keys() {
+            let mut p = full.clone();
+            if let Some(o) = p.as_object_mut() {
+                o.remove(key);
+            }
+            assert_schema_error(&format!(
+                r#"{{"schemaVersion":1,"rules":[],"protection":{p}}}"#
+            ));
+            assert_schema_error(&rule_set_with_protection(&format!(r#"{{"{key}":null}}"#)));
+        }
+        assert_schema_error(&rule_set_with_protection(r#"{"pathKeyword":["x"]}"#));
+        assert_schema_error(&rule_set_with_protection(r#"{"description":null}"#));
+        assert_schema_error(&rule_set_with_protection(
+            r#"{"paramCombinations":["code"]}"#,
+        ));
+        assert_schema_error(&rule_set_with_protection(r#"{"paramCombinations":[[1]]}"#));
+    }
+
+    #[test]
     fn path_substrings_after_keywords() {
         let engine = Engine::from_json(
-            r#"{"schemaVersion":1,"rules":[{"id":"u","mode":"clean","prefixes":["utm_"]}],
-               "protection":{"pathKeywords":["login"],"pathSubstrings":["verif","login","pass"]}}"#,
+            r#"{"schemaVersion":1,"rules":[{"id":"u","description":"d","mode":"clean","prefixes":["utm_"]}],
+               "protection":{"domains":[],"pathKeywords":["login"],"pathSubstrings":["verif","login","pass"],
+               "params":[],"paramPrefixes":[],"paramSuffixes":[],"paramCombinations":[]}}"#,
         )
         .expect("valid");
         let reason = |u: &str| engine.clean(u, &CleanOptions::default()).reason;
@@ -342,7 +439,7 @@ mod tests {
     #[test]
     fn custom_rules() {
         let engine = Engine::from_json(
-            r#"{"schemaVersion":1,"rules":[{"id":"x","mode":"clean","params":["foo"]}]}"#,
+            r#"{"schemaVersion":1,"rules":[{"id":"x","description":"d","mode":"clean","params":["foo"]}]}"#,
         )
         .expect("valid");
         let r = engine.clean("https://e.com/?foo=1&bar=2", &CleanOptions::default());

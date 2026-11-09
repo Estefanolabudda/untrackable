@@ -13,10 +13,25 @@ All notable changes are documented here. The format follows
 - Optional automatic recovery from tracker redirect loops (optional
   `webNavigation` permission, off by default).
 - Differential conformance test generating >50,000 URLs from `rules.json`
-  and requiring identical TypeScript and Rust results (CI job).
+  (incl. control characters, `+`/non-ASCII/invalid-UTF-8 keys, encoded path
+  words, fragments) and requiring identical TypeScript and Rust results, plus
+  validation parity on mutated rule sets (CI job).
+- Case-insensitive fallback for domain-specific trackers; guard keeps the
+  fallback chain below Chromium's redirect limit.
+- e2e test comparing the DNR model with real Chromium on generated URLs.
+- Rust toolchain pinned (`rust-toolchain.toml`); weekly scheduled CI for new
+  advisories.
+
+### Changed
+
+- Rule files are validated strictly and identically in both engines: unknown
+  fields, `null` lists and missing protection lists are rejected.
+- Protection tuned against over-protection of ordinary links.
 
 ### Fixed
 
+- Redirect-loop recovery could retry forever and could be abused to forward
+  trackers to another site; copy cleaning could be probed by page scripts.
 - A rule Chromium cannot compile no longer blocks the whole rule update;
   unsupported protection rules disable redirects (fail safe).
 

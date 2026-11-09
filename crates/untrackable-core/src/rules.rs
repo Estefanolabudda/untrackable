@@ -18,18 +18,20 @@ pub enum RuleMode {
 }
 
 /// A single parameter-removal rule.
+///
+/// Unknown keys are rejected. `domains`, `params` and `prefixes` may be omitted,
+/// but `null` is rejected (it is not treated as absent).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Rule {
-    /// Stable identifier reported as `ruleId`.
+    /// Stable identifier reported as `ruleId` (non-empty, unique).
     pub id: String,
-    /// Human-readable description.
-    #[serde(default)]
+    /// Human-readable description (required).
     pub description: String,
     /// Mode in which the rule applies.
     pub mode: RuleMode,
-    /// Optional host restriction; `None`/empty means "all hosts".
-    #[serde(default)]
+    /// Optional host restriction; `None` means "all hosts". Must be non-empty when present.
+    #[serde(default, deserialize_with = "present_vec")]
     pub domains: Option<Vec<String>>,
     /// Exact (normalised) keys removed by this rule.
     #[serde(default)]
@@ -39,45 +41,54 @@ pub struct Rule {
     pub prefixes: Vec<String>,
 }
 
+/// Deserialises a present field as `Some(vec)`; a JSON `null` is an error
+/// (an absent field falls back to `None` via `#[serde(default)]`).
+fn present_vec<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Vec::<String>::deserialize(deserializer).map(Some)
+}
+
 /// Protection signals: URLs matching any of these are never modified.
+///
+/// The whole `protection` object may be omitted from the rule file (meaning
+/// "no protection", see [`Protection::default`]). When it is present, all
+/// seven lists are required and `description` is optional; unknown keys are
+/// rejected.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Protection {
-    /// Human-readable description.
+    /// Human-readable description (optional).
     #[serde(default)]
     pub description: String,
     /// Protected hosts (domain-matched).
-    #[serde(default)]
     pub domains: Vec<String>,
     /// Path keywords (see the spec for the matching regex).
-    #[serde(default)]
     pub path_keywords: Vec<String>,
-    /// Plain substrings of the decoded, lower-cased path (required field).
+    /// Plain substrings of the decoded, lower-cased path.
     pub path_substrings: Vec<String>,
     /// Exact protected keys.
-    #[serde(default)]
     pub params: Vec<String>,
     /// Protected key prefixes.
-    #[serde(default)]
     pub param_prefixes: Vec<String>,
     /// Protected key suffixes.
-    #[serde(default)]
     pub param_suffixes: Vec<String>,
     /// Key combinations that are protected when all keys are present.
-    #[serde(default)]
     pub param_combinations: Vec<Vec<String>>,
 }
 
-/// The complete rule set.
+/// The complete rule set. Top-level keys are exactly `schemaVersion`, `rules`
+/// and the optional `protection`; unknown keys are rejected.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RuleSet {
-    /// Schema version; must equal [`SUPPORTED_SCHEMA_VERSION`].
+    /// Schema version; must be the integer [`SUPPORTED_SCHEMA_VERSION`].
     pub schema_version: u64,
     /// Removal rules in file order (order is significant for `ruleId`).
     pub rules: Vec<Rule>,
     /// Protection signals. Omitting the whole object means "no protection";
-    /// when present, every list is required.
+    /// when present, every list is required (`null` is rejected).
     #[serde(default)]
     pub protection: Protection,
 }

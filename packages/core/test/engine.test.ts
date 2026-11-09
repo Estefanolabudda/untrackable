@@ -113,6 +113,24 @@ describe('engine behaviour', () => {
     expect(cleanUrl(undefined as unknown as string).status).toBe('invalid');
   });
 
+  it('rejects unknown fields, null lists and non-string descriptions (parity with Rust)', () => {
+    const base = () => JSON.parse(JSON.stringify(defaultRuleSet));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cases: [string, (rs: { [k: string]: any }) => void][] = [
+      ['unknown top-level field', (rs) => (rs.extra = 1)],
+      ['unknown rule field (typo)', (rs) => (rs.rules[0].param = ['x'])],
+      ['unknown protection field', (rs) => (rs.protection.extra = [])],
+      ['null domains', (rs) => (rs.rules[0].domains = null)],
+      ['numeric description', (rs) => (rs.rules[0].description = 5)],
+      ['missing protection list', (rs) => delete rs.protection.params],
+    ];
+    for (const [name, mutate] of cases) {
+      const rs = base();
+      mutate(rs);
+      expect(() => validateRuleSet(rs), name).toThrow();
+    }
+  });
+
   it('treats a missing protection object as no protection', () => {
     const rs = validateRuleSet({
       schemaVersion: 1,

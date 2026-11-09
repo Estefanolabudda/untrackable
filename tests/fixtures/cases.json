@@ -965,6 +965,41 @@
       "expected": "https://shop.example/checkouts/abc123?utm_source=x",
       "status": "protected",
       "reason": "path:checkouts"
+    },
+    {
+      "name": "trailing control character is encoded with upper-case hex",
+      "input": "https://example.com/?b=1\u001f&utm_source=1",
+      "expected": "https://example.com/?b=1%1F",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "percent-encoded letters inside a path substring are decoded before matching",
+      "input": "https://example.com/account/reset%50assword?utm_source=x",
+      "expected": "https://example.com/account/reset%50assword?utm_source=x",
+      "status": "protected",
+      "reason": "path:password"
+    },
+    {
+      "name": "fragment keys are checked for protection even when the fragment is not param-shaped",
+      "input": "https://app.example/?utm_source=1#/cb?access_token=x",
+      "expected": "https://app.example/?utm_source=1#/cb?access_token=x",
+      "status": "protected",
+      "reason": "param:/cb?access_token"
+    },
+    {
+      "name": "non-ASCII key is not a tracker and survives",
+      "input": "https://example.com/?größe=1&utm_source=x",
+      "expected": "https://example.com/?größe=1",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "valueless functional parameter preserved",
+      "input": "https://example.com/wiki?edit&utm_source=1",
+      "expected": "https://example.com/wiki?edit",
+      "status": "cleaned",
+      "removed": ["utm_source"]
     }
   ]
 }

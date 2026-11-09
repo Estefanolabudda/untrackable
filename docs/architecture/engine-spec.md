@@ -167,8 +167,10 @@ The extension cannot run this algorithm synchronously for navigations, so it
 compiles `rules.json` + settings into declarativeNetRequest rules
 (`packages/core/src/dnr.ts`). Those rules are a conservative approximation:
 
-- Parameter removal uses `queryTransform.removeParams`, which matches keys
-  exactly. Prefix rules are expanded to the explicit `params` lists only.
+- Parameter removal uses `queryTransform.removeParams` (exact keys), followed
+  by case-insensitive, byte-preserving `regexSubstitution` fallback rules that
+  also cover prefix rules. Chromium normalises valueless/empty query segments
+  when `queryTransform` removes something (see the architecture overview).
 - Protection is compiled into higher-priority `allow` rules using equivalent
   RE2 regular expressions over the raw URL. Because DNR cannot decode, any
   URL whose path or a parameter key contains a percent-encoded letter, `-`,

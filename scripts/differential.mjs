@@ -10,7 +10,9 @@
 // Requires: npm ci, and a Rust toolchain (builds the `clean` example).
 import { build } from 'esbuild';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -47,6 +49,9 @@ function variantKey(k) {
   let key = k;
   if (chance(0.3)) key = randomCase(key);
   if (chance(0.1)) key = encodeSome(key);
+  if (chance(0.05)) key = key.replace('_', pick(['+', '%2B', '%20']));
+  if (chance(0.05)) key = pick(['%FF', '%C3', 'Ä', 'ß', '%E2%80%8B']) + key;
+  if (chance(0.03)) key = key + pick(['%ZZ', '%', '+']);
   return key;
 }
 const values = [
@@ -109,7 +114,7 @@ function path() {
   for (let i = 0; i < n; i++) {
     if (chance(0.15)) {
       const w = pick(pathWords);
-      segs.push(pick([w, `${w}-x`, `my${w}`, `${w}2`, randomCase(w), `x_${w}.html`]));
+      segs.push(pick([w, `${w}-x`, `my${w}`, `${w}2`, randomCase(w), `x_${w}.html`, encodeSome(w), `a%2F${w}`]));
     } else
       segs.push(pick(['a', 'article', 'dp', 'B0X1', 'watch', 'author', 'display', 'straße', 's-anzeige', 'p%20q']));
   }
@@ -132,9 +137,24 @@ function url() {
   const q = params();
   if (q.length > 0 || chance(0.05)) u += '?' + q.join('&');
   if (chance(0.25)) {
-    u += '#' + pick(['section', params().join('&'), '/route?utm_source=x', ':~:text=a&utm_medium=b', '']);
+    u +=
+      '#' +
+      pick([
+        'section',
+        params().join('&'),
+        '/route?utm_source=x',
+        ':~:text=a&utm_medium=b',
+        '',
+        `/cb?${params().join('&')}`,
+        `a=1/b&${params().join('&')}`,
+      ]);
   }
   if (chance(0.03)) u = pick([' ', '\u0001', '']) + u + pick([' ', '  ', '']);
+  // whitespace / control characters inside the URL (path, before '?', in values)
+  if (chance(0.05)) {
+    const i = Math.floor(rand() * u.length);
+    u = u.slice(0, i) + pick([' ', '\u0001', '\u001f', '\u007f']) + u.slice(i);
+  }
   return u;
 }
 
@@ -179,14 +199,18 @@ const bundle = await build({
 });
 const core = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 
-// Rust engine.
-const cargo = spawnSync('cargo', ['build', '-q', '--locked', '--example', 'clean'], { cwd: root, stdio: 'inherit' });
-if (cargo.status !== 0) process.exit(cargo.status ?? 1);
-const rust = spawnSync(`${root}/target/debug/examples/clean`, ['--jsonl'], {
-  input: requests.map((r) => JSON.stringify(r)).join('\n') + '\n',
-  maxBuffer: 1 << 30,
-  encoding: 'utf8',
-});
+// Rust engine (via `cargo run`, so CARGO_TARGET_DIR and friends are honoured).
+function runRust(args, input) {
+  const res = spawnSync('cargo', ['run', '-q', '--locked', '--example', 'clean', '--', ...args], {
+    cwd: root,
+    input,
+    maxBuffer: 1 << 30,
+    encoding: 'utf8',
+  });
+  if (res.error) throw res.error;
+  return res;
+}
+const rust = runRust(['--jsonl'], requests.map((r) => JSON.stringify(r)).join('\n') + '\n');
 if (rust.status !== 0) {
   console.error(rust.stderr);
   process.exit(1);
@@ -208,6 +232,66 @@ requests.forEach((req, i) => {
   if (summarise(ts) !== summarise(rustResults[i]))
     diffs.push({ req, ts: summarise(ts), rust: summarise(rustResults[i]) });
 });
+
+// 3. Rule-set validation parity on mutated copies of rules.json.
+const mutations = [
+  (rs) => (rs.extra = 1),
+  (rs) => (pick(rs.rules).param = ['x']),
+  (rs) => (rs.protection.extra = []),
+  (rs) => (pick(rs.rules).domains = null),
+  (rs) => (pick(rs.rules).domains = []),
+  (rs) => (pick(rs.rules).description = 5),
+  (rs) => delete pick(rs.rules).description,
+  (rs) => (pick(rs.rules).id = ''),
+  (rs) => (rs.rules[1].id = rs.rules[0].id),
+  (rs) => (pick(rs.rules).mode = 'weird'),
+  (rs) => (pick(rs.rules).params ??= []).push('UPPER'),
+  (rs) => (pick(rs.rules).params ??= []).push(''),
+  (rs) => (pick(rs.rules).params ??= []).push('äöü'),
+  (rs) => delete rs.protection,
+  (rs) => {
+    const key = pick([
+      'domains',
+      'pathKeywords',
+      'pathSubstrings',
+      'params',
+      'paramPrefixes',
+      'paramSuffixes',
+      'paramCombinations',
+    ]);
+    rs.protection = Object.fromEntries(Object.entries(rs.protection).filter(([k]) => k !== key));
+  },
+  (rs) => (rs.protection.description = 7),
+  (rs) => (rs.schemaVersion = 2),
+  (rs) => (rs.rules = {}),
+  () => {},
+];
+const tmp = mkdtempSync(join(tmpdir(), 'untrackable-validate-'));
+let validationMismatches = 0;
+try {
+  for (let i = 0; i < 60; i++) {
+    const rs = JSON.parse(JSON.stringify(rules));
+    mutations[i % mutations.length](rs);
+    const file = join(tmp, `rules-${i}.json`);
+    writeFileSync(file, JSON.stringify(rs));
+    let tsOk = true;
+    try {
+      core.validateRuleSet(JSON.parse(JSON.stringify(rs)));
+    } catch {
+      tsOk = false;
+    }
+    const r = runRust(['--rules', file, '--validate'], '');
+    const rustOk = r.status === 0 && JSON.parse(r.stdout.trim() || '{}').ok === true;
+    if (tsOk !== rustOk) {
+      validationMismatches++;
+      console.error(`validation mismatch (mutation ${i % mutations.length}): ts=${tsOk} rust=${rustOk}`);
+    }
+  }
+} finally {
+  rmSync(tmp, { recursive: true, force: true });
+}
+if (validationMismatches > 0) process.exit(1);
+console.log('Rule-set validation agrees on 60 mutated rule sets.');
 
 console.log(`differential: ${requests.length} cases, status mix ${JSON.stringify(statuses)}`);
 if (diffs.length > 0) {

@@ -87,9 +87,11 @@ The full list lives in [`rules/rules.json`](rules/rules.json).
 - **Not anonymity.** Cookies, IP addresses, fingerprinting and tracking
   scripts are unaffected.
 - Navigation cleaning uses Chromium's `declarativeNetRequest`. Mixed-case
-  spellings (`Utm_Source`) and unlisted `utm_*` names are handled; mixed-case
-  _domain-specific_ parameters and percent-encoded names are only cleaned when
-  copying. Only top-level navigations are cleaned.
+  spellings (`Utm_Source`) and unlisted `utm_*` names are handled;
+  percent-encoded names are only cleaned when copying. When Chromium removes
+  a parameter it may write a valueless parameter as `edit=` instead of
+  `edit`. URLs with very many unknown trackers (16+ parameters) are only
+  partly cleaned. Only top-level navigations are cleaned.
 - If a site redirects back to a tracking link, Chromium reports "too many
   redirects". Enable _automatic recovery_ in the settings (optional
   permission) or use a site exception.

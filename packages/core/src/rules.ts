@@ -42,6 +42,12 @@ const EMPTY_PROTECTION: ProtectionRules = Object.freeze({
   paramCombinations: [],
 });
 
+function rejectUnknownKeys(obj: Record<string, unknown>, allowed: readonly string[], where: string): void {
+  for (const key of Object.keys(obj)) {
+    if (!allowed.includes(key)) throw new Error(`unknown field ${where}.${key}`);
+  }
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'string');
 }
@@ -53,13 +59,16 @@ function isStringArray(value: unknown): value is string[] {
 export function validateRuleSet(value: unknown): RuleSet {
   if (typeof value !== 'object' || value === null) throw new Error('rule set must be an object');
   const v = value as Record<string, unknown>;
+  rejectUnknownKeys(v, ['schemaVersion', 'rules', 'protection'], 'ruleSet');
   if (v.schemaVersion !== 1) throw new Error('unsupported schemaVersion');
   if (!Array.isArray(v.rules)) throw new Error('rules must be an array');
   const ids = new Set<string>();
   for (const r of v.rules as unknown[]) {
     if (typeof r !== 'object' || r === null) throw new Error('rule must be an object');
     const rule = r as Record<string, unknown>;
+    rejectUnknownKeys(rule, ['id', 'description', 'mode', 'domains', 'params', 'prefixes'], 'rule');
     if (typeof rule.id !== 'string' || rule.id === '') throw new Error('rule.id must be a non-empty string');
+    if (typeof rule.description !== 'string') throw new Error(`${rule.id}.description must be a string`);
     if (ids.has(rule.id)) throw new Error(`duplicate rule id ${rule.id}`);
     ids.add(rule.id);
     if (rule.mode !== 'clean' && rule.mode !== 'strict') throw new Error(`invalid mode in ${rule.id}`);
@@ -78,7 +87,24 @@ export function validateRuleSet(value: unknown): RuleSet {
   // Omitting the whole protection object means "no protection" (same as Rust).
   if (v.protection === undefined) v.protection = EMPTY_PROTECTION;
   const p = v.protection as Record<string, unknown> | undefined;
-  if (typeof p !== 'object' || p === null) throw new Error('protection must be an object');
+  if (typeof p !== 'object' || p === null || Array.isArray(p)) throw new Error('protection must be an object');
+  rejectUnknownKeys(
+    p,
+    [
+      'description',
+      'domains',
+      'pathKeywords',
+      'pathSubstrings',
+      'params',
+      'paramPrefixes',
+      'paramSuffixes',
+      'paramCombinations',
+    ],
+    'protection',
+  );
+  if (p.description !== undefined && typeof p.description !== 'string') {
+    throw new Error('protection.description must be a string');
+  }
   for (const key of [
     'domains',
     'pathKeywords',

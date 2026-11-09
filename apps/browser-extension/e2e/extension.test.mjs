@@ -211,6 +211,20 @@ describe('automatic navigation cleaning (Clean mode)', () => {
     assert.equal(await visit('/a?UTM_SOURCE=x&id=1'), '/a?id=1');
   });
 
+  test('valueless segments: documented Chromium normalisation vs byte-preserving fallback', async () => {
+    // Exact (queryTransform) removal: Chromium re-serialises `edit` as `edit=`.
+    assert.equal(await visit('/wiki?edit&utm_source=1'), '/wiki?edit=');
+    // Regex fallback (mixed case) keeps the query byte-for-byte.
+    assert.equal(await visit('/wiki?edit&Utm_Source=1'), '/wiki?edit');
+  });
+
+  test('many unlisted trackers never exceed the redirect limit', async () => {
+    const unlisted = Array.from({ length: 25 }, (_, i) => `utm_z${i}=1`).join('&');
+    assert.equal(await visit(`/a?${unlisted}&utm_source=x&id=1`), `/a?${unlisted}&id=1`);
+    const some = Array.from({ length: 10 }, (_, i) => `Utm_Z${i}=1`).join('&');
+    assert.equal(await visit(`/b?${some}&id=1`), '/b?id=1');
+  });
+
   test('removes mixed-case spellings and unlisted utm_* names', async () => {
     assert.equal(await visit('/a?Utm_Source=x&id=1&FbClid=y&uTm_NewThing=z'), '/a?id=1');
     assert.deepEqual(seen, ['/a?id=1'], 'tracker never reached the server');
@@ -610,6 +624,66 @@ describe('redirect loops', () => {
       rmSync(dir, { recursive: true, force: true });
       rmSync(profile, { recursive: true, force: true });
     }
+  });
+});
+
+describe('DNR model vs Chromium', () => {
+  test('the unit-test simulator predicts Chromium for generated URLs', async () => {
+    const bundle = await build({
+      stdin: {
+        contents: `export * from './packages/core/src/index.ts'; export { simulate } from './packages/core/test/dnr-simulator.ts';`,
+        resolveDir: fileURLToPath(new URL('../../../', import.meta.url)),
+        loader: 'ts',
+      },
+      bundle: true,
+      format: 'esm',
+      platform: 'node',
+      write: false,
+      logLevel: 'silent',
+    });
+    const mod = await import(
+      `data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`
+    );
+    const rules = mod.compileDnrRules({ mode: 'clean', exceptions: [] });
+    let seed = 7;
+    const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const pick = (xs) => xs[Math.floor(rand() * xs.length)];
+    const keys = [
+      'utm_source',
+      'UTM_MEDIUM',
+      'Utm_Campaign',
+      'utm_new',
+      'fbclid',
+      'FbClid',
+      'gclid',
+      'id',
+      'q',
+      'edit',
+      'si',
+      'ref',
+      'sig',
+      'code',
+      'state',
+      '',
+      'utm%5Fsource',
+    ];
+    const vals = ['', '=1', '=a%20b', '=x&', '=1#frag'];
+    const paths = ['/a', '/login', '/watch', '/x%2Fsso', '/p/q'];
+    const mismatches = [];
+    for (let i = 0; i < 200; i++) {
+      const n = 1 + Math.floor(rand() * 5);
+      const query =
+        Array.from({ length: n }, () => pick(keys) + pick(vals.slice(0, 3))).join('&') + (rand() < 0.15 ? '&' : '');
+      const host = pick(['news.test', 'www.youtube.com']);
+      const path = `${pick(paths)}?${query}${rand() < 0.2 ? '#frag' : ''}`;
+      const predicted = mod.simulate(rules, `http://${host}:${port}${path}`).replace(`http://${host}:${port}`, '');
+      const page = await context.newPage();
+      await page.goto(`http://${host}:${port}${path}`).catch(() => {});
+      const actual = page.url().replace(`http://${host}:${port}`, '');
+      await page.close();
+      if (actual !== predicted) mismatches.push({ path, host, predicted, actual });
+    }
+    assert.deepEqual(mismatches, []);
   });
 });
 

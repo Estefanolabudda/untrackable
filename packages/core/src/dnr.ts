@@ -44,12 +44,14 @@ export interface DnrSettings {
 
 export const PRIORITY = {
   caseInsensitiveFallback: 1,
-  globalRedirect: 2,
-  domainRedirect: 3,
-  protection: 4,
-  userException: 5,
+  /** `allow` that stops the one-per-hop fallback chain on very long queries. */
+  fallbackGuard: 2,
+  globalRedirect: 3,
+  domainRedirect: 4,
+  protection: 5,
+  userException: 6,
   /** Reserved for per-tab session rules created by the extension. */
-  tabPause: 6,
+  tabPause: 7,
 } as const;
 
 /** Rule id ranges, so callers can recognise rule kinds. */
@@ -57,6 +59,7 @@ export const ID_BASE = {
   globalRedirect: 1,
   domainRedirect: 100,
   caseInsensitiveFallback: 500,
+  fallbackGuard: 999,
   protection: 1000,
   userException: 2000,
 } as const;
@@ -65,6 +68,15 @@ export const ID_BASE = {
 const FALLBACK_CHUNK = 4;
 
 const REGEX_CHUNK = 6;
+
+/**
+ * Chromium aborts after 20 redirects. The fallback removes one parameter per
+ * redirect, so it is disabled (exact rules still run) once the URL has 16 or
+ * more '&' after its first '?' (fragment included – errs towards not cleaning).
+ * Written without '#'-exclusion on purpose: `[^&#]` repeated 16 times exceeds
+ * Chromium's 2 KB regex memory limit, `[^&]` does not (verified).
+ */
+const MAX_FALLBACK_SEGMENTS = 16;
 
 function escapeRe2(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
@@ -125,6 +137,10 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
         type: 'redirect',
         redirect: { transform: { queryTransform: { removeParams: withCaseVariants(globalParams) } } },
       },
+      // No regexFilter here on purpose: Chromium only falls through from a
+      // no-op redirect to a lower-priority rule of the *other* matcher kind
+      // (URL-pattern vs regex). Keeping the exact rules regex-free lets the
+      // regex fallback run after them (verified in the e2e suite).
       condition: { resourceTypes: ['main_frame'] },
     });
   }
@@ -148,36 +164,55 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
     });
   });
 
-  // 2b. Case-insensitive fallback for global rules: removes one remaining
-  //     tracker per redirect (mixed case such as Utm_Source, unlisted utm_*).
-  //     Every hop strictly shortens the URL, so the chain terminates; the
-  //     exact rules above have already removed all common spellings.
-  const keyPatterns = uniq([
+  // 2b. Byte-preserving, case-insensitive fallback: removes one remaining
+  //     tracker per redirect (mixed case such as Utm_Source, unlisted utm_*,
+  //     queries the exact rules skip). Every hop strictly shortens the URL, so
+  //     the chain terminates; the guard below keeps it under Chromium's limit.
+  const patternsOf = (rs: readonly Rule[]): string[] =>
+    uniq([
+      ...rs.flatMap((r) => (r.prefixes ?? []).map((x) => `${escapeRe2(x)}[^=&#]*`)),
+      ...rs.flatMap((r) => (r.params ?? []).map(escapeRe2)),
+    ]);
+  const fallbackGroups: { domains?: string[]; patterns: string[] }[] = [
+    { patterns: patternsOf(active.filter((r) => r.domains === undefined)) },
     ...active
-      .filter((r) => r.domains === undefined)
-      .flatMap((r) => (r.prefixes ?? []).map((x) => `${escapeRe2(x)}[^=&#]*`)),
-    ...globalParams.map(escapeRe2),
-  ]);
+      .filter((r) => r.domains !== undefined)
+      .map((r) => ({ domains: [...(r.domains ?? [])], patterns: patternsOf([r]) })),
+  ];
   let fid: number = ID_BASE.caseInsensitiveFallback;
-  for (const group of chunk(keyPatterns, FALLBACK_CHUNK)) {
-    const names = `(?:${group.join('|')})`;
-    const variants: [string, string][] = [
-      // tracker followed by more parameters: drop it and its '&'
-      [`^([^?#]*\\?(?:[^&#]*&)*?)${names}(?:=[^&#]*)?&(.*)$`, '\\1\\2'],
-      // last parameter after others: drop it and the preceding '&'
-      [`^([^?#]*\\?[^#]*?)&${names}(?:=[^&#]*)?(#.*)?$`, '\\1\\2'],
-      // the only parameter: drop it and the '?'
-      [`^([^?#]*)\\?${names}(?:=[^&#]*)?(#.*)?$`, '\\1\\2'],
-    ];
-    for (const [regexFilter, regexSubstitution] of variants) {
-      rules.push({
-        id: fid++,
-        priority: PRIORITY.caseInsensitiveFallback,
-        action: { type: 'redirect', redirect: { regexSubstitution } },
-        condition: { resourceTypes: ['main_frame'], regexFilter, isUrlFilterCaseSensitive: false },
-      });
+  for (const { domains: requestDomains, patterns } of fallbackGroups) {
+    for (const group of chunk(patterns, FALLBACK_CHUNK)) {
+      const names = `(?:${group.join('|')})`;
+      const variants: [string, string][] = [
+        // tracker followed by more parameters: drop it and its '&'
+        [`^([^?#]*\\?(?:[^&#]*&)*?)${names}(?:=[^&#]*)?&(.*)$`, '\\1\\2'],
+        // last parameter after others: drop it and the preceding '&'
+        [`^([^?#]*\\?[^#]*?)&${names}(?:=[^&#]*)?(#.*)?$`, '\\1\\2'],
+        // the only parameter: drop it and the '?'
+        [`^([^?#]*)\\?${names}(?:=[^&#]*)?(#.*)?$`, '\\1\\2'],
+      ];
+      for (const [regexFilter, regexSubstitution] of variants) {
+        rules.push({
+          id: fid++,
+          priority: PRIORITY.caseInsensitiveFallback,
+          action: { type: 'redirect', redirect: { regexSubstitution } },
+          condition: {
+            resourceTypes: ['main_frame'],
+            ...(requestDomains === undefined ? {} : { requestDomains }),
+            regexFilter,
+            isUrlFilterCaseSensitive: false,
+          },
+        });
+      }
     }
   }
+  if (fid >= ID_BASE.fallbackGuard) throw new Error('too many fallback rules for the reserved id range');
+  rules.push({
+    id: ID_BASE.fallbackGuard,
+    priority: PRIORITY.fallbackGuard,
+    action: { type: 'allow' },
+    condition: { resourceTypes: ['main_frame'], regexFilter: `\\?(?:[^&]*&){${MAX_FALLBACK_SEGMENTS}}` },
+  });
 
   // 3. Protection allow rules.
   const p = ruleSet.protection;

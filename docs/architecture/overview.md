@@ -105,15 +105,27 @@ there are no redirect loops (verified by e2e test).
 
 - `removeParams` matches keys exactly and case-sensitively, so it handles the
   listed lower-case and ALL-UPPER-CASE spellings in one redirect. Mixed case
-  (`Utm_Source`) and unlisted names of **global** prefix rules (`utm_*`) are
-  removed by lower-priority, case-insensitive `regexSubstitution` fallback
-  rules – one parameter per internal redirect. This relies on Chromium
-  skipping a redirect rule whose result equals the request URL and falling
-  through to the next matching rule (verified in the e2e suite). Each hop
-  shortens the URL, so the chain terminates; a URL with more than about 18
-  _mixed-case_ trackers would hit Chromium's redirect limit. Mixed-case
-  spellings of **domain-specific** parameters (e.g. `SI` on YouTube) are only
-  removed when copying.
+  (`Utm_Source`) and unlisted names of prefix rules (`utm_*`) are removed by
+  lower-priority, case-insensitive `regexSubstitution` fallback rules (global
+  and per domain rule) – one parameter per internal redirect, byte-preserving.
+- **How Chromium chooses** (verified in Chromium 153, encoded in
+  `packages/core/test/dnr-simulator.ts` and checked against the real browser
+  on 200 generated URLs by the e2e suite): URL-pattern rules and regex rules
+  each contribute only their highest-priority match; if the winner is a
+  redirect that would not change the URL, the other kind's candidate is
+  tried. The exact rules are therefore kept regex-free, so the regex fallback
+  can run after them.
+- **Redirect limit:** Chromium aborts after 20 redirects. A guard `allow`
+  rule disables the one-per-hop fallback once a URL has 16 or more `&` after
+  its `?` (exact rules still run), so many unlisted trackers are simply left
+  in place instead of breaking the page (e2e: 25 unlisted `utm_*`).
+- **Valueless and empty segments:** when an exact rule removes something,
+  Chromium re-serialises the query – `?edit&utm_source=1` becomes
+  `?edit=`, an empty segment in the middle becomes `=`, a trailing `&` is
+  dropped. Servers treat `edit` and `edit=` alike in practice, but the result
+  is not byte-identical to the engine (copy cleaning is). Avoiding this would
+  require regex conditions on the exact rules, which disables the fallback
+  (see above), so it is documented instead.
 - DNR cannot percent-decode. URLs whose path or parameter keys contain a
   percent-encoded letter, `-`, `.` or `_` are therefore left completely alone
   during navigation (e.g. `utm%5Fsource` is not removed, `/%6Cogin` is not

@@ -77,5 +77,8 @@ export type Message =
   | { type: 'openUnmodified'; url: string };
 
 export interface TabState {
+  /** Cleaning is off in this tab (user pause or a running one-time bypass). */
   paused: boolean;
+  /** The user switched on "Pause in this tab" (what the popup checkbox shows). */
+  pausedByUser?: boolean;
 }

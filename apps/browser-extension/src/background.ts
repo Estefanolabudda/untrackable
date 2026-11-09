@@ -156,10 +156,6 @@ async function tabRules(tabId: number): Promise<chrome.declarativeNetRequest.Rul
   return (await chrome.declarativeNetRequest.getSessionRules()).filter((r) => r.condition.tabIds?.includes(tabId));
 }
 
-async function isTabPaused(tabId: number): Promise<boolean> {
-  return (await tabRules(tabId)).length > 0;
-}
-
 /** Replace the tab's rules of `kind` (remove all, optionally add one). Must run inside `serialised`. */
 async function setTabRule(
   tabId: number,
@@ -459,7 +455,12 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     // Content scripts may only ask about their own tab.
     const tabId = fromContentScript ? sender.tab?.id : (message.tabId ?? sender.tab?.id);
     if (tabId === undefined) return false;
-    void isTabPaused(tabId).then((paused) => sendResponse({ paused } satisfies TabState));
+    void tabRules(tabId).then((rules) =>
+      sendResponse({
+        paused: rules.length > 0,
+        pausedByUser: rules.some((r) => kindOf(r.id) === 'pause'),
+      } satisfies TabState),
+    );
     return true;
   }
   if (fromContentScript) return false; // privileged messages: extension pages only

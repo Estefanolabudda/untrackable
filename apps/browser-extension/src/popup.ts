@@ -68,7 +68,7 @@ async function init(): Promise<void> {
   render(await loadSettings());
   if (tab?.id !== undefined && host !== '') {
     const state = (await chrome.runtime.sendMessage({ type: 'getTabState', tabId: tab.id })) as TabState | undefined;
-    tabPausedBox.checked = state?.paused === true;
+    tabPausedBox.checked = state?.pausedByUser === true;
   }
 }
 

@@ -1,17 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { simulate } from './dnr-simulator.js';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import {
-  defaultRuleSet,
-  cleanUrl,
-  compileDnrRules,
-  domainMatches,
-  ID_BASE,
-  toAsciiDomain,
-  type DnrRule,
-  type Mode,
-} from '../src/index.js';
+import { defaultRuleSet, cleanUrl, compileDnrRules, ID_BASE, toAsciiDomain, type Mode } from '../src/index.js';
 
 /**
  * Minimal model of Chromium's DNR evaluation for main_frame requests:
@@ -19,58 +11,6 @@ import {
  * removeParams removes segments whose raw key matches exactly.
  * The real browser behaviour is verified separately by the e2e suite.
  */
-function applyRedirect(rule: DnrRule, url: string): string {
-  if (rule.action.type !== 'redirect') return url;
-  const redirect = rule.action.redirect;
-  if ('regexSubstitution' in redirect) {
-    const re = new RegExp(rule.condition.regexFilter!, rule.condition.isUrlFilterCaseSensitive === false ? 'i' : '');
-    // RE2 substitutes an unmatched group with the empty string, like JS does.
-    return url.replace(re, redirect.regexSubstitution.replace(/\\(\d)/g, '$$$1'));
-  }
-  const remove = new Set(redirect.transform.queryTransform.removeParams);
-  const hashIdx = url.indexOf('#');
-  const fragment = hashIdx === -1 ? '' : url.slice(hashIdx);
-  const base = hashIdx === -1 ? url : url.slice(0, hashIdx);
-  const qIdx = base.indexOf('?');
-  if (qIdx === -1) return url;
-  const segments = base.slice(qIdx + 1).split('&');
-  const kept = segments.filter((seg) => !remove.has(seg.split('=')[0]!));
-  if (kept.length === segments.length) return url;
-  return base.slice(0, qIdx) + (kept.join('&') ? `?${kept.join('&')}` : '') + fragment;
-}
-
-/**
- * Model of Chromium's DNR evaluation for main_frame requests: highest
- * priority first, `allow` beats `redirect` at equal priority, a redirect whose
- * result equals the request URL is skipped (verified in Chromium), and every
- * redirect starts a new request (max 20 hops). Like Chromium, the URL matched
- * by rules includes the fragment. The real browser is exercised by e2e tests.
- */
-function simulate(rules: DnrRule[], input: string): string {
-  let url = input;
-  for (let hop = 0; hop < 20; hop++) {
-    const host = new URL(url).hostname.toLowerCase().replace(/\.+$/, '');
-    const matching = rules
-      .filter((r) => {
-        const c = r.condition;
-        if (c.requestDomains && !c.requestDomains.some((d) => domainMatches(host, d))) return false;
-        if (c.regexFilter && !new RegExp(c.regexFilter, c.isUrlFilterCaseSensitive === false ? 'i' : '').test(url))
-          return false;
-        return true;
-      })
-      .sort((a, b) => b.priority - a.priority || (a.action.type === 'allow' ? -1 : 1));
-    let next = url;
-    for (const rule of matching) {
-      if (rule.action.type === 'allow') break;
-      next = applyRedirect(rule, url);
-      if (next !== url) break;
-    }
-    if (next === url) return url;
-    url = next;
-  }
-  throw new Error('redirect limit exceeded');
-}
-
 interface Case {
   name: string;
   input: string;
@@ -167,8 +107,11 @@ describe('DNR approximation vs engine (shared fixtures)', () => {
     // Cleaned: identical to the engine for the query; DNR never touches fragments.
     const engineNoFragment = new URL(engine.url);
     const dnr = new URL(viaDnr);
-    // Documented exceptions: fragments are never sent; encoded keys are left alone.
-    const exact = !engine.removed.some((r) => r.location === 'fragment' || r.name.includes('%'));
+    // Documented exceptions: fragments are never sent; encoded keys are left
+    // alone; Chromium's queryTransform normalises valueless/empty segments.
+    const query = c.input.trim().split('#')[0]!.split('?').slice(1).join('?');
+    const hasValueless = query !== '' && query.split('&').some((seg) => !seg.includes('='));
+    const exact = !hasValueless && !engine.removed.some((r) => r.location === 'fragment' || r.name.includes('%'));
     if (exact) {
       expect(dnr.search).toBe(engineNoFragment.search);
     }
@@ -208,6 +151,23 @@ describe('DNR approximation vs engine (shared fixtures)', () => {
       expect(simulate(rules, input)).toBe(expected);
       expect(cleanUrl(input).url).toBe(expected);
     }
+  });
+
+  it('documents that Chromium normalises valueless and empty segments when it removes exact matches', () => {
+    const rules = compileDnrRules({ mode: 'clean', exceptions: [] });
+    // Engine: byte-for-byte. Navigation (queryTransform): `edit` -> `edit=`, `` -> `=`.
+    expect(cleanUrl('https://e.example/wiki?edit&utm_source=1').url).toBe('https://e.example/wiki?edit');
+    expect(simulate(rules, 'https://e.example/wiki?edit&utm_source=1')).toBe('https://e.example/wiki?edit=');
+    // Only mixed-case trackers: handled by the byte-preserving regex fallback.
+    expect(simulate(rules, 'https://e.example/wiki?edit&Utm_Source=1')).toBe('https://e.example/wiki?edit');
+  });
+
+  it('never exceeds the redirect limit: long queries skip the fallback chain', () => {
+    const rules = compileDnrRules({ mode: 'clean', exceptions: [] });
+    const unlisted = Array.from({ length: 25 }, (_, i) => `utm_z${i}=1`).join('&');
+    const url = `https://e.example/a?${unlisted}&utm_source=x&id=1`;
+    // Exact rules still remove the listed tracker; unlisted ones stay (no endless chain).
+    expect(simulate(rules, url)).toBe(`https://e.example/a?${unlisted}&id=1`);
   });
 
   it('terminates for many mixed-case trackers (each hop shortens the URL)', () => {
