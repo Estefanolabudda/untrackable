@@ -47,16 +47,19 @@ First release. Chromium extension (Phase 1) and reusable cleaning engines.
 
 ### Security and privacy hardening (found in independent reviews before release)
 
-- Copy cleaning no longer modifies the copy event; the service worker writes
-  the clean link afterwards, so settings and exception domains cannot be
-  probed by web pages.
+- Copy cleaning no longer modifies the copy event; the service worker
+  rewrites the clipboard after every keyboard-copied link (clean or
+  unchanged), so neither the event nor clipboard-change notifications reveal
+  mode, pause state or exception domains; the latest copy always wins; a
+  page's own copy handling is respected.
 - Redirect-loop helper never navigates on its own or to a stored URL; only an
   explicit click reloads the failed tab once, with a bypass limited to that
   host; only the host name is kept, briefly.
 - Orphaned content scripts stop acting after the extension is disabled or
   updated.
 - "Open link without cleaning" no longer sends a request twice (one-time links
-  stay valid) and also covers redirectors in front of the destination.
+  stay valid), covers redirectors in front of the destination and ends as
+  soon as the destination commits.
 - Rule installation is fail-safe: a protection rule Chromium cannot compile
   disables redirects instead of cleaning unprotected.
 - Message authorisation by extension origin; offscreen clipboard writer only

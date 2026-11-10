@@ -184,18 +184,24 @@ e2e test asserts that every compiled rule is actually installed.
 How it works: the content script listens for a trusted Ctrl/Cmd+C or
 Ctrl+Insert keystroke (matched by physical key and by character, so Dvorak
 and non-Latin layouts work). On the following copy event it does **not**
-touch the event; it reads the selection and, if it is exactly one http(s)
-link, sends it to the service worker. The service worker applies the
-settings (switch, mode, exceptions, global and tab pause) and, if the engine
-cleans the link, writes the clean link through the offscreen document right
-after the native copy. Consequences:
+touch the event. After the page's own handlers have run it reports the copy
+to the service worker – with the text if the selection is exactly one
+http(s) link and the page did not handle the copy itself. The service worker
+applies the settings and, for such a link, rewrites the clipboard through the
+offscreen document right after the native copy: with the clean link, or with
+the same link unchanged if it must not be cleaned (exception, protected URL,
+pause). Consequences:
 
-- Web pages cannot observe whether, or how, Untrackable reacted – settings
-  and exceptions never reach the page process (this replaced an earlier
-  design that set the clipboard data in the copy event, which pages could
-  probe; found in review).
+- Web pages cannot observe settings: the copy event is untouched and every
+  keyboard-copied link produces the same clipboard-change notifications,
+  whatever the mode, pause state or exception list. (Two earlier designs were
+  observable – setting data in the copy event, and writing only when
+  something was cleaned; both found in review.) Only "copy cleaning switched
+  off" is visible, because then nothing is written.
+- Only the most recent copy may write, so a slow write never replaces
+  something copied afterwards.
 - If you paste within a few milliseconds, you may still get the original
-  link.
+  link. The rewrite is plain text.
 - Orphaned content scripts (extension disabled, reloaded or updated) detach
   themselves instead of acting on stale settings.
 

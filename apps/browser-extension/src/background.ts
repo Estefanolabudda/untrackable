@@ -242,9 +242,15 @@ async function waitForTab(tabId: number, done: (t: chrome.tabs.Tab) => boolean, 
   return false;
 }
 
+// A one-time bypass ends as soon as the destination page commits (its URL
+// shows up), not when it finishes loading – otherwise a slow page could
+// navigate onwards while cleaning is still off (found in review). Server
+// redirects happen before the commit and stay covered. A reload (loop
+// helper) keeps the URL, so the "complete" status ends it there.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status !== 'complete' || tab.url === undefined || tab.url === 'about:blank') return;
-  void endOnce(tabId);
+  const committedUrl = changeInfo.url !== undefined && changeInfo.url !== 'about:blank';
+  const completed = changeInfo.status === 'complete' && tab.url !== undefined && tab.url !== 'about:blank';
+  if (committedUrl || completed) void endOnce(tabId);
 });
 
 // ---------------------------------------------------------------------------
@@ -306,7 +312,10 @@ function setLoopOffer(tabId: number, host: string | undefined): Promise<void> {
       const oldest = Math.min(...Object.values(offers).map((o) => o.at));
       await chrome.alarms.create(LOOP_PURGE_ALARM, { when: oldest + LOOP_OFFER_TTL_MS + 1000 });
     }
-    await chrome.action.setBadgeText({ tabId, text: host === undefined ? '' : '↻' }).catch(() => {});
+    // null resets the tab to the global badge (an empty string would hide S/off/!).
+    await chrome.action
+      .setBadgeText({ tabId, text: host === undefined ? (null as unknown as string) : '↻' })
+      .catch(() => {});
     if (host !== undefined) {
       await chrome.action
         .setTitle({ tabId, title: 'Untrackable – this page failed with too many redirects. Open for options.' })
@@ -402,7 +411,6 @@ chrome.permissions.onRemoved.addListener(() => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  lastCopyWrite.delete(tabId);
   void readLoopOffers().then((offers) => (offers[String(tabId)] ? setLoopOffer(tabId, undefined) : undefined));
   void serialised(async () => {
     await setTabRule(tabId, 'pause', false);
@@ -439,16 +447,18 @@ async function ensureOffscreen(): Promise<void> {
 let clipboardQueue: Promise<unknown> = Promise.resolve();
 
 /** Serialised so concurrent copies cannot create or close the document under each other. */
-function copyToClipboard(text: string): Promise<boolean> {
+function copyToClipboard(text: string, stillWanted: () => boolean = () => true): Promise<boolean> {
   const run = clipboardQueue.then(async () => {
+    if (!stillWanted()) return false;
     await ensureOffscreen();
-    try {
-      const ok: unknown = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'copy', text });
-      return ok === true;
-    } finally {
-      // Do not keep a clipboard-capable document alive longer than needed.
-      await chrome.offscreen.closeDocument().catch(() => {});
-    }
+    // Checked again right before writing, so a newer copy wins whenever possible.
+    if (!stillWanted()) return false;
+    // The offscreen document stays open between writes: it only accepts
+    // messages from this service worker, and reopening it for every keyboard
+    // copy would widen the window in which a slow write could replace a newer
+    // copy. Chromium closes it together with the service worker.
+    const ok: unknown = await chrome.runtime.sendMessage({ target: 'offscreen', type: 'copy', text });
+    return ok === true;
   });
   clipboardQueue = run.catch(() => {});
   return run.catch(() => false);
@@ -470,27 +480,38 @@ async function copyClean(url: string): Promise<void> {
 // Event wiring
 // ---------------------------------------------------------------------------
 
-/** Per-tab time of the last copy write, to bound clipboard writes a page could provoke. */
-const lastCopyWrite = new Map<number, number>();
-const COPY_MIN_INTERVAL_MS = 300;
+/** Order of keyboard copies seen by content scripts (all tabs); only the latest may write. */
+let copySeq = 0;
 
 /**
- * Copy cleaning, decided here so settings never reach web pages: the content
- * script reports a link the user just copied with the keyboard; if the
- * configured mode would clean it, the clean link replaces the clipboard
- * content right after the native copy. Only cleaned versions of the copied
- * link are ever written – a content script cannot write arbitrary text.
+ * Copy cleaning, decided here so settings never reach web pages.
+ *
+ * The content script reports every keyboard copy the page did not handle
+ * itself, with the copied text if it is exactly one link. For such a link the
+ * clipboard is **always** rewritten right after the native copy – with the
+ * clean link if the settings say so, otherwise with the same link unchanged.
+ * Writing in every case is deliberate: Chromium notifies pages of clipboard
+ * changes (`clipboardchange`), so writing only when something was cleaned
+ * would reveal mode, pause state and exception domains (found in review).
+ * Only when the user switched copy cleaning (or Untrackable) off entirely is
+ * nothing written.
+ *
+ * Only the latest copy may write, so a slow write never replaces something
+ * the user copied afterwards. A content script can only cause the copied link
+ * itself or its cleaned version to be written, never arbitrary text.
  */
-async function cleanCopiedLink(tabId: number, url: string): Promise<void> {
-  const now = Date.now();
-  if (now - (lastCopyWrite.get(tabId) ?? 0) < COPY_MIN_INTERVAL_MS) return;
+async function onCopiedLink(tabId: number, url: string | undefined): Promise<void> {
+  const seq = ++copySeq;
+  if (url === undefined) return; // a newer non-link copy supersedes pending writes
   const settings = await loadSettings();
+  // Switched off means no clipboard writes at all. (A page can therefore tell
+  // whether copy cleaning is switched on – but not mode, pauses or exceptions.)
+  if (!settings.enabled || !settings.copyCleaning) return;
   const mode = effectiveMode(settings);
-  if (!settings.copyCleaning || mode === 'bypass' || (await tabRules(tabId)).length > 0) return;
-  const result = cleanUrl(url, { mode, exceptions: settings.exceptions });
-  if (result.status !== 'cleaned') return;
-  lastCopyWrite.set(tabId, now);
-  await copyToClipboard(result.url);
+  const active = mode !== 'bypass' && (await tabRules(tabId)).length === 0;
+  const result = active ? cleanUrl(url, { mode, exceptions: settings.exceptions }) : undefined;
+  const text = result?.status === 'cleaned' ? result.url : url;
+  await copyToClipboard(text, () => seq === copySeq);
 }
 
 function createMenus(): void {
@@ -551,8 +572,8 @@ function isMessage(m: unknown): m is Message {
       return typeof msg.url === 'string' && msg.url.length <= 32_768;
     case 'retryLoop':
       return Number.isInteger(msg.tabId);
-    case 'cleanCopiedLink':
-      return typeof msg.url === 'string' && msg.url.length <= 8192;
+    case 'copied':
+      return msg.url === undefined || (typeof msg.url === 'string' && msg.url.length <= 8192);
     default:
       return false;
   }
@@ -581,10 +602,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     );
     return true;
   }
-  if (message.type === 'cleanCopiedLink') {
-    // Content scripts only (the user just pressed Ctrl/Cmd+C on a single link).
+  if (message.type === 'copied') {
+    // Content scripts only: the user just copied with the keyboard.
     if (!fromContentScript || sender.tab?.id === undefined) return false;
-    void cleanCopiedLink(sender.tab.id, message.url);
+    void onCopiedLink(sender.tab.id, message.url);
     return false;
   }
   if (fromContentScript) return false; // privileged messages: extension pages only

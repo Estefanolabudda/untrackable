@@ -13,9 +13,11 @@ on http(s) pages. It uses that access only for:
   enable the redirect-loop retry offer, see below),
 - a content script that, when you press Ctrl/Cmd+C, reads the current
   selection and – only if it is exactly one link – hands it to the
-  extension's background worker, which writes the cleaned link to the
-  clipboard. Your settings and exception list are never shared with web
-  pages; pages cannot tell whether Untrackable reacted,
+  extension's background worker, which writes the link to the clipboard
+  again – cleaned, or unchanged if it must not be cleaned. Your settings and
+  exception list are never shared with web pages, and pages cannot tell from
+  the clipboard activity whether a link was cleaned (they can tell whether
+  copy cleaning is switched on),
 - reading the active tab's URL when **you** choose "Copy clean link",
 - only if you enable the redirect-loop retry offer: receiving navigation
   error events (optional `webNavigation` permission). Chromium then delivers
@@ -53,7 +55,7 @@ inspect storage after normal browsing and while a loop offer exists.
 
 - No telemetry, analytics or crash reporting.
 - The extension makes no network requests of its own. (The only
-  navigations it ever triggers are ones you ask for: "Retry once without
+  navigations it ever triggers are ones you ask for: "Reload once without
   cleaning" after a redirect loop, or "Open link without cleaning".)
 - No remote rule updates.
 - No cookies, form data, credentials or page content.

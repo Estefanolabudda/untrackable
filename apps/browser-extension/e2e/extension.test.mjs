@@ -86,6 +86,15 @@ before(async () => {
       res.end();
       return;
     }
+    // A destination whose load never completes, then navigates onwards via JS.
+    if (req.url.startsWith('/hang')) return; // never answer (keeps the load event pending)
+    if (req.url.startsWith('/slow-then-leak')) {
+      res.setHeader('content-type', 'text/html; charset=utf-8');
+      res.end(
+        `<img src="/hang"><script>setTimeout(() => { location.href = 'http://third.test:${port}/landing?gclid=LEAK&id=1'; }, 1500);</script>`,
+      );
+      return;
+    }
     // A click tracker redirecting to another host with a tracker parameter.
     if (req.url.startsWith('/r?to=dest')) {
       res.writeHead(302, { location: `http://dest.test:${port}/landing?mkt_tok=ABC` });
@@ -432,6 +441,24 @@ describe('per-tab controls', () => {
     await ext.close();
   });
 
+  test('one-time bypass ends when the destination commits (slow pages cannot leak onwards)', async () => {
+    const ext = await extensionPage('options.html');
+    await ext.evaluate(
+      (u) => chrome.runtime.sendMessage({ type: 'openUnmodified', url: u }),
+      `http://news.test:${port}/slow-then-leak?utm_source=x`,
+    );
+    const tab = await waitFor(
+      () => context.pages().find((p) => p.url().includes('third.test')),
+      'onward navigation',
+      15_000,
+    );
+    await tab.waitForURL(/third\.test/);
+    assert.match(tab.url(), /\/landing\?id=1$/);
+    assert.ok(seen.includes('/slow-then-leak?utm_source=x'), 'original link opened uncleaned');
+    await tab.close();
+    await ext.close();
+  });
+
   test('one-time bypass opens the original link once', async () => {
     const ext = await extensionPage('options.html');
     await ext.fill('#preview-input', `http://news.test:${port}/once?utm_source=x&id=1`);
@@ -656,6 +683,80 @@ describe('copy cleaning', () => {
       { prevented: false, data: '' },
       { prevented: false, data: '' },
     ]);
+    await page.close();
+  });
+
+  test('clipboard-change notifications do not reveal settings', async () => {
+    await setSettings({ exceptions: ['private.example'] });
+    const page = await context.newPage();
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      window.changes = 0;
+      navigator.clipboard.addEventListener?.('clipboardchange', () => window.changes++);
+    });
+    const countFor = async (url) => {
+      await page.evaluate(() => (window.changes = 0));
+      await page.evaluate((u) => {
+        const f = document.getElementById('field');
+        f.value = u;
+        f.focus();
+        f.select();
+      }, url);
+      await page.keyboard.press('ControlOrMeta+C');
+      await new Promise((r) => setTimeout(r, 1000));
+      return page.evaluate(() => window.changes);
+    };
+    const excepted = await countFor('https://private.example/?utm_source=x');
+    const cleaned = await countFor('https://public.example/?utm_source=x');
+    const protectedUrl = await countFor('https://public.example/oauth/authorize?utm_source=x');
+    assert.ok(cleaned >= 1, 'clipboardchange events are observable in this browser (test is meaningful)');
+    assert.equal(excepted, cleaned, `excepted ${excepted} vs cleaned ${cleaned}`);
+    assert.equal(protectedUrl, cleaned, `protected ${protectedUrl} vs cleaned ${cleaned}`);
+    await page.close();
+  });
+
+  test('a quick second copy is never replaced by the first one', async () => {
+    const page = await context.newPage();
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      const f = document.getElementById('field');
+      f.value = 'https://shop.example/a?utm_source=x';
+      f.focus();
+      f.select();
+    });
+    await page.keyboard.press('ControlOrMeta+C');
+    // A person needs well over 150 ms to select something else and copy again.
+    await new Promise((r) => setTimeout(r, 150));
+    await page.evaluate(() => {
+      const p = document.getElementById('para');
+      p.textContent = 'plain second copy';
+      getSelection().selectAllChildren(p);
+    });
+    await page.keyboard.press('ControlOrMeta+C');
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'plain second copy');
+    await page.close();
+  });
+
+  test("a page's own copy handling is respected", async () => {
+    const page = await context.newPage();
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      document.addEventListener('copy', (e) => {
+        e.clipboardData.setData('text/plain', 'PAGE-CUSTOM-DATA');
+        e.preventDefault();
+      });
+      const f = document.getElementById('field');
+      f.value = 'https://shop.example/x?utm_source=y';
+      f.focus();
+      f.select();
+    });
+    await page.keyboard.press('ControlOrMeta+C');
+    await new Promise((r) => setTimeout(r, 1200));
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'PAGE-CUSTOM-DATA');
     await page.close();
   });
 

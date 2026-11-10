@@ -10,11 +10,11 @@ require the maintainer's explicit approval.
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Engine correctness  | 150 shared fixtures pass in TypeScript, Rust and inside Chromium's URL parser; property tests (fast-check, proptest)                                                                                                                                                    |
 | Engine consistency  | Differential test: >51,000 URLs generated from `rules/rules.json` give identical results in TS and Rust; validation parity on 60 mutated rule sets (CI job)                                                                                                             |
-| Browser behaviour   | 56 Chromium end-to-end tests against the built extension (navigation, protection, modes, exceptions, pauses, bypasses, copy cleaning, privacy of storage, loop helper, popup per-tab controls, DNR model vs real Chromium on 200 generated URLs); stable under CPU load |
+| Browser behaviour   | 60 Chromium end-to-end tests against the built extension (navigation, protection, modes, exceptions, pauses, bypasses, copy cleaning, privacy of storage, loop helper, popup per-tab controls, DNR model vs real Chromium on 200 generated URLs); stable under CPU load |
 | Static checks       | Prettier, ESLint, TypeScript strict, rustfmt, clippy `-D warnings`                                                                                                                                                                                                      |
 | Dependencies        | `npm audit --audit-level=high`, `cargo audit`: no findings (10 moderate dev-only npm advisories in eslint's `minimatch`)                                                                                                                                                |
 | Packaging           | Reproducible zip (identical SHA-256 across clean clones); unzipped artifact loads in Chromium, installs all rules                                                                                                                                                       |
-| Independent reviews | Four rounds (code, security, privacy, release) by separate reviewers; all confirmed findings fixed with regression tests – see commit history of PR #1                                                                                                                  |
+| Independent reviews | Five rounds (code, security, privacy, release, focused re-verification) by separate reviewers; all confirmed findings fixed with regression tests – see commit history of PR #1                                                                                         |
 
 ## Permissions
 
@@ -35,9 +35,10 @@ on all sites.
   with fewer than 7 parameters; top-level navigations only.
 - Copy cleaning: keyboard shortcut only (not Edit menu/touch), exactly one
   link selected, not in iframes/shadow-DOM inputs; a paste within a few
-  milliseconds may still contain the original link.
-- "Open link without cleaning" disables cleaning in that tab until the page
-  has loaded (≤ 1 minute).
+  milliseconds may still contain the original link; the clean link is
+  written as plain text; pages can see whether copy cleaning is switched on.
+- "Open link without cleaning" disables cleaning in that tab until the
+  destination page commits (≤ 1 minute, e.g. for downloads).
 - Redirect-loop helper needs the optional `webNavigation` permission.
 - Tested automatically only on Chromium 153 (Linux, headless).
 

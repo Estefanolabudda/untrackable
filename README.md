@@ -107,6 +107,8 @@ The full list lives in [`rules/rules.json`](rules/rules.json).
   with the keyboard (Ctrl/Cmd+C or Ctrl+Insert). Copying via the browser's
   menus or touch gestures, and the browser's own UI (address bar, "Copy link
   address"), are not cleaned – use Untrackable's "Copy clean link" instead.
+  The clean link is written right after the copy (as plain text); pasting
+  within a few milliseconds may still give the original.
 - Redirect-based click tracking (`tracker.example/click?u=…`) is not handled yet.
 
 Details: [architecture overview](docs/architecture/overview.md).

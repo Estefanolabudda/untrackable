@@ -7,12 +7,12 @@
  * started by page scripts) is left alone.
  *
  * Design (privacy): this script never touches the copy event itself – no
- * setData, no preventDefault – so the page cannot observe whether, or how,
- * Untrackable reacted. It only forwards the copied link to the service worker,
- * which decides with the user's settings (mode, exceptions, pause, switch) and
- * writes the cleaned link to the clipboard afterwards. The page would need
- * clipboard-read permission to notice; settings never enter the page's
- * process.
+ * setData, no preventDefault. It reports keyboard copies to the service
+ * worker, which decides with the user's settings (mode, exceptions, pause,
+ * switch) and rewrites the clipboard right after the native copy – for a
+ * single link always, with either the clean or the unchanged link, so pages
+ * cannot infer settings from clipboard-change notifications. Settings never
+ * enter the page's process.
  *
  * Runs in Chrome's isolated world. It never stores or logs anything.
  */
@@ -79,9 +79,16 @@ function onCopy(event: ClipboardEvent): void {
   }
   if (!event.isTrusted || !consumeGesture()) return;
   const text = selectedText().trim();
-  if (text.length > MAX_LENGTH || !SINGLE_URL.test(text)) return;
-  // Fire and forget; the native copy proceeds untouched.
-  chrome.runtime.sendMessage({ type: 'cleanCopiedLink', url: text }).catch(() => {});
+  const link = text.length <= MAX_LENGTH && SINGLE_URL.test(text) ? text : undefined;
+  // Decide after the page's own copy handlers ran: if the page handled the
+  // copy itself (preventDefault, e.g. editors with their own clipboard data),
+  // leave the clipboard alone. Every keyboard copy is reported, so a newer
+  // copy always supersedes a pending write of an older one.
+  setTimeout(() => {
+    if (!extensionAlive()) return;
+    const url = event.defaultPrevented ? undefined : link;
+    chrome.runtime.sendMessage(url === undefined ? { type: 'copied' } : { type: 'copied', url }).catch(() => {});
+  }, 0);
 }
 
 window.addEventListener('keydown', onKeyDown, true);
