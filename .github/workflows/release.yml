@@ -1,0 +1,72 @@
+name: Release
+
+# Publishes a GitHub release when an annotated version tag is pushed.
+# The tag is created manually by the maintainer after CI is green on main;
+# this workflow only builds the extension from exactly that commit and
+# attaches the reproducible ZIP. It never publishes to any browser store.
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish GitHub release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write # create the release and upload the asset
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify tag (annotated, on main, matches package version)
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test "$(git cat-file -t "refs/tags/$TAG")" = tag || { echo "::error::$TAG is not an annotated tag"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$TAG is not on main"; exit 1; }
+          version="$(node -p "require('./apps/browser-extension/package.json').version")"
+          test "v$version" = "$TAG" || { echo "::error::package version v$version != tag $TAG"; exit 1; }
+          test -f "docs/release/$TAG-release-notes.md" || { echo "::error::missing docs/release/$TAG-release-notes.md"; exit 1; }
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Build and package (reproducible zip)
+        run: |
+          umask 022
+          npm run package -w apps/browser-extension
+          cd artifacts
+          sha256sum untrackable-chromium-*.zip | tee SHA256SUMS
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          {
+            cat "docs/release/$TAG-release-notes.md"
+            echo
+            echo "## Artifact"
+            echo
+            echo "Built by this workflow from commit \`$GITHUB_SHA\`."
+            echo
+            echo '```'
+            cat artifacts/SHA256SUMS
+            echo '```'
+          } > release-body.md
+          gh release create "$TAG" artifacts/untrackable-chromium-*.zip artifacts/SHA256SUMS \
+            --verify-tag --title "Untrackable ${TAG#v}" --notes-file release-body.md
