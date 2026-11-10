@@ -65,4 +65,13 @@ fixtures in the same change.
    The archive is reproducible by default (fixed 2000-01-01 timestamps;
    `SOURCE_DATE_EPOCH` overrides them). File modes are stored, so build from
    a checkout made with a normal umask (e.g. 022).
-5. Tag the release. Publishing to stores is a manual, maintainer-approved step.
+5. Add `docs/release/vX.Y.Z-release-notes.md`, merge to `main` and wait for
+   green CI on that commit.
+6. Create and push an annotated tag on that commit:
+   `git tag -a vX.Y.Z -m "Untrackable X.Y.Z" <sha> && git push origin vX.Y.Z`.
+   `.github/workflows/release.yml` then verifies the tag (annotated, on
+   `main`, matches the package version, release notes present), runs the unit
+   tests, builds the reproducible zip from exactly that commit and publishes
+   the GitHub release with the zip and `SHA256SUMS`.
+7. Publishing to browser stores is a separate, manual, maintainer-approved
+   step.
