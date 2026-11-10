@@ -1,0 +1,20 @@
+[package]
+name = "untrackable-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Removes tracking parameters from URLs (Rust implementation of the Untrackable cleaning engine)"
+keywords = ["url", "tracking", "privacy", "utm"]
+categories = ["web-programming", "parser-implementations"]
+readme = false
+publish = false
+
+[dependencies]
+url = "2.5"
+percent-encoding = "2.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+
+[dev-dependencies]
+proptest = "1"

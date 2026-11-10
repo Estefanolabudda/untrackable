@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Untrackable – Settings</title>
+    <link rel="stylesheet" href="common.css" />
+    <style>
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 1.5rem 1rem 3rem;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin-bottom: 0.25rem;
+      }
+      section {
+        margin-top: 1.25rem;
+      }
+      ul.exceptions {
+        list-style: none;
+        padding: 0;
+        margin: 0.5rem 0 0;
+      }
+      ul.exceptions li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.25rem 0;
+        border-bottom: 1px solid var(--border);
+      }
+      form.row input {
+        flex: 1 1 14rem;
+        width: auto;
+      }
+      #preview-output ul {
+        margin: 0.25rem 0 0;
+        padding-left: 1.2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Untrackable settings</h1>
+      <p class="muted">All processing happens locally in your browser. Untrackable stores only these settings.</p>
+
+      <section>
+        <fieldset>
+          <legend>Cleaning</legend>
+          <label><input type="checkbox" id="enabled" /> <span>Clean links automatically</span></label>
+          <label
+            ><input type="radio" name="mode" value="clean" />
+            <span
+              ><strong>Clean</strong> (recommended) – removes well-known trackers such as <code>utm_*</code>,
+              <code>fbclid</code>, <code>gclid</code>.</span
+            ></label
+          >
+          <label
+            ><input type="radio" name="mode" value="strict" />
+            <span
+              ><strong>Strict</strong> – additionally removes referral and analytics parameters (e.g. <code>ref</code>,
+              Amazon/Google/eBay specifics) and trackers in link fragments. May occasionally affect a site.</span
+            ></label
+          >
+          <label
+            ><input type="checkbox" id="copy-cleaning" />
+            <span
+              >Clean a link when I copy it from a web page
+              <small>(only when the selection is exactly one link)</small></span
+            ></label
+          >
+          <label
+            ><input type="checkbox" id="loop-recovery" />
+            <span
+              >Offer a one-click retry when a site keeps redirecting back to a tracking link
+              <small
+                >(asks for permission to see navigation errors; only “too many redirects” errors of the page are used,
+                nothing is stored permanently)</small
+              ></span
+            ></label
+          >
+          <p class="muted" id="pause-status" role="status" aria-live="polite"></p>
+        </fieldset>
+      </section>
+
+      <section>
+        <fieldset>
+          <legend>Sites that are never cleaned</legend>
+          <p class="muted">Links to these sites and their subdomains are left untouched.</p>
+          <form class="row" id="add-exception">
+            <label for="exception-input" class="muted">Domain</label>
+            <input type="text" id="exception-input" placeholder="example.com" autocomplete="off" spellcheck="false" />
+            <button type="submit">Add</button>
+          </form>
+          <p id="exception-error" class="status off" role="alert"></p>
+          <ul class="exceptions" id="exceptions" aria-label="Exceptions"></ul>
+          <p class="muted" id="no-exceptions">No exceptions.</p>
+        </fieldset>
+      </section>
+
+      <section>
+        <fieldset>
+          <legend>Check a link</legend>
+          <p class="muted">
+            See exactly what Untrackable would change with your current settings. Nothing is sent anywhere.
+          </p>
+          <label for="preview-input" class="muted">Link</label>
+          <input type="url" id="preview-input" placeholder="https://example.com/?utm_source=…" spellcheck="false" />
+          <div id="preview-output" role="status" aria-live="polite"></div>
+          <div class="row">
+            <button type="button" id="open-unmodified" disabled>Open original link without cleaning</button>
+          </div>
+        </fieldset>
+      </section>
+
+      <section>
+        <h2>Good to know</h2>
+        <ul class="muted">
+          <li>
+            Sign-in, password-reset, payment and signed download links are detected heuristically and left unchanged. If
+            a site still misbehaves, add it above or use “Open link without cleaning” in the link context menu.
+          </li>
+          <li>
+            Removing tracking parameters does not stop cookies, IP-based tracking or browser fingerprinting. Untrackable
+            does not make you anonymous.
+          </li>
+          <li>Keyboard shortcut for “Copy clean link” can be changed at <code>chrome://extensions/shortcuts</code>.</li>
+        </ul>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

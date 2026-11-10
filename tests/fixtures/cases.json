@@ -1,0 +1,1048 @@
+{
+  "description": "Shared conformance fixtures for all cleaning engine implementations. All URLs are synthetic. Fields: input, mode (default clean), exceptions (default []), expected (resulting URL), status, removed (optional list of raw keys, in order), reason (optional).",
+  "cases": [
+    {
+      "name": "basic utm removal keeps functional id",
+      "input": "https://example.com/article?utm_source=newsletter&utm_medium=email&id=123",
+      "expected": "https://example.com/article?id=123",
+      "status": "cleaned",
+      "removed": ["utm_source", "utm_medium"]
+    },
+    {
+      "name": "all five classic utm parameters",
+      "input": "https://example.com/?utm_source=a&utm_medium=b&utm_campaign=c&utm_term=d&utm_content=e",
+      "expected": "https://example.com/",
+      "status": "cleaned",
+      "removed": ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]
+    },
+    {
+      "name": "unknown utm_ parameter removed via prefix",
+      "input": "https://example.com/page?utm_newthing=1&q=shoes",
+      "expected": "https://example.com/page?q=shoes",
+      "status": "cleaned",
+      "removed": ["utm_newthing"]
+    },
+    {
+      "name": "fbclid only",
+      "input": "https://example.com/post/42?fbclid=IwAR0abcDEF",
+      "expected": "https://example.com/post/42",
+      "status": "cleaned",
+      "removed": ["fbclid"]
+    },
+    {
+      "name": "gclid and msclkid among functional params",
+      "input": "https://shop.example/products?category=boots&gclid=Cj0KCQ&size=42&msclkid=abc",
+      "expected": "https://shop.example/products?category=boots&size=42",
+      "status": "cleaned",
+      "removed": ["gclid", "msclkid"]
+    },
+    {
+      "name": "mailchimp ids",
+      "input": "https://example.org/news?mc_cid=1a2b3c&mc_eid=4d5e6f",
+      "expected": "https://example.org/news",
+      "status": "cleaned",
+      "removed": ["mc_cid", "mc_eid"]
+    },
+    {
+      "name": "case-insensitive parameter names",
+      "input": "https://example.com/?UTM_SOURCE=x&Utm_Medium=y&FBCLID=z&keep=1",
+      "expected": "https://example.com/?keep=1",
+      "status": "cleaned",
+      "removed": ["UTM_SOURCE", "Utm_Medium", "FBCLID"]
+    },
+    {
+      "name": "percent-encoded parameter name",
+      "input": "https://example.com/?utm%5Fsource=x&id=7",
+      "expected": "https://example.com/?id=7",
+      "status": "cleaned",
+      "removed": ["utm%5Fsource"]
+    },
+    {
+      "name": "duplicate tracking parameters all removed",
+      "input": "https://example.com/?utm_source=a&id=1&utm_source=b",
+      "expected": "https://example.com/?id=1",
+      "status": "cleaned",
+      "removed": ["utm_source", "utm_source"]
+    },
+    {
+      "name": "duplicate functional parameters preserved in order",
+      "input": "https://example.com/search?tag=a&utm_medium=x&tag=b",
+      "expected": "https://example.com/search?tag=a&tag=b",
+      "status": "cleaned",
+      "removed": ["utm_medium"]
+    },
+    {
+      "name": "empty tracking value and key without equals sign",
+      "input": "https://example.com/?utm_source=&fbclid&a=",
+      "expected": "https://example.com/?a=",
+      "status": "cleaned",
+      "removed": ["utm_source", "fbclid"]
+    },
+    {
+      "name": "empty segments are preserved",
+      "input": "https://example.com/?a=1&&utm_source=x&b=2",
+      "expected": "https://example.com/?a=1&&b=2",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "parameter order preserved",
+      "input": "https://example.com/?z=26&utm_campaign=c&a=1&m=13",
+      "expected": "https://example.com/?z=26&a=1&m=13",
+      "status": "cleaned",
+      "removed": ["utm_campaign"]
+    },
+    {
+      "name": "fragment preserved in clean mode",
+      "input": "https://example.com/docs?utm_source=x#section-2",
+      "expected": "https://example.com/docs#section-2",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "param-shaped fragment untouched in clean mode",
+      "input": "https://example.com/a#utm_source=x",
+      "expected": "https://example.com/a#utm_source=x",
+      "status": "unchanged"
+    },
+    {
+      "name": "param-shaped fragment cleaned in strict mode",
+      "input": "https://example.com/a?id=1#utm_source=x&utm_medium=y",
+      "mode": "strict",
+      "expected": "https://example.com/a?id=1",
+      "status": "cleaned",
+      "removed": ["utm_source", "utm_medium"]
+    },
+    {
+      "name": "xtor fragment cleaned in strict mode keeps other fragment params",
+      "input": "https://news.example/article.html#xtor=RSS-3208&page=2",
+      "mode": "strict",
+      "expected": "https://news.example/article.html#page=2",
+      "status": "cleaned",
+      "removed": ["xtor"]
+    },
+    {
+      "name": "SPA hash route never modified, even in strict mode",
+      "input": "https://app.example/#/inbox?utm_source=x",
+      "mode": "strict",
+      "expected": "https://app.example/#/inbox?utm_source=x",
+      "status": "unchanged"
+    },
+    {
+      "name": "text fragment never modified",
+      "input": "https://example.com/page?utm_source=x#:~:text=hello",
+      "mode": "strict",
+      "expected": "https://example.com/page#:~:text=hello",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "percent-encoding of functional values preserved byte-for-byte",
+      "input": "https://example.com/s?q=caf%C3%A9+cr%C3%A8me&utm_source=x&path=%2Fa%2Fb",
+      "expected": "https://example.com/s?q=caf%C3%A9+cr%C3%A8me&path=%2Fa%2Fb",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "unicode in path and query preserved as typed",
+      "input": "https://example.com/straße?suche=größe&utm_medium=social",
+      "expected": "https://example.com/straße?suche=größe",
+      "status": "cleaned",
+      "removed": ["utm_medium"]
+    },
+    {
+      "name": "internationalized domain name kept as typed",
+      "input": "https://bücher.example/katalog?utm_source=x&isbn=978",
+      "expected": "https://bücher.example/katalog?isbn=978",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "punycode domain",
+      "input": "https://xn--bcher-kva.example/?gclid=1",
+      "expected": "https://xn--bcher-kva.example/",
+      "status": "cleaned",
+      "removed": ["gclid"]
+    },
+    {
+      "name": "port and userinfo preserved",
+      "input": "http://user@example.com:8080/x?utm_source=a&b=1",
+      "expected": "http://user@example.com:8080/x?b=1",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "surrounding whitespace is trimmed when cleaning",
+      "input": "  https://example.com/?utm_source=a  ",
+      "expected": "https://example.com/",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "unchanged URL returned verbatim including whitespace",
+      "input": " https://example.com/?id=1 ",
+      "expected": " https://example.com/?id=1 ",
+      "status": "unchanged"
+    },
+    {
+      "name": "URL without query unchanged",
+      "input": "https://example.com/path/to/page",
+      "expected": "https://example.com/path/to/page",
+      "status": "unchanged"
+    },
+    {
+      "name": "empty query unchanged",
+      "input": "https://example.com/?",
+      "expected": "https://example.com/?",
+      "status": "unchanged"
+    },
+    {
+      "name": "similar but non-tracking names preserved",
+      "input": "https://example.com/?utm=1&source=web&medium=print&gclid_x=1&my_fbclid=2",
+      "expected": "https://example.com/?utm=1&source=web&medium=print&gclid_x=1&my_fbclid=2",
+      "status": "unchanged"
+    },
+    {
+      "name": "tracking-looking value is not a tracking key",
+      "input": "https://example.com/?q=utm_source%3Dx",
+      "expected": "https://example.com/?q=utm_source%3Dx",
+      "status": "unchanged"
+    },
+    {
+      "name": "redirect parameter value is not rewritten",
+      "input": "https://example.com/out?url=https%3A%2F%2Fother.example%2F%3Futm_source%3Dx&utm_campaign=y",
+      "expected": "https://example.com/out?url=https%3A%2F%2Fother.example%2F%3Futm_source%3Dx",
+      "status": "cleaned",
+      "removed": ["utm_campaign"]
+    },
+    {
+      "name": "invalid input",
+      "input": "not a url",
+      "expected": "not a url",
+      "status": "invalid"
+    },
+    {
+      "name": "empty input",
+      "input": "",
+      "expected": "",
+      "status": "invalid"
+    },
+    {
+      "name": "relative URL is invalid without base",
+      "input": "/path?utm_source=x",
+      "expected": "/path?utm_source=x",
+      "status": "invalid"
+    },
+    {
+      "name": "embedded newline rejected",
+      "input": "https://example.com/?utm_source=x\nid=1",
+      "expected": "https://example.com/?utm_source=x\nid=1",
+      "status": "invalid"
+    },
+    {
+      "name": "malformed host",
+      "input": "https://exa mple.com/?utm_source=x",
+      "expected": "https://exa mple.com/?utm_source=x",
+      "status": "invalid"
+    },
+    {
+      "name": "javascript scheme unsupported",
+      "input": "javascript:alert(1)//?utm_source=x",
+      "expected": "javascript:alert(1)//?utm_source=x",
+      "status": "unsupported"
+    },
+    {
+      "name": "mailto scheme unsupported",
+      "input": "mailto:someone@example.com?subject=hi&utm_source=x",
+      "expected": "mailto:someone@example.com?subject=hi&utm_source=x",
+      "status": "unsupported"
+    },
+    {
+      "name": "ftp scheme unsupported",
+      "input": "ftp://example.com/file?utm_source=x",
+      "expected": "ftp://example.com/file?utm_source=x",
+      "status": "unsupported"
+    },
+    {
+      "name": "bypass mode leaves URL untouched",
+      "input": "https://example.com/?utm_source=x",
+      "mode": "bypass",
+      "expected": "https://example.com/?utm_source=x",
+      "status": "bypassed"
+    },
+    {
+      "name": "user exception for exact domain",
+      "input": "https://example.com/?utm_source=x",
+      "exceptions": ["example.com"],
+      "expected": "https://example.com/?utm_source=x",
+      "status": "excepted"
+    },
+    {
+      "name": "user exception covers subdomains",
+      "input": "https://news.example.com/?utm_source=x",
+      "exceptions": ["example.com"],
+      "expected": "https://news.example.com/?utm_source=x",
+      "status": "excepted"
+    },
+    {
+      "name": "user exception normalised from wildcard and case",
+      "input": "https://shop.example.com/?utm_source=x",
+      "exceptions": ["  *.EXAMPLE.com. "],
+      "expected": "https://shop.example.com/?utm_source=x",
+      "status": "excepted"
+    },
+    {
+      "name": "user exception given as URL",
+      "input": "https://example.com/a?utm_source=x",
+      "exceptions": ["https://example.com/settings"],
+      "expected": "https://example.com/a?utm_source=x",
+      "status": "excepted"
+    },
+    {
+      "name": "user exception does not match suffix-only lookalike",
+      "input": "https://badexample.com/?utm_source=x",
+      "exceptions": ["example.com"],
+      "expected": "https://badexample.com/",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "OAuth authorization request is protected",
+      "input": "https://auth.example.com/oauth2/authorize?client_id=abc&redirect_uri=https%3A%2F%2Fapp.example%2Fcb&response_type=code&state=xyz&utm_source=mail",
+      "expected": "https://auth.example.com/oauth2/authorize?client_id=abc&redirect_uri=https%3A%2F%2Fapp.example%2Fcb&response_type=code&state=xyz&utm_source=mail",
+      "status": "protected",
+      "reason": "path:oauth"
+    },
+    {
+      "name": "OAuth callback with code and state is protected",
+      "input": "https://app.example/welcome?code=SplxlOBeZQQYbYS6WxSbIA&state=af0ifjsldkj&utm_source=x",
+      "expected": "https://app.example/welcome?code=SplxlOBeZQQYbYS6WxSbIA&state=af0ifjsldkj&utm_source=x",
+      "status": "protected",
+      "reason": "combination:code+state"
+    },
+    {
+      "name": "code alone is not protected (promo codes)",
+      "input": "https://shop.example/deal?code=SUMMER&utm_source=x",
+      "expected": "https://shop.example/deal?code=SUMMER",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "OIDC implicit flow token in fragment is protected",
+      "input": "https://app.example/landing?utm_source=x#id_token=eyJabc&state=1",
+      "mode": "strict",
+      "expected": "https://app.example/landing?utm_source=x#id_token=eyJabc&state=1",
+      "status": "protected",
+      "reason": "param:id_token"
+    },
+    {
+      "name": "SAML endpoint protected",
+      "input": "https://idp.example.org/saml2/sso?SAMLRequest=fZJNT&RelayState=abc&utm_campaign=x",
+      "expected": "https://idp.example.org/saml2/sso?SAMLRequest=fZJNT&RelayState=abc&utm_campaign=x",
+      "status": "protected",
+      "reason": "path:saml"
+    },
+    {
+      "name": "SAML parameter protected on neutral path",
+      "input": "https://example.org/acs?SAMLResponse=PHNhbWw&utm_source=x",
+      "expected": "https://example.org/acs?SAMLResponse=PHNhbWw&utm_source=x",
+      "status": "protected",
+      "reason": "param:samlresponse"
+    },
+    {
+      "name": "password reset link protected",
+      "input": "https://example.com/account/reset-password?uid=42&utm_source=transactional",
+      "expected": "https://example.com/account/reset-password?uid=42&utm_source=transactional",
+      "status": "protected",
+      "reason": "path:password"
+    },
+    {
+      "name": "German password reset path protected",
+      "input": "https://example.de/passwort-vergessen/neu?k=abc&utm_medium=email",
+      "expected": "https://example.de/passwort-vergessen/neu?k=abc&utm_medium=email",
+      "status": "protected",
+      "reason": "path:passwort"
+    },
+    {
+      "name": "email verification link protected",
+      "input": "https://example.com/email/verify/42/abcdef?expires=1700000000&utm_source=mail",
+      "expected": "https://example.com/email/verify/42/abcdef?expires=1700000000&utm_source=mail",
+      "status": "protected",
+      "reason": "path:verify"
+    },
+    {
+      "name": "invitation link protected",
+      "input": "https://team.example.com/join/invitation/abc?utm_source=invite_email",
+      "expected": "https://team.example.com/join/invitation/abc?utm_source=invite_email",
+      "status": "protected",
+      "reason": "path:invitation"
+    },
+    {
+      "name": "token query parameter protected",
+      "input": "https://example.com/welcome?access_token=abc&utm_source=x",
+      "expected": "https://example.com/welcome?access_token=abc&utm_source=x",
+      "status": "protected",
+      "reason": "param:access_token"
+    },
+    {
+      "name": "AWS S3 presigned URL protected",
+      "input": "https://bucket.s3.amazonaws.com/file.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA%2F20260101&X-Amz-Date=20260101T000000Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef&utm_source=x",
+      "expected": "https://bucket.s3.amazonaws.com/file.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA%2F20260101&X-Amz-Date=20260101T000000Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef&utm_source=x",
+      "status": "protected",
+      "reason": "param:x-amz-algorithm"
+    },
+    {
+      "name": "Google Cloud signed URL protected",
+      "input": "https://storage.googleapis.com/bucket/obj?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=abc&utm_medium=x",
+      "expected": "https://storage.googleapis.com/bucket/obj?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=abc&utm_medium=x",
+      "status": "protected",
+      "reason": "param:x-goog-algorithm"
+    },
+    {
+      "name": "Azure SAS URL protected",
+      "input": "https://acct.blob.core.windows.net/c/report.zip?sv=2022-11-02&se=2026-01-01&sr=b&sp=r&sig=abc%3D&utm_source=x",
+      "expected": "https://acct.blob.core.windows.net/c/report.zip?sv=2022-11-02&se=2026-01-01&sr=b&sp=r&sig=abc%3D&utm_source=x",
+      "status": "protected",
+      "reason": "param:sig"
+    },
+    {
+      "name": "CloudFront signed download protected",
+      "input": "https://d111.cloudfront.example/video.mp4?Expires=1700000000&Signature=abc~def&Key-Pair-Id=K2ABC&gclid=1",
+      "expected": "https://d111.cloudfront.example/video.mp4?Expires=1700000000&Signature=abc~def&Key-Pair-Id=K2ABC&gclid=1",
+      "status": "protected",
+      "reason": "param:signature"
+    },
+    {
+      "name": "expiring download with hmac protected",
+      "input": "https://files.example.com/dl/report.csv?exp=1700000000&hmac=deadbeef&utm_source=x",
+      "expected": "https://files.example.com/dl/report.csv?exp=1700000000&hmac=deadbeef&utm_source=x",
+      "status": "protected",
+      "reason": "param:hmac"
+    },
+    {
+      "name": "payment provider domain protected",
+      "input": "https://www.paypal.com/checkoutnow?token=EC-123&utm_source=x",
+      "expected": "https://www.paypal.com/checkoutnow?token=EC-123&utm_source=x",
+      "status": "protected",
+      "reason": "domain:paypal.com"
+    },
+    {
+      "name": "3-D Secure path protected",
+      "input": "https://acs.bank.example/3ds/challenge?tx=1&utm_source=x",
+      "expected": "https://acs.bank.example/3ds/challenge?tx=1&utm_source=x",
+      "status": "protected",
+      "reason": "path:3ds"
+    },
+    {
+      "name": "checkout page protected",
+      "input": "https://shop.example/checkout/step-2?cart=abc&utm_source=x",
+      "expected": "https://shop.example/checkout/step-2?cart=abc&utm_source=x",
+      "status": "protected",
+      "reason": "path:checkout"
+    },
+    {
+      "name": "identity provider domain protected",
+      "input": "https://accounts.google.com/o/oauth2/v2/auth?client_id=1&utm_source=x",
+      "expected": "https://accounts.google.com/o/oauth2/v2/auth?client_id=1&utm_source=x",
+      "status": "protected",
+      "reason": "domain:accounts.google.com"
+    },
+    {
+      "name": "magic login link protected via token suffix",
+      "input": "https://example.com/m?login_token=abc&utm_source=x",
+      "expected": "https://example.com/m?login_token=abc&utm_source=x",
+      "status": "protected",
+      "reason": "param:login_token"
+    },
+    {
+      "name": "verification code parameter protected",
+      "input": "https://example.com/welcome?verification_code=123456&utm_source=x",
+      "expected": "https://example.com/welcome?verification_code=123456&utm_source=x",
+      "status": "protected",
+      "reason": "param:verification_code"
+    },
+    {
+      "name": "author path is not mistaken for auth",
+      "input": "https://blog.example/author/jane?utm_source=x",
+      "expected": "https://blog.example/author/jane",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "display path is not mistaken for pay",
+      "input": "https://example.com/display-settings?utm_source=x",
+      "expected": "https://example.com/display-settings",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "oauth2 path keyword followed by digit",
+      "input": "https://example.com/oauth2/callback?utm_source=x",
+      "expected": "https://example.com/oauth2/callback?utm_source=x",
+      "status": "protected",
+      "reason": "path:oauth"
+    },
+    {
+      "name": "percent-encoded protected path detected",
+      "input": "https://example.com/%6Cogin?utm_source=x",
+      "expected": "https://example.com/%6Cogin?utm_source=x",
+      "status": "protected",
+      "reason": "path:login"
+    },
+    {
+      "name": "bypass wins over protection",
+      "input": "https://example.com/login?utm_source=x",
+      "mode": "bypass",
+      "expected": "https://example.com/login?utm_source=x",
+      "status": "bypassed"
+    },
+    {
+      "name": "Kleinanzeigen share link (app sharesheet)",
+      "input": "https://www.kleinanzeigen.de/s-anzeige/fahrrad-28-zoll/1234567890-217-1234?utm_source=sharesheet&utm_medium=social&utm_campaign=socialbuttons&utm_content=app_ios",
+      "expected": "https://www.kleinanzeigen.de/s-anzeige/fahrrad-28-zoll/1234567890-217-1234",
+      "status": "cleaned",
+      "removed": ["utm_source", "utm_medium", "utm_campaign", "utm_content"]
+    },
+    {
+      "name": "Kleinanzeigen search keeps filters",
+      "input": "https://www.kleinanzeigen.de/s-fahrraeder/berlin/c217l3331?minPrice=50&maxPrice=300&utm_source=newsletter",
+      "expected": "https://www.kleinanzeigen.de/s-fahrraeder/berlin/c217l3331?minPrice=50&maxPrice=300",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "newsletter link with HubSpot parameters",
+      "input": "https://blog.example.com/post?utm_campaign=weekly&_hsenc=p2ANqtz-abc&_hsmi=12345",
+      "expected": "https://blog.example.com/post",
+      "status": "cleaned",
+      "removed": ["utm_campaign", "_hsenc", "_hsmi"]
+    },
+    {
+      "name": "newsletter link with Marketo token",
+      "input": "https://www.example.com/webinar?mkt_tok=MzI3LUFCQy00NTY",
+      "expected": "https://www.example.com/webinar",
+      "status": "cleaned",
+      "removed": ["mkt_tok"]
+    },
+    {
+      "name": "YouTube share link si removed, timestamp kept",
+      "input": "https://youtu.be/dQw4w9WgXcQ?si=AbCdEf123&t=42",
+      "expected": "https://youtu.be/dQw4w9WgXcQ?t=42",
+      "status": "cleaned",
+      "removed": ["si"]
+    },
+    {
+      "name": "YouTube watch link keeps v and list",
+      "input": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123&si=xyz",
+      "expected": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123",
+      "status": "cleaned",
+      "removed": ["si"]
+    },
+    {
+      "name": "si is not removed on other domains",
+      "input": "https://example.com/?si=1",
+      "expected": "https://example.com/?si=1",
+      "status": "unchanged"
+    },
+    {
+      "name": "Spotify share link",
+      "input": "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC?si=a1b2c3",
+      "expected": "https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC",
+      "status": "cleaned",
+      "removed": ["si"]
+    },
+    {
+      "name": "Instagram share link",
+      "input": "https://www.instagram.com/p/C0abc123/?igsh=MWQ1ZGUxMzBkMA==",
+      "expected": "https://www.instagram.com/p/C0abc123/",
+      "status": "cleaned",
+      "removed": ["igsh"]
+    },
+    {
+      "name": "X share link",
+      "input": "https://x.com/someone/status/1234567890?s=20&t=AbCdEf",
+      "expected": "https://x.com/someone/status/1234567890",
+      "status": "cleaned",
+      "removed": ["s", "t"]
+    },
+    {
+      "name": "Facebook link with fbclid in clean mode",
+      "input": "https://www.facebook.com/events/123?fbclid=IwAR1&__tn__=K-R",
+      "expected": "https://www.facebook.com/events/123?__tn__=K-R",
+      "status": "cleaned",
+      "removed": ["fbclid"]
+    },
+    {
+      "name": "Facebook link in strict mode",
+      "input": "https://www.facebook.com/events/123?fbclid=IwAR1&__tn__=K-R",
+      "mode": "strict",
+      "expected": "https://www.facebook.com/events/123",
+      "status": "cleaned",
+      "removed": ["fbclid", "__tn__"]
+    },
+    {
+      "name": "Google search keeps q in strict mode",
+      "input": "https://www.google.com/search?q=untrackable&sca_esv=abc&ei=xyz&ved=0ah&oq=untr&gs_lp=Egdn",
+      "mode": "strict",
+      "expected": "https://www.google.com/search?q=untrackable",
+      "status": "cleaned",
+      "removed": ["sca_esv", "ei", "ved", "oq", "gs_lp"]
+    },
+    {
+      "name": "Google search telemetry untouched in clean mode",
+      "input": "https://www.google.com/search?q=untrackable&ved=0ah",
+      "expected": "https://www.google.com/search?q=untrackable&ved=0ah",
+      "status": "unchanged"
+    },
+    {
+      "name": "Amazon product page clean mode only removes click ids",
+      "input": "https://www.amazon.de/dp/B0EXAMPLE1?ref=sr_1_1&qid=1700000000&sr=8-1&th=1&psc=1",
+      "expected": "https://www.amazon.de/dp/B0EXAMPLE1?ref=sr_1_1&qid=1700000000&sr=8-1&th=1&psc=1",
+      "status": "unchanged"
+    },
+    {
+      "name": "Amazon product page strict mode keeps variant selection",
+      "input": "https://www.amazon.de/dp/B0EXAMPLE1?ref=sr_1_1&pf_rd_p=abc&pd_rd_w=def&qid=1700000000&sr=8-1&th=1&psc=1",
+      "mode": "strict",
+      "expected": "https://www.amazon.de/dp/B0EXAMPLE1?th=1&psc=1",
+      "status": "cleaned",
+      "removed": ["ref", "pf_rd_p", "pd_rd_w", "qid", "sr"]
+    },
+    {
+      "name": "Amazon search keeps keywords in strict mode",
+      "input": "https://www.amazon.com/s?k=usb+cable&crid=2ABC&sprefix=usb%2Caps%2C200&ref=nb_sb_noss",
+      "mode": "strict",
+      "expected": "https://www.amazon.com/s?k=usb+cable",
+      "status": "cleaned",
+      "removed": ["crid", "sprefix", "ref"]
+    },
+    {
+      "name": "shopping cart link keeps items",
+      "input": "https://shop.example/cart/add?sku=123&qty=2&coupon=SAVE10&utm_source=email",
+      "expected": "https://shop.example/cart/add?sku=123&qty=2&coupon=SAVE10",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "e-commerce search filters preserved",
+      "input": "https://shop.example/c/shoes?color=black&size=44&sort=price_asc&page=2&gclid=abc",
+      "expected": "https://shop.example/c/shoes?color=black&size=44&sort=price_asc&page=2",
+      "status": "cleaned",
+      "removed": ["gclid"]
+    },
+    {
+      "name": "eBay item strict mode",
+      "input": "https://www.ebay.de/itm/123456789?_trkparms=abc&_trksid=p123&amdata=x&mkcid=1",
+      "mode": "strict",
+      "expected": "https://www.ebay.de/itm/123456789",
+      "status": "cleaned",
+      "removed": ["_trkparms", "_trksid", "amdata", "mkcid"]
+    },
+    {
+      "name": "strict generic ref removed, clean mode keeps it",
+      "input": "https://example.com/?ref=producthunt&id=5",
+      "expected": "https://example.com/?ref=producthunt&id=5",
+      "status": "unchanged"
+    },
+    {
+      "name": "strict generic ref removed in strict mode",
+      "input": "https://example.com/?ref=producthunt&id=5",
+      "mode": "strict",
+      "expected": "https://example.com/?id=5",
+      "status": "cleaned",
+      "removed": ["ref"]
+    },
+    {
+      "name": "Matomo prefix in strict mode",
+      "input": "https://example.com/?pk_campaign=spring&pk_kwd=x&mtm_source=y&q=1",
+      "mode": "strict",
+      "expected": "https://example.com/?q=1",
+      "status": "cleaned",
+      "removed": ["pk_campaign", "pk_kwd", "mtm_source"]
+    },
+    {
+      "name": "strict mode preserves unknown parameters",
+      "input": "https://example.com/?foo=bar&xyz=1&utm_source=x",
+      "mode": "strict",
+      "expected": "https://example.com/?foo=bar&xyz=1",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "search engine Bing result link click id",
+      "input": "https://www.example.com/landing?msclkid=8a7b6c5d4e&utm_source=bing&utm_medium=cpc",
+      "expected": "https://www.example.com/landing",
+      "status": "cleaned",
+      "removed": ["msclkid", "utm_source", "utm_medium"]
+    },
+    {
+      "name": "marketing campaign with Google Ads params",
+      "input": "https://www.example.com/sale?gad_source=1&gbraid=0AAAA&gclid=EAIa&lang=de",
+      "expected": "https://www.example.com/sale?lang=de",
+      "status": "cleaned",
+      "removed": ["gad_source", "gbraid", "gclid"]
+    },
+    {
+      "name": "TikTok ad click id",
+      "input": "https://www.example.com/promo?ttclid=E.C.P.abc",
+      "expected": "https://www.example.com/promo",
+      "status": "cleaned",
+      "removed": ["ttclid"]
+    },
+    {
+      "name": "trailing dot host",
+      "input": "https://youtube.com./watch?v=1&si=2",
+      "expected": "https://youtube.com./watch?v=1",
+      "status": "cleaned",
+      "removed": ["si"]
+    },
+    {
+      "name": "uppercase scheme and host",
+      "input": "HTTPS://WWW.EXAMPLE.COM/A?UTM_SOURCE=X",
+      "expected": "HTTPS://WWW.EXAMPLE.COM/A",
+      "status": "cleaned",
+      "removed": ["UTM_SOURCE"]
+    },
+    {
+      "name": "IPv4 host",
+      "input": "http://192.168.1.10:3000/?utm_source=x&a=1",
+      "expected": "http://192.168.1.10:3000/?a=1",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "IPv6 host",
+      "input": "http://[::1]:8080/?fbclid=1",
+      "expected": "http://[::1]:8080/",
+      "status": "cleaned",
+      "removed": ["fbclid"]
+    },
+    {
+      "name": "plus in key is decoded as space and does not match",
+      "input": "https://example.com/?utm+source=x",
+      "expected": "https://example.com/?utm+source=x",
+      "status": "unchanged"
+    },
+    {
+      "name": "invalid percent-encoding in key falls back to raw",
+      "input": "https://example.com/?foo%ZZ=1&utm_medium=2",
+      "expected": "https://example.com/?foo%ZZ=1",
+      "status": "cleaned",
+      "removed": ["utm_medium"]
+    },
+    {
+      "name": "invalid percent-encoding with utm_ prefix still matches prefix",
+      "input": "https://example.com/?utm_%ZZ=1&a=2",
+      "expected": "https://example.com/?a=2",
+      "status": "cleaned",
+      "removed": ["utm_%ZZ"]
+    },
+    {
+      "name": "value containing equals signs preserved",
+      "input": "https://example.com/?data=a%3Db=c&utm_source=x",
+      "expected": "https://example.com/?data=a%3Db=c",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "exceptions ignored in bypass precedence order",
+      "input": "https://example.com/?utm_source=x",
+      "mode": "bypass",
+      "exceptions": ["example.com"],
+      "expected": "https://example.com/?utm_source=x",
+      "status": "bypassed"
+    },
+    {
+      "name": "text fragment with tracking-looking key never modified in strict mode",
+      "input": "https://example.com/p#:~:text=a&utm_medium=b",
+      "mode": "strict",
+      "expected": "https://example.com/p#:~:text=a&utm_medium=b",
+      "status": "unchanged"
+    },
+    {
+      "name": "empty fragment marker preserved",
+      "input": "https://example.com/?utm_source=x#",
+      "expected": "https://example.com/#",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "empty query marker preserved when only fragment changes",
+      "input": "https://example.com/?#utm_source=x",
+      "mode": "strict",
+      "expected": "https://example.com/?",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "fragment kept when only query changes in strict mode",
+      "input": "https://example.com/?utm_source=x#a=1",
+      "mode": "strict",
+      "expected": "https://example.com/#a=1",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "IDN exception entry matches punycode host",
+      "input": "https://shop.bücher.example/?utm_source=x",
+      "exceptions": ["bücher.example"],
+      "expected": "https://shop.bücher.example/?utm_source=x",
+      "status": "excepted"
+    },
+    {
+      "name": "exception entry with path and port",
+      "input": "https://example.com/?utm_source=x",
+      "exceptions": ["example.com:8080/some/path"],
+      "expected": "https://example.com/?utm_source=x",
+      "status": "excepted"
+    },
+    {
+      "name": "unparseable exception entry ignored",
+      "input": "https://example.com/?utm_source=x",
+      "exceptions": ["exa mple.com", "*.", ""],
+      "expected": "https://example.com/",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "multiple trailing dots on host",
+      "input": "https://youtube.com../watch?v=1&si=2",
+      "expected": "https://youtube.com../watch?v=1",
+      "status": "cleaned",
+      "removed": ["si"]
+    },
+    {
+      "name": "plus and invalid percent-encoding in key",
+      "input": "https://example.com/?utm+%ZZ=1&utm_+%ZZ=2",
+      "expected": "https://example.com/?utm+%ZZ=1",
+      "status": "cleaned",
+      "removed": ["utm_+%ZZ"]
+    },
+    {
+      "name": "host with characters outside the host-name alphabet is invalid",
+      "input": "https://exa!mple.com/?utm_source=x",
+      "expected": "https://exa!mple.com/?utm_source=x",
+      "status": "invalid"
+    },
+    {
+      "name": "exception entry with characters outside the host-name alphabet ignored",
+      "input": "https://example.com/?utm_source=x",
+      "exceptions": ["exa!mple.com", "example.com!"],
+      "expected": "https://example.com/",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "camelCase password reset path protected",
+      "input": "https://example.com/account/resetPassword?t=1&utm_source=mail",
+      "expected": "https://example.com/account/resetPassword?t=1&utm_source=mail",
+      "status": "protected",
+      "reason": "path:password"
+    },
+    {
+      "name": "Marketo unsubscribe page keeps mkt_tok",
+      "input": "https://go.example.com/UnsubscribePage.html?mkt_unsubscribe=1&mkt_tok=MzI3",
+      "expected": "https://go.example.com/UnsubscribePage.html?mkt_unsubscribe=1&mkt_tok=MzI3",
+      "status": "protected",
+      "reason": "path:unsubscribe"
+    },
+    {
+      "name": "preference center protected",
+      "input": "https://info.example.com/PreferenceCenter.html?mkt_tok=MzI3",
+      "expected": "https://info.example.com/PreferenceCenter.html?mkt_tok=MzI3",
+      "status": "protected",
+      "reason": "path:preferencecenter"
+    },
+    {
+      "name": "joined verify-email path protected",
+      "input": "https://example.com/verifyEmail?id=1&utm_source=x",
+      "expected": "https://example.com/verifyEmail?id=1&utm_source=x",
+      "status": "protected",
+      "reason": "path:verifyemail"
+    },
+    {
+      "name": "short signature with expiry protected",
+      "input": "https://example.com/dl?expires=1999999999&utm_source=newsletter&s=abcdef0123",
+      "expected": "https://example.com/dl?expires=1999999999&utm_source=newsletter&s=abcdef0123",
+      "status": "protected",
+      "reason": "combination:expires+s"
+    },
+    {
+      "name": "Akamai token protected",
+      "input": "https://media.example.com/v.mp4?hdnts=exp%3D1~acl%3D~hmac%3Dab&utm_source=x",
+      "expected": "https://media.example.com/v.mp4?hdnts=exp%3D1~acl%3D~hmac%3Dab&utm_source=x",
+      "status": "protected",
+      "reason": "param:hdnts"
+    },
+    {
+      "name": "API path protected in strict mode",
+      "input": "https://git.example.com/api/v4/projects/1/repository/files/f/raw?ref=release",
+      "mode": "strict",
+      "expected": "https://git.example.com/api/v4/projects/1/repository/files/f/raw?ref=release",
+      "status": "protected",
+      "reason": "path:api"
+    },
+    {
+      "name": "Omeda encrypted id only removed in strict mode",
+      "input": "https://news.example.com/a?oly_enc_id=1234&oly_anon_id=5",
+      "expected": "https://news.example.com/a?oly_enc_id=1234",
+      "status": "cleaned",
+      "removed": ["oly_anon_id"]
+    },
+    {
+      "name": "trailing space before removed segment is encoded in path",
+      "input": "https://example.com/download%20 ?utm_source=1",
+      "expected": "https://example.com/download%20%20",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "trailing space in kept value is encoded",
+      "input": "https://example.com/?b=1 &utm_source=1",
+      "expected": "https://example.com/?b=1%20",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "ordinary words that merely start with a keyword are cleaned",
+      "input": "https://blog.example/confirmed-speakers?utm_source=x",
+      "expected": "https://blog.example/confirmed-speakers",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "over-protection guard: designing contains signin",
+      "input": "https://news.example/2026/designing-cities-for-people?utm_source=x&utm_medium=social",
+      "expected": "https://news.example/2026/designing-cities-for-people",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: signing contains sign",
+      "input": "https://news.example/politics/treaty-signing-ceremony?utm_campaign=x",
+      "expected": "https://news.example/politics/treaty-signing-ceremony",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: assigning tasks",
+      "input": "https://blog.example/assigning-tasks-in-teams?fbclid=1",
+      "expected": "https://blog.example/assigning-tasks-in-teams",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: payday article",
+      "input": "https://news.example/money/payday-loans-explained?utm_source=x",
+      "expected": "https://news.example/money/payday-loans-explained",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: country_code is functional and not protected",
+      "input": "https://shop.example/stores?country_code=de&utm_source=x",
+      "expected": "https://shop.example/stores?country_code=de",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: reset in an ordinary path",
+      "input": "https://news.example/tech/the-great-reset-of-2026?utm_source=x",
+      "expected": "https://news.example/tech/the-great-reset-of-2026",
+      "status": "cleaned"
+    },
+    {
+      "name": "over-protection guard: preferences page of a shop",
+      "input": "https://shop.example/preferences/shoes?gclid=1",
+      "expected": "https://shop.example/preferences/shoes",
+      "status": "cleaned"
+    },
+    {
+      "name": "Django style password reset still protected",
+      "input": "https://example.com/accounts/password/reset/key/1-set-password/?utm_source=x",
+      "expected": "https://example.com/accounts/password/reset/key/1-set-password/?utm_source=x",
+      "status": "protected",
+      "reason": "path:password"
+    },
+    {
+      "name": "camelCase checkouts path protected",
+      "input": "https://shop.example/checkouts/abc123?utm_source=x",
+      "expected": "https://shop.example/checkouts/abc123?utm_source=x",
+      "status": "protected",
+      "reason": "path:checkouts"
+    },
+    {
+      "name": "trailing control character is encoded with upper-case hex",
+      "input": "https://example.com/?b=1\u001f&utm_source=1",
+      "expected": "https://example.com/?b=1%1F",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "percent-encoded letters inside a path substring are decoded before matching",
+      "input": "https://example.com/account/reset%50assword?utm_source=x",
+      "expected": "https://example.com/account/reset%50assword?utm_source=x",
+      "status": "protected",
+      "reason": "path:password"
+    },
+    {
+      "name": "fragment keys are checked for protection even when the fragment is not param-shaped",
+      "input": "https://app.example/?utm_source=1#/cb?access_token=x",
+      "expected": "https://app.example/?utm_source=1#/cb?access_token=x",
+      "status": "protected",
+      "reason": "param:/cb?access_token"
+    },
+    {
+      "name": "non-ASCII key is not a tracker and survives",
+      "input": "https://example.com/?größe=1&utm_source=x",
+      "expected": "https://example.com/?größe=1",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "valueless functional parameter preserved",
+      "input": "https://example.com/wiki?edit&utm_source=1",
+      "expected": "https://example.com/wiki?edit",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "Marketo email preferences page keeps mkt_tok",
+      "input": "https://pages.example.com/EmailPreferences.html?mkt_tok=MzI3",
+      "expected": "https://pages.example.com/EmailPreferences.html?mkt_tok=MzI3",
+      "status": "protected",
+      "reason": "path:emailpreferences"
+    },
+    {
+      "name": "HubSpot manage-preferences keeps _hsenc",
+      "input": "https://info.example.com/hs/manage-preferences/summary?v=1&_hsenc=p2&_hsmi=1",
+      "expected": "https://info.example.com/hs/manage-preferences/summary?v=1&_hsenc=p2&_hsmi=1",
+      "status": "protected",
+      "reason": "path:manage-preferences"
+    },
+    {
+      "name": "HubSpot preferences-center keeps _hsenc",
+      "input": "https://info.example.com/hs/preferences-center/en/page?data=1&_hsenc=p2",
+      "expected": "https://info.example.com/hs/preferences-center/en/page?data=1&_hsenc=p2",
+      "status": "protected",
+      "reason": "path:preferences-center"
+    },
+    {
+      "name": "Spotify social session keeps si",
+      "input": "https://open.spotify.com/socialsession/abc123?si=xyz",
+      "expected": "https://open.spotify.com/socialsession/abc123?si=xyz",
+      "status": "protected",
+      "reason": "path:socialsession"
+    },
+    {
+      "name": "Google /url redirect keeps sa and usg in strict mode",
+      "input": "https://www.google.com/url?q=https://example.com/&sa=D&source=docs&ust=1&usg=AOvVaw",
+      "mode": "strict",
+      "expected": "https://www.google.com/url?q=https://example.com/&sa=D&source=docs&ust=1&usg=AOvVaw",
+      "status": "unchanged"
+    },
+    {
+      "name": "GitHub API ref kept in strict mode",
+      "input": "https://api.github.com/repos/o/r/contents/README.md?ref=dev",
+      "mode": "strict",
+      "expected": "https://api.github.com/repos/o/r/contents/README.md?ref=dev",
+      "status": "protected",
+      "reason": "domain:api.github.com"
+    }
+  ]
+}
