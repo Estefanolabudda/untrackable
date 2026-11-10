@@ -3,7 +3,8 @@
 ## Prerequisites
 
 - Node.js ≥ 22.12 and npm
-- Rust stable with `rustfmt` and `clippy`
+- Rust 1.97.0 with `rustfmt` and `clippy` (pinned in `rust-toolchain.toml`;
+  rustup installs it automatically)
 - For browser tests: Playwright's Chromium (`npx playwright install chromium`)
 
 ## Setup
@@ -54,9 +55,14 @@ fixtures in the same change.
 ## Release preparation
 
 1. Bump `version` in `apps/browser-extension/package.json` (the manifest is
-   updated by the build) and `crates/untrackable-core/Cargo.toml`.
+   updated by the build), `packages/core/package.json` and the exact
+   `@untrackable/core` dependency of the extension,
+   `crates/untrackable-core/Cargo.toml`; then refresh `package-lock.json`
+   (`npm install`) and `Cargo.lock` (`cargo build`).
 2. Update `CHANGELOG.md`.
 3. Run the full test suite including `npm run test:e2e`.
 4. `npm run package -w apps/browser-extension` → `artifacts/untrackable-chromium-<version>.zip`
-   (set `SOURCE_DATE_EPOCH` for reproducible archive timestamps).
+   The archive is reproducible by default (fixed 2000-01-01 timestamps;
+   `SOURCE_DATE_EPOCH` overrides them). File modes are stored, so build from
+   a checkout made with a normal umask (e.g. 022).
 5. Tag the release. Publishing to stores is a manual, maintainer-approved step.

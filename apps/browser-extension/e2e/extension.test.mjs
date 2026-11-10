@@ -708,6 +708,8 @@ describe('redirect loops', () => {
       assert.ok(!seen.some((u) => u.includes('utm_source=forced')), 'no automatic retry without cleaning');
       // Explicit retry: loads once without cleaning, then normal cleaning resumes.
       assert.equal(await retry(tabId), true);
+      // Privacy: the stored URL is forgotten as soon as the offer is used.
+      assert.equal((await offerFor(tabId)).offered, false);
       await page.waitForURL(/\/loop\?utm_source=forced$/, { timeout: 10_000 });
       await waitFor(
         async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,

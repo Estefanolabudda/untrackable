@@ -10,11 +10,11 @@ on http(s) pages. It uses that access only for:
 
 - letting Chromium's `declarativeNetRequest` engine rewrite navigation URLs
   (the extension's own code does not see these navigations – unless you
-  enable redirect-loop recovery, see below),
+  enable the redirect-loop retry offer, see below),
 - a content script that reacts to `copy` events, reading the current
   selection only at the moment you copy,
 - reading the active tab's URL when **you** choose "Copy clean link",
-- only if you enable automatic redirect-loop recovery: receiving navigation
+- only if you enable the redirect-loop retry offer: receiving navigation
   error events (optional `webNavigation` permission). Chromium then delivers
   error events, including their URLs, for all frames to the extension.
   Untrackable reacts only to "too many redirects" errors of the top-level
@@ -35,14 +35,17 @@ All processing happens locally, synchronously, in memory.
 
 ## What is stored
 
-| Where                                                              | Content                                                                                                                  |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `chrome.storage.local`                                             | Your settings only: on/off, mode, pause end time, copy-cleaning switch, the list of exception domains you entered        |
-| `chrome.storage.session` (memory, cleared when the browser closes) | Only with loop recovery: tab id → time of the last retry (no URLs)                                                       |
-| DNR session rules and alarms (memory)                              | Tab ids you paused or opened without cleaning; for a loop-recovery retry, the host name of that page until it has loaded |
+| Where                                                              | Content                                                                                                                                                                |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chrome.storage.local`                                             | Your settings only: on/off, mode, pause end time, copy-cleaning switch, the list of exception domains you entered                                                      |
+| `chrome.storage.session` (memory, cleared when the browser closes) | Only with the retry offer: tab id → time of the last retry; tab id → URL of a page that failed with a redirect loop (at most 10 minutes, until used or the tab closes) |
+| DNR session rules and alarms (memory)                              | Tab ids you paused or opened without cleaning, and the host of that link until the page has loaded (at most 1 minute)                                                  |
 
-No URLs, page titles, history, counters or statistics are stored. This is
-verified by an end-to-end test that inspects storage after browsing.
+Apart from the short-lived, in-memory entries above (only with the optional
+retry offer, or while a one-time bypass is pending), no URLs, page titles,
+history, counters or statistics are stored. An end-to-end test inspects
+storage after normal browsing; another one checks that a loop offer is
+removed once used.
 
 ## What is never collected
 

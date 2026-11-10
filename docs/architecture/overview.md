@@ -50,12 +50,12 @@ properties:
 
 ### Why two engine implementations?
 
-The prompt for this project recommended Rust + WebAssembly. We evaluated it
+Rust + WebAssembly was considered for the extension. We evaluated it
 for the extension and chose TypeScript there:
 
 | Concern       | Rust → WASM in the extension                                                                                                                            | TypeScript in the extension               |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Copy cleaning | The `copy` event handler must set clipboard data **synchronously**; WASM must be instantiated in every page's content script (async, ~100 KB per page). | Synchronous, ~20 KB bundle.               |
+| Copy cleaning | The `copy` event handler must set clipboard data **synchronously**; WASM must be instantiated in every page's content script (async, ~100 KB per page). | Synchronous, ~26 KB (unminified) bundle.  |
 | CSP           | Needs `'wasm-unsafe-eval'` in the extension CSP.                                                                                                        | Default strict CSP (`script-src 'self'`). |
 | Navigation    | Not usable either way: navigations are rewritten by `declarativeNetRequest`, which cannot call extension code.                                          | Same.                                     |
 | Build/CI      | wasm-pack/wasm-bindgen toolchain.                                                                                                                       | esbuild only.                             |

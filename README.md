@@ -69,7 +69,10 @@ Nothing to do – links are cleaned as you browse. The toolbar popup offers:
 | Pause in this tab              | Bypass for one tab until re-enabled or closed |
 | Copy clean link                | Copies the current page's clean link          |
 
-The badge shows `S` in Strict mode and `off` when cleaning is off or paused.
+The badge shows `S` in Strict mode, `off` when cleaning is off or paused,
+`!` if this browser could not install the protection rules (navigation
+cleaning is then disabled) and `↻` on a tab that hit a redirect loop (only
+with the optional retry offer).
 Right-click a link for **Copy clean link** and **Open link without cleaning**.
 
 ## Cleaning modes
@@ -98,12 +101,12 @@ The full list lives in [`rules/rules.json`](rules/rules.json).
   redirects". Enable the _retry offer_ in the settings (optional permission;
   then click "Retry once without cleaning" in the popup) or use a site
   exception.
-- Copy cleaning works with the keyboard shortcut (Ctrl/Cmd+C). Copying via
-  the browser's menus is not cleaned – use "Copy clean link" instead.
 - Protection of sign-in/payment/signed links is heuristic. If a site
   misbehaves, add an exception or use _Open link without cleaning_.
-- Copy cleaning only applies when the copied selection is exactly one link,
-  and cannot intercept the browser's own UI (use the context menu instead).
+- Copy cleaning applies when the selection is exactly one link and is copied
+  with the keyboard (Ctrl/Cmd+C or Ctrl+Insert). Copying via the browser's
+  menus or touch gestures, and the browser's own UI (address bar, "Copy link
+  address"), are not cleaned – use Untrackable's "Copy clean link" instead.
 - Redirect-based click tracking (`tracker.example/click?u=…`) is not handled yet.
 
 Details: [architecture overview](docs/architecture/overview.md).

@@ -6,9 +6,11 @@
  * - Keyboard command: copy clean link of the current page.
  * - Per-tab pause and one-time bypass via DNR session rules.
  *
- * Privacy: nothing here stores or transmits URLs. Per-tab state lives only in
- * DNR session rules, alarms and chrome.storage.session (retry timestamps, no
- * URLs) and disappears with the browser session.
+ * Privacy: nothing here transmits URLs or stores them persistently. Per-tab
+ * state lives only in DNR session rules, alarms and chrome.storage.session
+ * (retry timestamps and – only with the optional retry offer – the URL of a
+ * page that hit a redirect loop, for at most 10 minutes) and disappears with
+ * the browser session.
  */
 import { cleanUrl, compileDnrRules, PRIORITY } from '@untrackable/core';
 import { effectiveMode, loadSettings, saveSettings, type Message, type Settings, type TabState } from './settings.js';
