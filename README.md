@@ -11,8 +11,8 @@ https://example.com/article?utm_source=newsletter&utm_medium=email&id=123
 https://example.com/article?id=123
 ```
 
-Status: **v0.1.0 release candidate** – Chromium extension (Phase 1). Not yet
-published in the Chrome Web Store.
+Status: **v0.1.0** – Chromium extension (Phase 1), available as a ZIP on the
+GitHub releases page for manual installation. Not yet in the Chrome Web Store.
 
 ## Features
 

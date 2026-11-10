@@ -8,7 +8,7 @@ All notable changes are documented here. The format follows
 
 Nothing yet.
 
-## [0.1.0] – unreleased (release candidate, date set on release)
+## [0.1.0] – 2026-11-10
 
 First release. Chromium extension (Phase 1) and reusable cleaning engines.
 

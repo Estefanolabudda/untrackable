@@ -1,8 +1,8 @@
 # Release readiness – Untrackable 0.1.0
 
-Status: **release candidate**, PR #1 open against `main`. Not merged, not
-tagged, not published. Merge, tag/release and Chrome Web Store submission
-require the maintainer's explicit approval.
+Status: **released as v0.1.0 on GitHub** (2026-11-10, approved by the
+maintainer). Not published in the Chrome Web Store – that needs a separate
+decision.
 
 ## Verification summary
 
@@ -44,8 +44,12 @@ on all sites.
 
 ## Open before a public release
 
-1. **Manual test pass** on Chrome for macOS: `docs/release/manual-testing-macos.md`
-   (real sign-ins, context menus, keyboard shortcut, popup UI, dark mode).
+1. **Manual test pass** on Chrome for macOS – done by the maintainer
+   (2026-11-10), all passed: automatic UTM removal, OAuth-style protected URL,
+   Cmd+C copy cleaning, domain exceptions, extension deactivation, "Copy clean
+   link" context menu, Alt+Shift+U. Not yet covered manually: real
+   third-party sign-ins and payments, popup/dark mode, redirect-loop helper
+   (remaining items of `docs/release/manual-testing-macos.md`).
 2. **Chrome Web Store listing material** (not created): 1280×800 screenshots,
    440×280 promo tile, detailed description, single-purpose statement,
    permission justifications, data-usage disclosure ("no data collected"),
@@ -57,6 +61,6 @@ on all sites.
 
 ## Recommendation
 
-Technically ready as a release candidate. Publish only after the manual test
-pass in item 1 has no ❌ in sections 1, 2 and 8 (navigation, protected URLs,
-privacy).
+Released on GitHub as v0.1.0 after automated verification and the
+maintainer's manual tests. Before a Chrome Web Store submission: complete the
+remaining manual checklist items and prepare the listing material (item 2).
