@@ -212,14 +212,12 @@
     },
     {
       "id": "strict-google-search",
-      "description": "Google Search telemetry parameters",
+      "description": "Google Search telemetry parameters (sa/usg are kept: google.com/url needs them for its redirect)",
       "mode": "strict",
       "domains": ["google.com", "google.de", "google.co.uk", "google.fr", "google.at", "google.ch"],
       "params": [
         "ved",
         "ei",
-        "sa",
-        "usg",
         "sca_esv",
         "sxsrf",
         "oq",
@@ -307,7 +305,8 @@
       "klarna.com",
       "adyen.com",
       "sofort.com",
-      "giropay.de"
+      "giropay.de",
+      "api.github.com"
     ],
     "pathKeywords": [
       "oauth",
@@ -365,7 +364,16 @@
       "emailverif",
       "magiclink",
       "oauth",
-      "saml"
+      "saml",
+      "preferences-center",
+      "preference-center",
+      "manage-preferences",
+      "emailpreferences",
+      "email-preferences",
+      "subscription-center",
+      "subscriptioncenter",
+      "manage-subscription",
+      "socialsession"
     ],
     "params": [
       "sig",

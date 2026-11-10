@@ -86,6 +86,18 @@ before(async () => {
       res.end();
       return;
     }
+    // A click tracker redirecting to another host with a tracker parameter.
+    if (req.url.startsWith('/r?to=dest')) {
+      res.writeHead(302, { location: `http://dest.test:${port}/landing?mkt_tok=ABC` });
+      res.end();
+      return;
+    }
+    // A download (never commits a page).
+    if (req.url.startsWith('/download')) {
+      res.setHeader('content-disposition', 'attachment; filename=x.bin');
+      res.end('x');
+      return;
+    }
     // Two server redirects, each adding five unlisted trackers.
     if (req.url.startsWith('/chain') && !req.url.startsWith('/chain-end')) {
       const step = Number(new URL(req.url, 'http://x').searchParams.get('step') ?? '0');
@@ -397,6 +409,29 @@ describe('per-tab controls', () => {
     await ext.close();
   });
 
+  test('one-time bypass requests a download link exactly once (signed links stay valid)', async () => {
+    const ext = await extensionPage('options.html');
+    const url = `http://news.test:${port}/download-once?utm_source=x&sig=1`;
+    await ext.evaluate((u) => chrome.runtime.sendMessage({ type: 'openUnmodified', url: u }), url);
+    await waitFor(() => seen.includes('/download-once?utm_source=x&sig=1'), 'download requested');
+    await new Promise((r) => setTimeout(r, 4000)); // longer than any retry window
+    assert.equal(seen.filter((u) => u.startsWith('/download-once')).length, 1);
+    for (const p of context.pages()) if (p !== ext && p.url() === 'about:blank') await p.close();
+    await ext.close();
+  });
+
+  test('one-time bypass covers redirectors in front of the destination', async () => {
+    const ext = await extensionPage('options.html');
+    await ext.evaluate(
+      (u) => chrome.runtime.sendMessage({ type: 'openUnmodified', url: u }),
+      `http://click.test:${port}/r?to=dest`,
+    );
+    const tab = await waitFor(() => context.pages().find((p) => p.url().includes('dest.test')), 'destination', 15_000);
+    assert.match(tab.url(), /\/landing\?mkt_tok=ABC$/);
+    await tab.close();
+    await ext.close();
+  });
+
   test('one-time bypass opens the original link once', async () => {
     const ext = await extensionPage('options.html');
     await ext.fill('#preview-input', `http://news.test:${port}/once?utm_source=x&id=1`);
@@ -423,17 +458,28 @@ describe('per-tab controls', () => {
 });
 
 describe('copy cleaning', () => {
+  /**
+   * Copy with the real keyboard shortcut and return the clipboard once it has
+   * settled: the native copy writes first, Untrackable's clean link (written by
+   * the service worker via the offscreen document) may replace it shortly after.
+   */
   async function copySelection(page, setup) {
     await page.evaluate(() => navigator.clipboard.writeText('sentinel'));
     await page.evaluate(setup);
     await page.keyboard.press('ControlOrMeta+C');
-    // Every case copies something, so wait until the sentinel is replaced.
+    const read = () => page.evaluate(() => navigator.clipboard.readText());
     let text = 'sentinel';
-    await waitFor(
-      async () => (text = await page.evaluate(() => navigator.clipboard.readText())) !== 'sentinel',
-      'clipboard update',
-      3_000,
-    );
+    await waitFor(async () => (text = await read()) !== 'sentinel', 'clipboard update', 3_000);
+    let stableSince = Date.now();
+    const deadline = Date.now() + 4_000;
+    while (Date.now() - stableSince < 800 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+      const next = await read();
+      if (next !== text) {
+        text = next;
+        stableSince = Date.now();
+      }
+    }
     return text;
   }
 
@@ -577,6 +623,42 @@ describe('copy cleaning', () => {
     await page.close();
   });
 
+  test('a page cannot observe copy cleaning even when it acts before the content script', async () => {
+    await setSettings({ exceptions: ['private.example'] });
+    const page = await context.newPage();
+    // Runs before any content script: a capture-phase keydown listener that
+    // swaps the selection to a probe URL, and a copy listener that inspects
+    // the event afterwards.
+    await page.addInitScript(() => {
+      window.results = [];
+      window.addEventListener(
+        'keydown',
+        (e) => {
+          if (!(e.ctrlKey || e.metaKey) || e.code !== 'KeyC') return;
+          const f = document.getElementById('field');
+          f.value = window.probe;
+          f.focus();
+          f.select();
+        },
+        true,
+      );
+      document.addEventListener('copy', (e) =>
+        window.results.push({ prevented: e.defaultPrevented, data: e.clipboardData.getData('text/plain') }),
+      );
+    });
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    for (const probe of ['https://private.example/?utm_source=x', 'https://public.example/?utm_source=x']) {
+      await page.evaluate((p) => (window.probe = p), probe);
+      await page.keyboard.press('ControlOrMeta+C');
+    }
+    assert.deepEqual(await page.evaluate(() => window.results), [
+      { prevented: false, data: '' },
+      { prevented: false, data: '' },
+    ]);
+    await page.close();
+  });
+
   test('copy cleaning can be switched off', async () => {
     await setSettings({ copyCleaning: false });
     const page = await context.newPage();
@@ -605,6 +687,117 @@ describe('copy cleaning', () => {
       5_000,
     );
     await ext.close();
+  });
+});
+
+describe('extension lifecycle', () => {
+  test('content scripts of a reloaded extension stop acting (no stale settings)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'untrackable-e2e-orphan-ext-'));
+    cpSync(dist, dir, { recursive: true });
+    const profile = mkdtempSync(join(tmpdir(), 'untrackable-e2e-orphan-'));
+    const third = await launchWith(dir, profile);
+    try {
+      await third.context.grantPermissions(['clipboard-read', 'clipboard-write']);
+      await waitFor(
+        async () => (await third.sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).length > 0,
+        'rules',
+      );
+      const page = await third.context.newPage();
+      await page.goto(`http://localhost:${port}/copy`);
+      await page.waitForTimeout(300);
+      // Reloading the extension orphans the content script in this tab.
+      await third.sw.evaluate(() => chrome.runtime.reload()).catch(() => {});
+      await new Promise((r) => setTimeout(r, 1500));
+      await page.evaluate(() => navigator.clipboard.writeText('sentinel'));
+      await page.evaluate(() => {
+        const f = document.getElementById('field');
+        f.value = 'https://shop.example/item?utm_source=mail';
+        f.focus();
+        f.select();
+      });
+      await page.keyboard.press('ControlOrMeta+C');
+      await new Promise((r) => setTimeout(r, 1500));
+      assert.equal(
+        await page.evaluate(() => navigator.clipboard.readText()),
+        'https://shop.example/item?utm_source=mail',
+      );
+    } finally {
+      await third.context.close();
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(profile, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('popup for a real tab', () => {
+  /** Open the popup as if it belonged to `target` (the real popup queries the active tab). */
+  async function popupFor(target) {
+    const tabId = await sw.evaluate(
+      async (u) => (await chrome.tabs.query({})).find((t) => t.url === u)?.id,
+      target.url(),
+    );
+    const popup = await context.newPage();
+    await popup.addInitScript(
+      ({ id, url }) => {
+        const original = chrome.tabs.query.bind(chrome.tabs);
+        chrome.tabs.query = (q) => (q && q.active ? Promise.resolve([{ id, url, index: 0 }]) : original(q));
+      },
+      { id: tabId, url: target.url() },
+    );
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    await popup.waitForSelector('#site-host:not(:empty)');
+    return { popup, tabId };
+  }
+
+  test('site exception toggle adds and removes only the exact host', async () => {
+    await setSettings({ exceptions: ['news.test'] });
+    const target = await context.newPage();
+    await target.goto(`http://eu.news.test:${port}/page`);
+    const { popup } = await popupFor(target);
+    assert.equal(await popup.textContent('#site-host'), 'eu.news.test');
+    assert.equal(await popup.isChecked('#site-exception'), true);
+    assert.equal(await popup.isDisabled('#site-exception'), true, 'parent exception is not removed from here');
+    assert.match(await popup.textContent('#site-note'), /news\.test/);
+    await popup.close();
+    await setSettings({});
+    const { popup: p2 } = await popupFor(target);
+    await p2.check('#site-exception');
+    await waitFor(
+      async () =>
+        (await sw.evaluate(() => chrome.storage.local.get('exceptions'))).exceptions?.includes('eu.news.test'),
+      'added',
+    );
+    await p2.uncheck('#site-exception');
+    await waitFor(
+      async () =>
+        !(await sw.evaluate(() => chrome.storage.local.get('exceptions'))).exceptions?.includes('eu.news.test'),
+      'removed',
+    );
+    await p2.close();
+    await target.close();
+  });
+
+  test('pause-in-this-tab checkbox pauses only that tab', async () => {
+    const target = await context.newPage();
+    await target.goto(`http://news.test:${port}/first`);
+    const { popup } = await popupFor(target);
+    await popup.check('#tab-paused');
+    await waitFor(
+      async () => (await sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 1,
+      'pause rule',
+    );
+    await popup.close();
+    await target.goto(`http://news.test:${port}/a?utm_source=x`);
+    assert.match(target.url(), /\?utm_source=x$/);
+    const { popup: again } = await popupFor(target);
+    assert.equal(await again.isChecked('#tab-paused'), true);
+    await again.uncheck('#tab-paused');
+    await waitFor(
+      async () => (await sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,
+      'unpaused',
+    );
+    await again.close();
+    await target.close();
   });
 });
 
@@ -689,6 +882,9 @@ describe('redirect loops', () => {
       const tabId = await waitFor(() => tabIdOf('/loop'), 'loop tab');
       await waitFor(async () => (await offerFor(tabId)).offered, 'retry offered');
       assert.equal((await offerFor(tabId)).badge, '↻');
+      // Privacy: only the host is kept, never a URL.
+      const session = await second.sw.evaluate(() => chrome.storage.session.get(null));
+      assert.ok(!JSON.stringify(session).includes('http'), JSON.stringify(session));
       // Nothing happens automatically (no extension-initiated navigation).
       // Let the original loop settle (its last requests can arrive late on slow
       // runners), then make sure nothing loads the page without cleaning: an
@@ -726,6 +922,10 @@ describe('redirect loops', () => {
       assert.equal(await retry(selfTab), true);
       await waitFor(async () => (await offerFor(selfTab)).offered, 'offered again after failed retry', 10_000);
       assert.equal(await retry(selfTab), false, 'only one retry per tab per minute');
+      // A stale offer disappears once the tab successfully loads something else.
+      await waitFor(async () => (await offerFor(selfTab)).offered, 'offer present again', 10_000).catch(() => {});
+      await self.goto(`http://other.test:${port}/unrelated`);
+      await waitFor(async () => !(await offerFor(selfTab)).offered, 'stale offer cleared');
 
       // A redirector cannot use the retry to forward trackers to another site.
       launderHits = 0;

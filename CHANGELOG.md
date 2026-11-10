@@ -6,54 +6,62 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
-### Added
+Nothing yet.
 
-- Navigation cleaning of mixed-case spellings (`Utm_Source`) and unlisted
-  `utm_*` names via case-insensitive declarativeNetRequest fallback rules.
-- Optional redirect-loop helper (optional `webNavigation` permission, off by
-  default): a `↻` badge and a "Retry once without cleaning" button in the
-  popup. Never retries automatically.
-- Differential conformance test generating >50,000 URLs from `rules.json`
-  (incl. control characters, `+`/non-ASCII/invalid-UTF-8 keys, encoded path
-  words, fragments) and requiring identical TypeScript and Rust results, plus
-  validation parity on mutated rule sets (CI job).
-- Case-insensitive fallback for domain-specific trackers; guard keeps the
-  fallback chain below Chromium's redirect limit.
-- e2e test comparing the DNR model with real Chromium on generated URLs.
-- Rust toolchain pinned (`rust-toolchain.toml`); weekly scheduled CI for new
-  advisories.
+## [0.1.0] – unreleased (release candidate, date set on release)
 
-### Changed
-
-- Rule files are validated strictly and identically in both engines: unknown
-  fields, `null` lists and missing protection lists are rejected.
-- Protection tuned against over-protection of ordinary links.
-
-### Fixed
-
-- Redirect-loop recovery could retry forever, could forward trackers to
-  another site, and – being automatic – let pages trigger browser-initiated
-  requests that bypass SameSite/Referer CSRF defences; now explicit only.
-- Copy cleaning could be probed by page scripts (execCommand after a click or
-  right-click); now requires a keyboard copy with unchanged selection.
-- Navigation: `code`+`state` protection also matches valueless adjacent keys;
-  fallback guard lowered to 6 `&` so redirect chains stay below the limit.
-- A rule Chromium cannot compile no longer blocks the whole rule update;
-  unsupported protection rules disable redirects (fail safe).
-
-## [0.1.0] – release candidate
+First release. Chromium extension (Phase 1) and reusable cleaning engines.
 
 ### Added
 
-- Shared tracker rule set with Clean and Strict rules and domain-specific rules.
-- Protection heuristics for OAuth/OIDC/SAML, password reset, verification,
-  invitation, signed/expiring download and payment URLs.
-- TypeScript cleaning engine and Rust cleaning engine with 130 shared
-  conformance fixtures and property-based tests (fixtures also run inside Chromium).
-- Chromium MV3 extension: automatic navigation cleaning, copy cleaning,
-  "Copy clean link" / "Copy clean page link" / "Open link without cleaning"
-  context menu items, Alt+Shift+U shortcut, Clean/Strict modes, global off,
-  15-minute pause, per-tab pause, one-time bypass, domain exceptions, popup
-  and options page with link preview.
-- Chromium end-to-end test suite, GitHub Actions CI, dependency audits,
-  reproducible extension packaging.
+- **Rules:** shared tracker rule set (`rules/rules.json`) with Clean and Strict
+  rules and domain-specific rules; strict, identical validation in both
+  engines.
+- **Protection** for sign-in (OAuth/OIDC/SAML), password reset, e-mail
+  verification, invitations, unsubscribe/preference centres, signed and
+  expiring downloads (S3, GCS, Azure, CloudFront, Akamai) and payment pages.
+- **Engines:** TypeScript engine (extension) and Rust engine (future desktop
+  app, CLI example) with 150 shared conformance fixtures, property-based tests
+  and a differential test that requires identical results on >50,000 URLs
+  generated from the rule file.
+- **Chromium MV3 extension:**
+  - automatic navigation cleaning via declarativeNetRequest, including
+    mixed-case spellings (`Utm_Source`) and unlisted `utm_*` names;
+  - keyboard copy cleaning (Ctrl/Cmd+C, Ctrl+Insert) that pages cannot
+    observe;
+  - context menu "Copy clean link", "Copy clean page link", "Open link
+    without cleaning"; shortcut Alt+Shift+U;
+  - Clean / Strict / Bypass: global off, 15-minute pause, pause in a tab,
+    one-time bypass, domain exceptions;
+  - optional redirect-loop helper (optional `webNavigation` permission, off by
+    default): `↻` badge and "Reload once without cleaning";
+  - popup and options page with link preview; badge states `S`, `off`, `!`,
+    `↻`.
+- **Quality:** Chromium end-to-end suite (incl. a check of the DNR model
+  against real Chromium), GitHub Actions CI (Rust, TypeScript, e2e,
+  conformance, dependency audits, weekly schedule), reproducible extension
+  zip, pinned Rust toolchain and SHA-pinned actions.
+- **Docs:** architecture, engine specification, threat model, privacy
+  statement, development guide, manual test checklist, release-readiness
+  notes.
+
+### Security and privacy hardening (found in independent reviews before release)
+
+- Copy cleaning no longer modifies the copy event; the service worker writes
+  the clean link afterwards, so settings and exception domains cannot be
+  probed by web pages.
+- Redirect-loop helper never navigates on its own or to a stored URL; only an
+  explicit click reloads the failed tab once, with a bypass limited to that
+  host; only the host name is kept, briefly.
+- Orphaned content scripts stop acting after the extension is disabled or
+  updated.
+- "Open link without cleaning" no longer sends a request twice (one-time links
+  stay valid) and also covers redirectors in front of the destination.
+- Rule installation is fail-safe: a protection rule Chromium cannot compile
+  disables redirects instead of cleaning unprotected.
+- Message authorisation by extension origin; offscreen clipboard writer only
+  accepts the service worker; no network requests, telemetry or URL logging.
+
+### Known limitations
+
+See `README.md` ("Known limitations") and `docs/release/release-readiness.md`.

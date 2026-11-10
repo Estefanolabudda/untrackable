@@ -151,18 +151,26 @@ keeps.
 
 **Redirect loops:** if a server insists on a tracking parameter and redirects
 back to a URL containing it, Chromium aborts with `ERR_TOO_MANY_REDIRECTS`.
-DNR cannot observe this. Users can enable a _retry offer_ in the settings,
-which requests the optional `webNavigation` permission ("Read your browsing
-history"). Untrackable then marks such a tab with a `↻` badge, and the popup
-offers **Retry once without cleaning**. The retry is never automatic: a
-navigation started by an extension is treated by the browser like a typed URL
-(no Referer, SameSite=Strict cookies sent), so an automatic retry would let
-any page trigger such a request to a URL of its choosing (found in review).
-Safeguards, each covered by e2e tests: explicit click only; at most one retry
-per tab per minute; the retry bypass covers only the failing URL's host in
-that tab, so a redirector cannot forward trackers to another site. Without
-the permission the user resolves a loop with a site exception, the tab pause
-or "Open link without cleaning".
+DNR cannot observe this. Users can enable a _reload offer_ in the settings,
+which requests the optional `webNavigation` permission (its warning is
+already covered by the host permission). Untrackable then marks such a tab
+with a `↻` badge, and the popup offers **Reload once without cleaning**.
+Safeguards (three review rounds, each covered by e2e tests):
+
+- never automatic – an extension-initiated load is treated like a typed URL
+  (no Referer, SameSite=Strict cookies sent);
+- the button installs a one-time bypass for the failed page's host in that
+  tab and calls `tabs.reload` on the tab's own error page – Untrackable never
+  navigates to a stored or page-supplied URL and stores only the host;
+- no offer when the failing URL is protected or excepted (our rules cannot
+  have caused that loop);
+- at most one reload per tab per minute;
+- an offer disappears on the tab's next successful top-level navigation, on
+  tab close, on permission removal and after 10 minutes;
+- a redirector cannot use the bypass to forward trackers to another site.
+
+Without the permission the user resolves a loop with a site exception, the
+tab pause or "Open link without cleaning".
 
 **Rule installation safety:** `updateDynamicRules` is atomic, so one rule
 Chromium cannot compile would block the whole update. The service worker
@@ -171,20 +179,37 @@ installs **no** redirects if any protection rule is unsupported (fail safe),
 and retries without the optional fallback rules if an update still fails. An
 e2e test asserts that every compiled rule is actually installed.
 
-### Copy cleaning limits
+### Copy cleaning
 
-- Works for selections in web pages (including `<input>`/`<textarea>`) when
-  the selection is exactly one link and the copy follows a real keyboard
-  shortcut (Ctrl/Cmd+C, Ctrl+Insert) with the selection unchanged – so page
-  scripts cannot use copies as an oracle for settings. Copying via the
-  browser's own Edit/context menu or touch gestures is not cleaned; use the
-  "Copy clean link" menu item instead. Text that merely _contains_ links is
-  copied unchanged to avoid altering what the user meant to copy.
-- Cannot intercept the browser's own UI (address bar, native "Copy link
-  address"); use the context-menu item "Copy clean link" instead. The URL in
-  the address bar is usually already clean thanks to navigation cleaning.
-- Clipboard operations in other applications are out of reach of a browser
-  extension.
+How it works: the content script listens for a trusted Ctrl/Cmd+C or
+Ctrl+Insert keystroke (matched by physical key and by character, so Dvorak
+and non-Latin layouts work). On the following copy event it does **not**
+touch the event; it reads the selection and, if it is exactly one http(s)
+link, sends it to the service worker. The service worker applies the
+settings (switch, mode, exceptions, global and tab pause) and, if the engine
+cleans the link, writes the clean link through the offscreen document right
+after the native copy. Consequences:
+
+- Web pages cannot observe whether, or how, Untrackable reacted – settings
+  and exceptions never reach the page process (this replaced an earlier
+  design that set the clipboard data in the copy event, which pages could
+  probe; found in review).
+- If you paste within a few milliseconds, you may still get the original
+  link.
+- Orphaned content scripts (extension disabled, reloaded or updated) detach
+  themselves instead of acting on stale settings.
+
+Limits:
+
+- Text that merely _contains_ links is copied unchanged.
+- Copying via the browser's Edit/context menu, touch gestures, the address
+  bar or the native "Copy link address" is not cleaned; use the context-menu
+  item "Copy clean link" instead. The address bar is usually already clean
+  thanks to navigation cleaning.
+- Inputs inside shadow DOM, selections inside iframes and editors that
+  replace the copied data with their own (e.g. some rich-text editors) are not
+  covered.
+- Clipboard operations in other applications are out of reach.
 
 ## Future desktop compatibility (Phase 2)
 

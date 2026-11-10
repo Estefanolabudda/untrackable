@@ -68,6 +68,13 @@ export const ID_BASE = {
 const FALLBACK_CHUNK = 4;
 
 const REGEX_CHUNK = 6;
+/**
+ * Case-insensitive alternations grow quickly in RE2; a chunk of six long
+ * words (~105 chars) exceeded Chromium's 2 KB limit, which the fail-safe
+ * turned into "no navigation cleaning" (caught by e2e). Keep the alternation
+ * text of one protection regex at or below this many characters.
+ */
+const REGEX_CHUNK_CHARS = 60;
 
 /**
  * Chromium aborts after 20 redirects – counted across the whole chain,
@@ -83,6 +90,25 @@ const MAX_FALLBACK_SEGMENTS = 6;
 
 function escapeRe2(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+}
+
+/** Split words into groups of at most `size` items and `maxChars` characters (escaped). */
+function chunkWords(words: readonly string[], size = REGEX_CHUNK, maxChars = REGEX_CHUNK_CHARS): string[][] {
+  const out: string[][] = [];
+  let current: string[] = [];
+  let chars = 0;
+  for (const w of words) {
+    const len = escapeRe2(w).length + 1;
+    if (current.length > 0 && (current.length >= size || chars + len > maxChars)) {
+      out.push(current);
+      current = [];
+      chars = 0;
+    }
+    current.push(w);
+    chars += len;
+  }
+  if (current.length > 0) out.push(current);
+  return out;
 }
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
@@ -229,13 +255,13 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
     });
   };
   if (p.domains.length > 0) allow({ requestDomains: [...p.domains] });
-  for (const group of chunk(p.pathKeywords, REGEX_CHUNK)) {
+  for (const group of chunkWords(p.pathKeywords)) {
     allow({
       regexFilter: `^https?://[^/?#]*/(?:[^?#]*[/_.-])?(?:${group.map(escapeRe2).join('|')})(?:[/_.0-9?#-]|$)`,
       isUrlFilterCaseSensitive: false,
     });
   }
-  for (const group of chunk(p.pathSubstrings, REGEX_CHUNK)) {
+  for (const group of chunkWords(p.pathSubstrings)) {
     allow({
       regexFilter: `^https?://[^/?#]*/[^?#]*(?:${group.map(escapeRe2).join('|')})`,
       isUrlFilterCaseSensitive: false,
@@ -247,7 +273,7 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
   const encodedWordChar = '%(?:[46][1-9a-f]|[57][0-9a]|2[def]|3[0-9]|5f)';
   allow({ regexFilter: `^https?://[^/?#]*/[^?#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   allow({ regexFilter: `[?&][^=&#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
-  for (const group of chunk(p.params, REGEX_CHUNK)) {
+  for (const group of chunkWords(p.params)) {
     allow({
       regexFilter: `[?&](?:${group.map(escapeRe2).join('|')})(?:[=&#]|$)`,
       isUrlFilterCaseSensitive: false,

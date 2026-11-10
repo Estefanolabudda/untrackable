@@ -45,9 +45,9 @@
 
     <div id="loop-section" class="row" hidden>
       <p class="status off" style="margin: 0 0 0.4rem">
-        <code id="loop-host"></code> kept redirecting to a tracking link.
+        <code id="loop-host"></code> failed with too many redirects. Tracker cleaning may be the cause.
       </p>
-      <button type="button" class="primary" id="loop-retry">Retry once without cleaning</button>
+      <button type="button" class="primary" id="loop-retry">Reload once without cleaning</button>
     </div>
 
     <fieldset id="site-section">
@@ -56,6 +56,7 @@
         ><input type="checkbox" id="site-exception" />
         <span>Never clean links to this site <small>(includes subdomains)</small></span></label
       >
+      <p id="site-note" class="muted" style="margin: 0"></p>
       <label
         ><input type="checkbox" id="tab-paused" />
         <span>Pause in this tab <small>(until you turn it back on or close the tab)</small></span></label

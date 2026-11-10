@@ -41,7 +41,11 @@ function render(s: Settings): void {
       btn.type = 'button';
       btn.textContent = 'Remove';
       btn.setAttribute('aria-label', `Remove exception ${domain}`);
-      btn.addEventListener('click', () => void saveSettings({ exceptions: s.exceptions.filter((d) => d !== domain) }));
+      // Read the current list at click time, so quick successive removals are not lost.
+      btn.addEventListener('click', async () => {
+        const latest = await loadSettings();
+        await saveSettings({ exceptions: latest.exceptions.filter((d) => d !== domain) });
+      });
       li.append(code, btn);
       return li;
     }),

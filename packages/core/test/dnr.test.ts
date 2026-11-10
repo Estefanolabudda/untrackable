@@ -34,6 +34,11 @@ describe('compileDnrRules', () => {
         if (r.action.type === 'redirect') expect(r.id).toBeLessThan(ID_BASE.protection);
         if (r.condition.regexFilter) expect(() => new RegExp(r.condition.regexFilter!)).not.toThrow();
         if (r.condition.regexFilter) expect(r.condition.regexFilter.length).toBeLessThan(400);
+        // Protection alternations are kept short (Chromium 2 KB RE2 limit, case-insensitive).
+        if (r.action.type === 'allow' && r.condition.regexFilter?.includes('(?:')) {
+          const alternation = /\(\?:([^()]*)\)/.exec(r.condition.regexFilter)?.[1] ?? '';
+          expect(alternation.length, r.condition.regexFilter).toBeLessThanOrEqual(70);
+        }
       }
     }
   });

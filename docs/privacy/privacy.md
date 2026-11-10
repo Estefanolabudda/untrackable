@@ -11,16 +11,20 @@ on http(s) pages. It uses that access only for:
 - letting Chromium's `declarativeNetRequest` engine rewrite navigation URLs
   (the extension's own code does not see these navigations – unless you
   enable the redirect-loop retry offer, see below),
-- a content script that reacts to `copy` events, reading the current
-  selection only at the moment you copy,
+- a content script that, when you press Ctrl/Cmd+C, reads the current
+  selection and – only if it is exactly one link – hands it to the
+  extension's background worker, which writes the cleaned link to the
+  clipboard. Your settings and exception list are never shared with web
+  pages; pages cannot tell whether Untrackable reacted,
 - reading the active tab's URL when **you** choose "Copy clean link",
 - only if you enable the redirect-loop retry offer: receiving navigation
   error events (optional `webNavigation` permission). Chromium then delivers
   error events, including their URLs, for all frames to the extension.
   Untrackable reacts only to "too many redirects" errors of the top-level
-  page: it keeps that page's URL in memory (`chrome.storage.session`) for up
-  to 10 minutes so the popup can offer "Retry once without cleaning", and
-  forgets it when used, when the tab closes or when it expires.
+  page: it keeps only that page's **host name** in memory
+  (`chrome.storage.session`) so the popup can offer "Reload once without
+  cleaning", and forgets it when used, on the tab's next successful page load,
+  when the tab closes, when you remove the permission, or after 10 minutes.
 
 ## What is processed
 
@@ -35,17 +39,15 @@ All processing happens locally, synchronously, in memory.
 
 ## What is stored
 
-| Where                                                              | Content                                                                                                                                                                |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chrome.storage.local`                                             | Your settings only: on/off, mode, pause end time, copy-cleaning switch, the list of exception domains you entered                                                      |
-| `chrome.storage.session` (memory, cleared when the browser closes) | Only with the retry offer: tab id → time of the last retry; tab id → URL of a page that failed with a redirect loop (at most 10 minutes, until used or the tab closes) |
-| DNR session rules and alarms (memory)                              | Tab ids you paused or opened without cleaning, and the host of that link until the page has loaded (at most 1 minute)                                                  |
+| Where                                                              | Content                                                                                                                                        |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chrome.storage.local`                                             | Your settings only: on/off, mode, pause end time, copy-cleaning switch, the list of exception domains you entered                              |
+| `chrome.storage.session` (memory, cleared when the browser closes) | Only with the retry offer: tab id → time of the last retry; tab id → host name of a page that failed with a redirect loop (see above). No URLs |
+| DNR session rules and alarms (memory)                              | Tab ids you paused or opened without cleaning (until the page has loaded, at most 1 minute); for a loop reload, the host name                  |
 
-Apart from the short-lived, in-memory entries above (only with the optional
-retry offer, or while a one-time bypass is pending), no URLs, page titles,
-history, counters or statistics are stored. An end-to-end test inspects
-storage after normal browsing; another one checks that a loop offer is
-removed once used.
+No URLs, page titles, history, counters or statistics are stored – only
+the settings and the short-lived host names / tab ids above. End-to-end tests
+inspect storage after normal browsing and while a loop offer exists.
 
 ## What is never collected
 

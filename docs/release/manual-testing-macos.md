@@ -10,13 +10,13 @@ Record for each step: ✅ / ❌ and a note. Use a **fresh Chrome profile**
 
 ## 0. Setup
 
-| #   | Step                                                                                          | Expected                                                                                                                                             |
-| --- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0.1 | `git checkout claude/ecstatic-einstein-qf1mtx && npm ci && npm run build`                     | Build finishes, `apps/browser-extension/dist/` exists                                                                                                |
-| 0.2 | `chrome://extensions` → _Developer mode_ on → _Load unpacked_ → `apps/browser-extension/dist` | "Untrackable 0.1.0" appears without errors; no "Errors" button                                                                                       |
-| 0.3 | Pin the extension (puzzle icon → pin)                                                         | Green icon in toolbar, no badge                                                                                                                      |
-| 0.4 | Note Chrome version (`chrome://version`)                                                      | ≥ 116                                                                                                                                                |
-| 0.5 | _Details_ → check permissions shown                                                           | "Read and change all your data on all websites", "Block content on any page", "Modify data you copy and paste"; **not** "Read your browsing history" |
+| #   | Step                                                                                          | Expected                                                                                      |
+| --- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 0.1 | `git checkout claude/ecstatic-einstein-qf1mtx && npm ci && npm run build`                     | Build finishes, `apps/browser-extension/dist/` exists                                         |
+| 0.2 | `chrome://extensions` → _Developer mode_ on → _Load unpacked_ → `apps/browser-extension/dist` | "Untrackable 0.1.0" appears without errors; no "Errors" button                                |
+| 0.3 | Pin the extension (puzzle icon → pin)                                                         | Green icon in toolbar, no badge                                                               |
+| 0.4 | Note Chrome version (`chrome://version`)                                                      | ≥ 116                                                                                         |
+| 0.5 | _Details_ → check permissions shown                                                           | Exactly: "Read and change all your data on all websites" and "Modify data you copy and paste" |
 
 ## 1. Automatic navigation cleaning
 
@@ -110,11 +110,11 @@ Use TextEdit or Notes to paste and inspect the result.
 
 ## 7. Redirect-loop helper (optional permission)
 
-| #   | Step                                                           | Expected                                                                                   |
-| --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 7.1 | Settings → check "Offer a one-click retry…"                    | Chrome asks for "Read your browsing history"; accept                                       |
-| 7.2 | Uncheck it again                                               | Permission removed (Details page no longer lists it)                                       |
-| 7.3 | (Only if you know a site that forces its tracker back) open it | Error page; badge `↻`; popup offers "Retry once without cleaning"; click → page loads once |
+| #   | Step                                                           | Expected                                                                                                                                        |
+| --- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7.1 | Settings → check "Offer a one-click retry…"                    | Checkbox stays checked. Chrome may not show a prompt, because the "webNavigation" warning is already covered by the host permission             |
+| 7.2 | Uncheck it again, reopen the settings                          | Checkbox unchecked                                                                                                                              |
+| 7.3 | (Only if you know a site that forces its tracker back) open it | Error page; badge `↻`; popup on that tab offers "Reload once without cleaning"; click → page loads once; navigating elsewhere removes the offer |
 
 ## 8. Lifecycle and privacy
 

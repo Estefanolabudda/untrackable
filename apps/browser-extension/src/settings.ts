@@ -75,7 +75,8 @@ export type Message =
   | { type: 'setTabPaused'; tabId: number; paused: boolean }
   | { type: 'copyText'; text: string }
   | { type: 'openUnmodified'; url: string }
-  | { type: 'retryLoop'; tabId: number };
+  | { type: 'retryLoop'; tabId: number }
+  | { type: 'cleanCopiedLink'; url: string };
 
 export interface TabState {
   /** Cleaning is off in this tab (user pause or a running one-time bypass). */

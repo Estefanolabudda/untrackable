@@ -99,7 +99,7 @@ The full list lives in [`rules/rules.json`](rules/rules.json).
   cleaned.
 - If a site redirects back to a tracking link, Chromium reports "too many
   redirects". Enable the _retry offer_ in the settings (optional permission;
-  then click "Retry once without cleaning" in the popup) or use a site
+  then click "Reload once without cleaning" in the popup) or use a site
   exception.
 - Protection of sign-in/payment/signed links is heuristic. If a site
   misbehaves, add an exception or use _Open link without cleaning_.

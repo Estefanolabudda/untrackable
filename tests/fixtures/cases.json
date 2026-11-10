@@ -1000,6 +1000,49 @@
       "expected": "https://example.com/wiki?edit",
       "status": "cleaned",
       "removed": ["utm_source"]
+    },
+    {
+      "name": "Marketo email preferences page keeps mkt_tok",
+      "input": "https://pages.example.com/EmailPreferences.html?mkt_tok=MzI3",
+      "expected": "https://pages.example.com/EmailPreferences.html?mkt_tok=MzI3",
+      "status": "protected",
+      "reason": "path:emailpreferences"
+    },
+    {
+      "name": "HubSpot manage-preferences keeps _hsenc",
+      "input": "https://info.example.com/hs/manage-preferences/summary?v=1&_hsenc=p2&_hsmi=1",
+      "expected": "https://info.example.com/hs/manage-preferences/summary?v=1&_hsenc=p2&_hsmi=1",
+      "status": "protected",
+      "reason": "path:manage-preferences"
+    },
+    {
+      "name": "HubSpot preferences-center keeps _hsenc",
+      "input": "https://info.example.com/hs/preferences-center/en/page?data=1&_hsenc=p2",
+      "expected": "https://info.example.com/hs/preferences-center/en/page?data=1&_hsenc=p2",
+      "status": "protected",
+      "reason": "path:preferences-center"
+    },
+    {
+      "name": "Spotify social session keeps si",
+      "input": "https://open.spotify.com/socialsession/abc123?si=xyz",
+      "expected": "https://open.spotify.com/socialsession/abc123?si=xyz",
+      "status": "protected",
+      "reason": "path:socialsession"
+    },
+    {
+      "name": "Google /url redirect keeps sa and usg in strict mode",
+      "input": "https://www.google.com/url?q=https://example.com/&sa=D&source=docs&ust=1&usg=AOvVaw",
+      "mode": "strict",
+      "expected": "https://www.google.com/url?q=https://example.com/&sa=D&source=docs&ust=1&usg=AOvVaw",
+      "status": "unchanged"
+    },
+    {
+      "name": "GitHub API ref kept in strict mode",
+      "input": "https://api.github.com/repos/o/r/contents/README.md?ref=dev",
+      "mode": "strict",
+      "expected": "https://api.github.com/repos/o/r/contents/README.md?ref=dev",
+      "status": "protected",
+      "reason": "domain:api.github.com"
     }
   ]
 }

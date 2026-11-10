@@ -54,7 +54,8 @@ async function supportedRules(
     if (regex !== undefined) {
       const { isSupported } = await chrome.declarativeNetRequest.isRegexSupported({
         regex,
-        isCaseSensitive: rule.condition.isUrlFilterCaseSensitive !== false,
+        // Chromium's default for regex rules is case-insensitive (Chrome 118+).
+        isCaseSensitive: rule.condition.isUrlFilterCaseSensitive === true,
         requireCapturing: rule.action.redirect?.regexSubstitution !== undefined,
       });
       if (!isSupported) {
@@ -189,20 +190,12 @@ async function setTabRule(
   }
 }
 
-function notifyTab(tabId: number, paused: boolean): void {
-  // Tell the tab's content script so copy cleaning follows the tab state.
-  chrome.tabs.sendMessage(tabId, { type: 'tabState', paused } satisfies { type: string } & TabState).catch(() => {
-    /* no content script in this tab (e.g. chrome:// page) */
-  });
-}
-
 function setTabPaused(tabId: number, paused: boolean): Promise<void> {
   return serialised(async () => {
     await setTabRule(tabId, 'pause', paused);
     // Un-pausing also ends a pending one-time bypass in that tab.
     if (!paused) await setTabRule(tabId, 'once', false);
     if (!paused) await chrome.alarms.clear(ONCE_ALARM_PREFIX + tabId);
-    notifyTab(tabId, paused);
   });
 }
 
@@ -212,22 +205,12 @@ function endOnce(tabId: number): Promise<void> {
     if (!rules.some((r) => kindOf(r.id) === 'once')) return;
     await setTabRule(tabId, 'once', false);
     await chrome.alarms.clear(ONCE_ALARM_PREFIX + tabId);
-    notifyTab(
-      tabId,
-      rules.some((r) => kindOf(r.id) === 'pause'),
-    );
   });
 }
 
 /** One-time bypass: open `url` in a new tab with cleaning disabled for that single page load. */
 async function openUnmodified(url: string, openerTab?: chrome.tabs.Tab): Promise<void> {
   if (!/^https?:/i.test(url)) return;
-  let host: string;
-  try {
-    host = new URL(url).hostname.replace(/\.+$/, '');
-  } catch {
-    return;
-  }
   const createProps: chrome.tabs.CreateProperties = { url: 'about:blank', active: true };
   if (openerTab?.id !== undefined) createProps.openerTabId = openerTab.id;
   if (openerTab?.index !== undefined) createProps.index = openerTab.index + 1;
@@ -237,17 +220,14 @@ async function openUnmodified(url: string, openerTab?: chrome.tabs.Tab): Promise
   // A navigation requested while the new tab is still loading its initial
   // about:blank can be swallowed (observed under load), so wait for it first.
   await waitForTab(tabId, (t) => t.status === 'complete');
-  // The bypass is limited to this tab and the link's host (plus redirects
-  // within that host).
-  await serialised(() => setTabRule(tabId, 'once', true, host.startsWith('[') ? undefined : [host]));
+  // The bypass covers every main-frame request in this tab until the page has
+  // loaded (or one minute passes) – including redirectors and click trackers
+  // in front of the destination, which is the point of "without cleaning".
+  await serialised(() => setTabRule(tabId, 'once', true));
   await chrome.alarms.create(ONCE_ALARM_PREFIX + tabId, { delayInMinutes: ONCE_TIMEOUT_MINUTES });
+  // No blind retry: downloads and 204 responses never commit, and a second
+  // request could consume a one-time link (found in review).
   await chrome.tabs.update(tabId, { url });
-  // Retry once if the navigation still did not start.
-  const started = await waitForTab(
-    tabId,
-    (t) => t.url !== undefined || t.pendingUrl !== undefined || t.status === 'loading',
-  );
-  if (!started) await chrome.tabs.update(tabId, { url }).catch(() => {});
 }
 
 /** Poll a tab until `done` holds (or it is gone / the timeout passes). Returns whether `done` held. */
@@ -275,64 +255,77 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // cleaned navigation loops until Chromium aborts with ERR_TOO_MANY_REDIRECTS.
 // DNR cannot observe this. When the user grants the optional webNavigation
 // permission, Untrackable notices such a top-level error, marks the tab
-// (badge "↻") and offers "Retry without cleaning" in the popup.
+// (badge "↻") and offers "Reload once without cleaning" in the popup.
 //
-// The retry is never automatic: a navigation started by the extension is
-// treated by the browser like a typed URL (no Referer, SameSite=Strict
-// cookies sent), so an automatic retry would let any page trigger such a
-// request to a URL of its choosing. Only an explicit click does. The retry
-// bypass covers only the failing URL's host in that tab, at most once per
-// tab per LOOP_RETRY_WINDOW_MS.
-//
-// The failing URL is kept in chrome.storage.session (memory only) until it
-// is used, the tab closes, or LOOP_OFFER_TTL_MS passes.
+// Safeguards (reviewed three times):
+// - never automatic: an extension-initiated load is treated like a typed URL
+//   (no Referer, SameSite=Strict cookies), so only an explicit click reloads;
+// - the reload is `tabs.reload` of the tab's own error page – Untrackable
+//   never navigates to a stored or page-supplied URL and stores no URL at
+//   all, only the host for display and scoping;
+// - no offer when the failing URL is protected or excepted (our rules cannot
+//   have caused that loop);
+// - the bypass covers only that host in that tab, once per tab per minute;
+// - an offer disappears on the tab's next successful top-level navigation,
+//   when the tab closes, when the permission is removed, and after
+//   LOOP_OFFER_TTL_MS (alarm).
 
 const REDIRECT_LOOP_ERROR = 'net::ERR_TOO_MANY_REDIRECTS';
 const LOOP_RETRY_KEY = 'loopRetries';
 const LOOP_OFFER_KEY = 'loopOffers';
+const LOOP_PURGE_ALARM = 'untrackable-loop-purge';
 const LOOP_RETRY_WINDOW_MS = 60_000;
 const LOOP_OFFER_TTL_MS = 10 * 60_000;
 
-type LoopOffers = Record<string, { url: string; at: number }>;
+type LoopOffers = Record<string, { host: string; at: number }>;
 
 async function readLoopOffers(): Promise<LoopOffers> {
   const raw = (await chrome.storage.session.get(LOOP_OFFER_KEY))[LOOP_OFFER_KEY];
   const out: LoopOffers = {};
   if (typeof raw === 'object' && raw !== null) {
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      const o = v as { url?: unknown; at?: unknown };
-      if (typeof o?.url === 'string' && typeof o.at === 'number' && Date.now() - o.at < LOOP_OFFER_TTL_MS) {
-        out[k] = { url: o.url, at: o.at };
+      const o = v as { host?: unknown; at?: unknown };
+      if (typeof o?.host === 'string' && typeof o.at === 'number' && Date.now() - o.at < LOOP_OFFER_TTL_MS) {
+        out[k] = { host: o.host, at: o.at };
       }
     }
   }
   return out;
 }
 
-function setLoopOffer(tabId: number, url: string | undefined): Promise<void> {
+/** Replace the offer for `tabId` (undefined removes it); also prunes expired offers. */
+function setLoopOffer(tabId: number, host: string | undefined): Promise<void> {
   return serialised(async () => {
     const offers = Object.fromEntries(
       Object.entries(await readLoopOffers()).filter(([k]) => k !== String(tabId)),
     ) as LoopOffers;
-    if (url !== undefined) offers[String(tabId)] = { url, at: Date.now() };
+    if (host !== undefined) offers[String(tabId)] = { host, at: Date.now() };
     await chrome.storage.session.set({ [LOOP_OFFER_KEY]: offers });
-    await chrome.action.setBadgeText({ tabId, text: url === undefined ? '' : '↻' }).catch(() => {});
-    if (url !== undefined) {
+    await chrome.alarms.clear(LOOP_PURGE_ALARM);
+    if (Object.keys(offers).length > 0) {
+      const oldest = Math.min(...Object.values(offers).map((o) => o.at));
+      await chrome.alarms.create(LOOP_PURGE_ALARM, { when: oldest + LOOP_OFFER_TTL_MS + 1000 });
+    }
+    await chrome.action.setBadgeText({ tabId, text: host === undefined ? '' : '↻' }).catch(() => {});
+    if (host !== undefined) {
       await chrome.action
-        .setTitle({ tabId, title: 'Untrackable – this page kept redirecting. Open to retry without cleaning.' })
+        .setTitle({ tabId, title: 'Untrackable – this page failed with too many redirects. Open for options.' })
         .catch(() => {});
     }
   });
 }
 
-async function loopOfferHost(tabId: number): Promise<string | undefined> {
-  const offer = (await readLoopOffers())[String(tabId)];
-  if (offer === undefined) return undefined;
-  try {
-    return new URL(offer.url).hostname;
-  } catch {
-    return undefined;
+async function purgeLoopOffers(): Promise<void> {
+  const before = (await chrome.storage.session.get(LOOP_OFFER_KEY))[LOOP_OFFER_KEY] as
+    Record<string, unknown> | undefined;
+  const live = await readLoopOffers();
+  for (const tabId of Object.keys(before ?? {})) {
+    if (!(tabId in live)) await setLoopOffer(Number(tabId), undefined);
   }
+}
+
+async function loopOfferHost(tabId: number): Promise<string | undefined> {
+  return (await readLoopOffers())[String(tabId)]?.host;
 }
 
 /** Atomically claim the single retry for this tab. Returns false if one happened recently. */
@@ -353,28 +346,32 @@ function claimLoopRetry(tabId: number): Promise<boolean> {
   });
 }
 
-/** Explicit user action from the popup: retry the looping page once without cleaning. */
+/** Explicit user action from the popup: reload the failed page once without cleaning its host. */
 async function retryLoopWithoutCleaning(tabId: number): Promise<boolean> {
-  const offer = (await readLoopOffers())[String(tabId)];
-  if (offer === undefined) return false;
+  const host = await loopOfferHost(tabId);
+  if (host === undefined) return false;
   await setLoopOffer(tabId, undefined);
-  let host: string;
-  try {
-    host = new URL(offer.url).hostname.replace(/\.+$/, '');
-  } catch {
-    return false;
-  }
-  if (host === '' || host.startsWith('[') || !(await claimLoopRetry(tabId))) return false;
-  await serialised(() => setTabRule(tabId, 'once', true, [host]));
+  if (!(await claimLoopRetry(tabId))) return false;
+  await serialised(() => setTabRule(tabId, 'once', true, host.startsWith('[') ? undefined : [host]));
   await chrome.alarms.create(ONCE_ALARM_PREFIX + tabId, { delayInMinutes: ONCE_TIMEOUT_MINUTES });
-  await chrome.tabs.update(tabId, { url: offer.url });
+  await chrome.tabs.reload(tabId);
   return true;
 }
 
 async function onRedirectLoop(tabId: number, url: string): Promise<void> {
-  const mode = effectiveMode(await loadSettings());
+  const settings = await loadSettings();
+  const mode = effectiveMode(settings);
   if (mode === 'bypass' || url.length > MAX_URL_LENGTH || !/^https?:/i.test(url)) return;
-  await setLoopOffer(tabId, url);
+  // Our rules never touch protected or excepted URLs, so such a loop is not ours.
+  const { status } = cleanUrl(url, { mode, exceptions: settings.exceptions });
+  if (status === 'protected' || status === 'excepted' || status === 'invalid') return;
+  let host: string;
+  try {
+    host = new URL(url).hostname.replace(/\.+$/, '');
+  } catch {
+    return;
+  }
+  if (host !== '') await setLoopOffer(tabId, host);
 }
 
 function onNavigationError(details: { tabId: number; frameId: number; url: string; error: string }): void {
@@ -382,18 +379,30 @@ function onNavigationError(details: { tabId: number; frameId: number; url: strin
   void onRedirectLoop(details.tabId, details.url);
 }
 
+function onNavigationCommitted(details: { tabId: number; frameId: number }): void {
+  if (details.frameId !== 0 || details.tabId < 0) return;
+  // A successful top-level load supersedes any pending offer for this tab.
+  void loopOfferHost(details.tabId).then((h) => (h === undefined ? undefined : setLoopOffer(details.tabId, undefined)));
+}
+
 function registerLoopRecovery(): void {
   // chrome.webNavigation only exists while the optional permission is granted.
   const nav = (chrome as { webNavigation?: typeof chrome.webNavigation }).webNavigation;
-  if (nav !== undefined && !nav.onErrorOccurred.hasListener(onNavigationError)) {
-    nav.onErrorOccurred.addListener(onNavigationError);
-  }
+  if (nav === undefined) return;
+  if (!nav.onErrorOccurred.hasListener(onNavigationError)) nav.onErrorOccurred.addListener(onNavigationError);
+  if (!nav.onCommitted.hasListener(onNavigationCommitted)) nav.onCommitted.addListener(onNavigationCommitted);
 }
 
 registerLoopRecovery();
 chrome.permissions.onAdded.addListener(registerLoopRecovery);
+chrome.permissions.onRemoved.addListener(() => {
+  void (async () => {
+    for (const tabId of Object.keys(await readLoopOffers())) await setLoopOffer(Number(tabId), undefined);
+  })();
+});
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  lastCopyWrite.delete(tabId);
   void readLoopOffers().then((offers) => (offers[String(tabId)] ? setLoopOffer(tabId, undefined) : undefined));
   void serialised(async () => {
     await setTabRule(tabId, 'pause', false);
@@ -461,6 +470,29 @@ async function copyClean(url: string): Promise<void> {
 // Event wiring
 // ---------------------------------------------------------------------------
 
+/** Per-tab time of the last copy write, to bound clipboard writes a page could provoke. */
+const lastCopyWrite = new Map<number, number>();
+const COPY_MIN_INTERVAL_MS = 300;
+
+/**
+ * Copy cleaning, decided here so settings never reach web pages: the content
+ * script reports a link the user just copied with the keyboard; if the
+ * configured mode would clean it, the clean link replaces the clipboard
+ * content right after the native copy. Only cleaned versions of the copied
+ * link are ever written – a content script cannot write arbitrary text.
+ */
+async function cleanCopiedLink(tabId: number, url: string): Promise<void> {
+  const now = Date.now();
+  if (now - (lastCopyWrite.get(tabId) ?? 0) < COPY_MIN_INTERVAL_MS) return;
+  const settings = await loadSettings();
+  const mode = effectiveMode(settings);
+  if (!settings.copyCleaning || mode === 'bypass' || (await tabRules(tabId)).length > 0) return;
+  const result = cleanUrl(url, { mode, exceptions: settings.exceptions });
+  if (result.status !== 'cleaned') return;
+  lastCopyWrite.set(tabId, now);
+  await copyToClipboard(result.url);
+}
+
 function createMenus(): void {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: MENU.copyLink, title: 'Copy clean link', contexts: ['link'] });
@@ -484,6 +516,7 @@ chrome.storage.onChanged.addListener((_changes, area) => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === RESUME_ALARM) void saveSettings({ pausedUntil: 0 });
+  else if (alarm.name === LOOP_PURGE_ALARM) void purgeLoopOffers();
   else if (alarm.name.startsWith(ONCE_ALARM_PREFIX)) {
     const tabId = Number(alarm.name.slice(ONCE_ALARM_PREFIX.length));
     if (Number.isInteger(tabId)) void endOnce(tabId);
@@ -518,6 +551,8 @@ function isMessage(m: unknown): m is Message {
       return typeof msg.url === 'string' && msg.url.length <= 32_768;
     case 'retryLoop':
       return Number.isInteger(msg.tabId);
+    case 'cleanCopiedLink':
+      return typeof msg.url === 'string' && msg.url.length <= 8192;
     default:
       return false;
   }
@@ -545,6 +580,12 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
       },
     );
     return true;
+  }
+  if (message.type === 'cleanCopiedLink') {
+    // Content scripts only (the user just pressed Ctrl/Cmd+C on a single link).
+    if (!fromContentScript || sender.tab?.id === undefined) return false;
+    void cleanCopiedLink(sender.tab.id, message.url);
+    return false;
   }
   if (fromContentScript) return false; // privileged messages: extension pages only
   if (message.type === 'setTabPaused') {

@@ -22,6 +22,7 @@ const copyResult = $('copy-result');
 const loopSection = $('loop-section');
 const loopHostEl = $('loop-host');
 const loopRetry = $('loop-retry') as HTMLButtonElement;
+const siteNote = $('site-note');
 
 let tab: chrome.tabs.Tab | undefined;
 let host = '';
@@ -61,7 +62,11 @@ function render(s: Settings): void {
   siteHost.textContent = host || '–';
   const covering = coveringException(s);
   siteException.checked = covering !== undefined;
-  siteException.title = covering !== undefined && covering !== host ? `Covered by exception for ${covering}` : '';
+  // An exception for a parent domain is managed in the settings, not silently
+  // removed from here (found in review).
+  const byParent = covering !== undefined && covering !== host;
+  siteException.disabled = byParent;
+  siteNote.textContent = byParent ? `Covered by the exception for ${covering} (change it in Settings).` : '';
   copyBtn.disabled = tab?.url === undefined || hostOf(tab.url) === '';
 }
 
@@ -72,7 +77,8 @@ async function init(): Promise<void> {
   if (tab?.id !== undefined && host !== '') {
     const state = (await chrome.runtime.sendMessage({ type: 'getTabState', tabId: tab.id })) as TabState | undefined;
     tabPausedBox.checked = state?.pausedByUser === true;
-    if (state?.loopHost !== undefined) {
+    // Only offer the reload for the page that actually failed.
+    if (state?.loopHost !== undefined && state.loopHost === host) {
       loopHostEl.textContent = state.loopHost;
       loopSection.hidden = false;
     }
@@ -92,11 +98,7 @@ pauseBtn.addEventListener('click', async () => {
 });
 siteException.addEventListener('change', async () => {
   const s = await loadSettings();
-  // Unchecking removes every exception that covers this host (e.g. both
-  // example.com and sub.example.com), otherwise the box would flip back on.
-  const exceptions = siteException.checked
-    ? [...s.exceptions, host]
-    : s.exceptions.filter((d) => !(host === d || host.endsWith(`.${d}`)));
+  const exceptions = siteException.checked ? [...s.exceptions, host] : s.exceptions.filter((d) => d !== host);
   await saveSettings({ exceptions });
 });
 tabPausedBox.addEventListener('change', async () => {
@@ -117,8 +119,10 @@ copyBtn.addEventListener('click', async () => {
 loopRetry.addEventListener('click', async () => {
   if (tab?.id === undefined) return;
   loopRetry.disabled = true;
-  await chrome.runtime.sendMessage({ type: 'retryLoop', tabId: tab.id });
-  window.close();
+  const ok = (await chrome.runtime.sendMessage({ type: 'retryLoop', tabId: tab.id })) === true;
+  if (ok) window.close();
+  else if (loopHostEl.parentElement)
+    loopHostEl.parentElement.textContent = 'Not possible right now – at most one reload per minute.';
 });
 $('open-options').addEventListener('click', () => void chrome.runtime.openOptionsPage());
 
