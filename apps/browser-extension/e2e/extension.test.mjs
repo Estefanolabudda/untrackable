@@ -572,6 +572,130 @@ describe('Experimental mode (strip query parameters)', () => {
   });
 });
 
+describe('robustness of mode handling (v0.2)', () => {
+  test('cycling through all modes changes navigation and badge every time', async () => {
+    const steps = [
+      ['clean', '/m?id=1&utm_source=x&ref=a', '/m?id=1&ref=a', ''],
+      ['strict', '/m?id=1&utm_source=x&ref=a', '/m?id=1', 'S'],
+      ['experimental', '/m?id=1&utm_source=x&ref=a', '/m', 'E'],
+      ['clean', '/m?id=1&utm_source=x&ref=a', '/m?id=1&ref=a', ''],
+      ['experimental', '/m?id=1', '/m', 'E'],
+      ['strict', '/m?id=1&ref=a', '/m?id=1', 'S'],
+    ];
+    for (const [mode, path, expected, badge] of steps) {
+      await setSettings({ mode });
+      assert.equal(await visit(path), expected, mode);
+      assert.equal(await sw.evaluate(() => chrome.action.getBadgeText({})), badge, mode);
+    }
+    await setSettings({ mode: 'experimental', enabled: false });
+    assert.equal(await visit('/m?id=1'), '/m?id=1', 'bypass');
+  });
+
+  test('a strip rule Chromium refuses shows "!" and strips nothing; recovery afterwards', async () => {
+    // Simulate a browser that rejects the strip rule's regex.
+    await sw.evaluate(() => {
+      const original = chrome.declarativeNetRequest.isRegexSupported.bind(chrome.declarativeNetRequest);
+      globalThis.__origIsRegexSupported = original;
+      chrome.declarativeNetRequest.isRegexSupported = async (o) =>
+        o.regex === '^[^?#]*\\?[^#]*[^&#]' ? { isSupported: false, reason: 'memoryLimitExceeded' } : original(o);
+    });
+    try {
+      await sw.evaluate(() => chrome.storage.local.set({ mode: 'experimental' }));
+      await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === '!', 'badge !');
+      const ids = (await sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).map((r) => r.id);
+      assert.ok(!ids.includes(50), 'strip rule not installed');
+      assert.equal(await visit('/f?id=1'), '/f?id=1', 'nothing stripped');
+    } finally {
+      await sw.evaluate(() => {
+        chrome.declarativeNetRequest.isRegexSupported = globalThis.__origIsRegexSupported;
+      });
+    }
+    await setSettings({ mode: 'experimental' });
+    assert.equal(await sw.evaluate(() => chrome.action.getBadgeText({})), 'E');
+    assert.equal(await visit('/f?id=1'), '/f');
+  });
+
+  test('a protection rule Chromium refuses disables all redirects (fail-safe), also in Experimental', async () => {
+    await sw.evaluate(() => {
+      const original = chrome.declarativeNetRequest.isRegexSupported.bind(chrome.declarativeNetRequest);
+      globalThis.__origIsRegexSupported = original;
+      chrome.declarativeNetRequest.isRegexSupported = async (o) =>
+        o.regex.includes('oauth') ? { isSupported: false, reason: 'memoryLimitExceeded' } : original(o);
+    });
+    try {
+      await sw.evaluate(() => chrome.storage.local.set({ mode: 'experimental' }));
+      await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === '!', 'badge !');
+      const rules = await sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules());
+      assert.ok(rules.length > 0 && rules.every((r) => r.action.type === 'allow'), 'only allow rules remain');
+      assert.equal(await visit('/f?id=1&utm_source=x'), '/f?id=1&utm_source=x');
+    } finally {
+      await sw.evaluate(() => {
+        chrome.declarativeNetRequest.isRegexSupported = globalThis.__origIsRegexSupported;
+      });
+    }
+    await setSettings({ mode: 'experimental' });
+    assert.equal(await sw.evaluate(() => chrome.action.getBadgeText({})), 'E');
+  });
+
+  test('if installing rules fails twice, stale rules of the previous mode are removed', async () => {
+    await setSettings({ mode: 'experimental' });
+    await sw.evaluate(() => {
+      const original = chrome.declarativeNetRequest.updateDynamicRules.bind(chrome.declarativeNetRequest);
+      globalThis.__origUpdate = original;
+      chrome.declarativeNetRequest.updateDynamicRules = async (o) => {
+        if ((o.addRules ?? []).length > 0) throw new Error('simulated failure');
+        return original(o);
+      };
+    });
+    try {
+      // Switching back to Clean must not leave the Experimental strip rule behind.
+      await sw.evaluate(() => chrome.storage.local.set({ mode: 'clean' }));
+      await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === '!', 'badge !');
+      assert.equal((await sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).length, 0);
+      assert.equal(await visit('/f?id=1'), '/f?id=1', 'no stale stripping');
+    } finally {
+      await sw.evaluate(() => {
+        chrome.declarativeNetRequest.updateDynamicRules = globalThis.__origUpdate;
+      });
+    }
+    await setSettings({ mode: 'clean' });
+    assert.equal(await sw.evaluate(() => chrome.action.getBadgeText({})), '');
+    assert.equal(await visit('/f?id=1&utm_source=x'), '/f?id=1');
+  });
+
+  test('Experimental and exceptions survive a browser restart', async () => {
+    const profile = mkdtempSync(join(tmpdir(), 'untrackable-e2e-restart-'));
+    try {
+      let b = await launchWith(dist, profile);
+      await b.sw.evaluate(() => chrome.storage.local.set({ mode: 'experimental', exceptions: ['keep.test'] }));
+      await waitFor(
+        async () =>
+          (await b.sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).some((r) => r.id === 50),
+        'strip rule',
+      );
+      await b.context.close();
+      b = await launchWith(dist, profile);
+      await waitFor(
+        async () => (await b.sw.evaluate(() => chrome.action.getBadgeText({}))) === 'E',
+        'badge E after restart',
+      );
+      const stored = await b.sw.evaluate(() => chrome.storage.local.get(null));
+      assert.equal(stored.mode, 'experimental');
+      assert.deepEqual(stored.exceptions, ['keep.test']);
+      const page = await b.context.newPage();
+      await page.goto(`http://news.test:${port}/after-restart?id=1`);
+      assert.match(page.url(), /\/after-restart$/);
+      await page.goto(`http://keep.test:${port}/x?id=1`);
+      assert.match(page.url(), /\/x\?id=1$/);
+      // No session state survives: no tab pause or one-time bypass rules.
+      assert.equal((await b.sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length, 0);
+      await b.context.close();
+    } finally {
+      rmSync(profile, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('per-tab controls', () => {
   test('pause in this tab only affects that tab', async () => {
     const target = await context.newPage();
