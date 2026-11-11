@@ -1,6 +1,7 @@
 import { cleanUrl, toAsciiDomain } from '@untrackable/core';
 import { setupModeControls } from './mode-controls.js';
 import { effectiveMode, loadSettings, MAX_EXCEPTIONS, saveSettings, type Settings } from './settings.js';
+import { renderStats, resetStats, setStatsEnabled, statsEnabled, watchStats } from './stats-view.js';
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -128,5 +129,26 @@ openUnmodifiedBtn.addEventListener('click', () => {
 chrome.storage.onChanged.addListener((_c, area) => {
   if (area === 'local') void loadSettings().then(render);
 });
+
+// Statistics: the optional permission is the setting (granted = on).
+const statsBox = $('stats-enabled') as HTMLInputElement;
+const statsResetBtn = $('stats-reset') as HTMLButtonElement;
+const statsResetResult = $('stats-reset-result');
+const refreshStats = (): void => {
+  void renderStats().then((on) => (statsBox.checked = on));
+};
+statsBox.addEventListener('change', () => {
+  void setStatsEnabled(statsBox.checked).then((on) => {
+    statsBox.checked = on;
+    statsResetResult.textContent = '';
+    refreshStats();
+  });
+});
+statsResetBtn.addEventListener('click', () => {
+  void resetStats().then(() => (statsResetResult.textContent = 'Numbers reset.'));
+});
+watchStats(refreshStats);
+void statsEnabled().then((on) => (statsBox.checked = on));
+refreshStats();
 
 void loadSettings().then(render);

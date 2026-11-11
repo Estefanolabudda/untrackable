@@ -6,6 +6,24 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Optional local statistics** (off by default): how many tracking
+  parameters Untrackable removed today, in the last 7 days and in total, shown
+  in the popup and the settings. Only removals Untrackable can confirm are
+  counted; only numbers are stored, on this device. Uses the optional,
+  read-only `webRequest` permission while switched on; turning it off deletes
+  the numbers.
+
+### Changed
+
+- **Redesigned popup and settings page**: a clear status header with the
+  main switch, a mode choice with one-line explanations, real switches for the
+  site exception and the tab pause, a single primary action, light and dark
+  themes, larger type (Chromium's extension pages shrank text to 10.5 px),
+  visible focus, high-contrast support, and a new icon (a link whose query is
+  cut off).
+
 ### Security and reliability
 
 - Regression corpus of 255 sensitive real-world URL shapes (sign-in, reset,

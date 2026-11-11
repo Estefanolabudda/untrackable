@@ -1,5 +1,5 @@
 // Generates the extension icons (PNG) without external dependencies.
-// Design: rounded green square, white link ring with a diagonal cut.
+// Design: rounded teal square, white link bar cut before its (faded) query.
 // Usage: node scripts/gen-icons.mjs
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
@@ -42,20 +42,28 @@ function png(size, rgba) {
 }
 
 // Shape coverage in unit coordinates [0,1]: returns [bgAlpha, fgAlpha].
+// Same geometry as the inline SVG logo (24-unit grid): a link bar, a cut,
+// and the faded rest of the query.
+const U = 1 / 24;
+function segDist(x, y, ax, ay, bx, by) {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1)));
+  return Math.hypot(x - (ax + t * vx), y - (ay + t * vy));
+}
 function sample(x, y) {
-  const r = 0.2; // corner radius
+  const r = 6 * U; // corner radius
   const dx = Math.max(Math.abs(x - 0.5) - (0.5 - r), 0);
   const dy = Math.max(Math.abs(y - 0.5) - (0.5 - r), 0);
   const inBg = dx * dx + dy * dy <= r * r;
-  const d = Math.hypot(x - 0.5, y - 0.5);
-  const ring = d >= 0.2 && d <= 0.31;
-  // diagonal cut through the ring (top-right to bottom-left gap)
-  const cut = Math.abs(x + y - 1) < 0.07;
-  const slash = Math.abs(x - y) < 0.055 && d <= 0.36;
-  return [inBg ? 1 : 0, inBg && ((ring && !cut) || slash) ? 1 : 0];
+  const half = 1.1 * U; // stroke width 2.2
+  const bar = segDist(x, y, 5.5 * U, 12 * U, 12 * U, 12 * U) <= half;
+  const cut = segDist(x, y, 13.6 * U, 16.4 * U, 16.4 * U, 7.6 * U) <= half;
+  const dot = Math.hypot(x - 18.6 * U, y - 12 * U) <= half;
+  return [inBg ? 1 : 0, inBg ? (bar || cut ? 1 : dot ? 0.55 : 0) : 0];
 }
 
-const BG = [0x1f, 0x5f, 0x3a];
+const BG = [0x0f, 0x5f, 0x56];
 const FG = [0xff, 0xff, 0xff];
 for (const size of [16, 32, 48, 128]) {
   const ss = 4;

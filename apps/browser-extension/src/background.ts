@@ -19,10 +19,22 @@ import {
   loadSettings,
   migrateStoredSettings,
   saveSettings,
+  SETTINGS_KEYS,
   type Message,
   type Settings,
   type TabState,
 } from './settings.js';
+import {
+  addToStats,
+  classifyRemoved,
+  isZero,
+  STATS_KEY,
+  STATS_PERMISSION,
+  sum,
+  verifiedRemovals,
+  ZERO,
+  type Counts,
+} from './stats.js';
 
 const RESUME_ALARM = 'untrackable-resume';
 /** Longest URL the extension cleans on explicit actions (Chromium's own limit is 2 MB). */
@@ -128,7 +140,7 @@ async function updateBadge(settings: Settings): Promise<void> {
   const mode = effectiveMode(settings);
   if (rulesDegraded && mode !== 'bypass') {
     await chrome.action.setBadgeText({ text: '!' });
-    await chrome.action.setBadgeBackgroundColor({ color: '#8a3b12' });
+    await chrome.action.setBadgeBackgroundColor({ color: '#8a4b00' });
     await chrome.action.setTitle({
       title:
         'Untrackable – navigation cleaning disabled: this browser could not install the cleaning or protection rules',
@@ -138,7 +150,7 @@ async function updateBadge(settings: Settings): Promise<void> {
   const text = { bypass: 'off', strict: 'S', experimental: 'E', clean: '' }[mode];
   await chrome.action.setBadgeText({ text });
   await chrome.action.setBadgeBackgroundColor({
-    color: mode === 'bypass' ? '#8a3b12' : mode === 'experimental' ? '#5b2a86' : '#1f5f3a',
+    color: mode === 'bypass' ? '#5c636b' : mode === 'experimental' ? '#8a4b00' : '#0f5f56',
   });
   const title =
     mode === 'bypass'
@@ -555,7 +567,9 @@ async function copyClean(url: string): Promise<void> {
   if (url.length > MAX_URL_LENGTH) return; // hostile pages can craft huge hrefs
   const settings = await loadSettings();
   const result = cleanUrl(url, { mode: settings.mode, exceptions: settings.exceptions });
-  await copyToClipboard(result.url, () => seq === copySeq);
+  if (await copyToClipboard(result.url, () => seq === copySeq)) {
+    recordStats(classifyRemoved(url, result, settings.mode, settings.exceptions));
+  }
 }
 
 /**
@@ -581,6 +595,130 @@ async function openStripped(url: string, openerTab?: chrome.tabs.Tab): Promise<v
   if (openerTab?.id !== undefined) createProps.openerTabId = openerTab.id;
   if (openerTab?.index !== undefined) createProps.index = openerTab.index + 1;
   await chrome.tabs.create(createProps);
+}
+
+// ---------------------------------------------------------------------------
+// Local statistics (optional permission "webRequest", off by default)
+// ---------------------------------------------------------------------------
+//
+// Counts how many parameters Untrackable removed – nothing else. DNR does not
+// report its redirects, so with the user's opt-in the service worker observes
+// top-level navigations (read-only, no blocking) and compares the requested
+// with the actually sent URL. A difference is counted only when it is exactly
+// the removal of query parameters the engine removes from that URL with the
+// current settings (`verifiedRemovals`); server redirects, HSTS upgrades and
+// other extensions' rewrites count 0. Copies count what was written.
+//
+// Privacy: URLs live only in memory for the duration of a request; storage
+// holds aggregate numbers per local date for the last seven days and a total.
+// Turning statistics off removes the permission and deletes the numbers.
+
+let pendingStats: Counts = { ...ZERO };
+let statsTimer: ReturnType<typeof setTimeout> | undefined;
+let statsQueue: Promise<void> = Promise.resolve();
+
+function recordStats(add: Counts): void {
+  if (isZero(add)) return;
+  pendingStats = sum(pendingStats, add);
+  statsTimer ??= setTimeout(() => {
+    statsTimer = undefined;
+    statsQueue = statsQueue.then(flushStats, flushStats);
+  }, 250);
+}
+
+async function flushStats(): Promise<void> {
+  const add = pendingStats;
+  pendingStats = { ...ZERO };
+  if (isZero(add) || !(await chrome.permissions.contains(STATS_PERMISSION))) return;
+  const stored = (await chrome.storage.local.get(STATS_KEY))[STATS_KEY];
+  await chrome.storage.local.set({ [STATS_KEY]: addToStats(stored, add) });
+}
+
+/** Top-level request id → URL last requested for it (memory only, never stored). */
+const requested = new Map<string, string>();
+const MAX_TRACKED_REQUESTS = 500;
+
+async function countNavigation(from: string, to: string, tabId: number): Promise<void> {
+  if (from.length > MAX_URL_LENGTH || to.length > MAX_URL_LENGTH) return;
+  const settings = await loadSettings();
+  const mode = effectiveMode(settings);
+  if (mode === 'bypass' || (await tabRules(tabId)).length > 0) return;
+  recordStats(verifiedRemovals(from, to, mode, settings.exceptions));
+}
+
+function onStatsBeforeRequest(d: chrome.webRequest.OnBeforeRequestDetails): undefined {
+  if (d.tabId < 0) return undefined;
+  if (requested.size >= MAX_TRACKED_REQUESTS) requested.clear();
+  requested.set(d.requestId, d.url);
+  return undefined;
+}
+
+/** A DNR rewrite of a server redirect's target changes the URL in place: requested ≠ sent. */
+function checkInPlace(d: { requestId: string; url: string; tabId: number }): void {
+  const from = requested.get(d.requestId);
+  if (from !== undefined && from !== d.url) void countNavigation(from, d.url, d.tabId);
+}
+
+function onStatsBeforeRedirect(d: chrome.webRequest.OnBeforeRedirectDetails): void {
+  if (d.tabId < 0) return;
+  checkInPlace(d);
+  requested.delete(d.requestId);
+  // Redirects made inside the browser (DNR, HSTS, other extensions) have no
+  // server address; verifiedRemovals tells ours apart.
+  if (d.statusCode === 307 && d.ip === undefined && /Internal Redirect/i.test(d.statusLine)) {
+    void countNavigation(d.url, d.redirectUrl, d.tabId);
+  }
+}
+
+function onStatsCompleted(d: chrome.webRequest.OnCompletedDetails): void {
+  if (d.tabId < 0) return;
+  checkInPlace(d);
+  requested.delete(d.requestId);
+}
+
+function onStatsError(d: chrome.webRequest.OnErrorOccurredDetails): void {
+  requested.delete(d.requestId);
+}
+
+function registerStats(): void {
+  // chrome.webRequest only exists while the optional permission is granted.
+  const wr = (chrome as { webRequest?: typeof chrome.webRequest }).webRequest;
+  if (wr === undefined) return;
+  const filter: chrome.webRequest.RequestFilter = {
+    urls: ['http://*/*', 'https://*/*'],
+    types: [chrome.webRequest.ResourceType.MAIN_FRAME],
+  };
+  if (!wr.onBeforeRequest.hasListener(onStatsBeforeRequest))
+    wr.onBeforeRequest.addListener(onStatsBeforeRequest, filter);
+  if (!wr.onBeforeRedirect.hasListener(onStatsBeforeRedirect)) {
+    wr.onBeforeRedirect.addListener(onStatsBeforeRedirect, filter);
+  }
+  if (!wr.onCompleted.hasListener(onStatsCompleted)) wr.onCompleted.addListener(onStatsCompleted, filter);
+  if (!wr.onErrorOccurred.hasListener(onStatsError)) wr.onErrorOccurred.addListener(onStatsError, filter);
+}
+
+registerStats();
+chrome.permissions.onAdded.addListener(registerStats);
+chrome.permissions.onRemoved.addListener(() => {
+  void chrome.permissions.contains(STATS_PERMISSION).then((granted) => {
+    if (granted) return;
+    requested.clear();
+    pendingStats = { ...ZERO };
+    return chrome.storage.local.remove(STATS_KEY);
+  });
+});
+
+/** Popup "Copy clean link": clean the tab's URL with the configured mode (also while paused). */
+async function copyCleanTab(tabId: number): Promise<{ ok: boolean; removed: number }> {
+  const tab = await chrome.tabs.get(tabId).catch(() => undefined);
+  const url = tab?.url;
+  if (url === undefined || url.length > MAX_URL_LENGTH || !/^https?:/i.test(url)) return { ok: false, removed: 0 };
+  const seq = ++copySeq;
+  const settings = await loadSettings();
+  const result = cleanUrl(url, { mode: settings.mode, exceptions: settings.exceptions });
+  const ok = await copyToClipboard(result.url, () => seq === copySeq);
+  if (ok) recordStats(classifyRemoved(url, result, settings.mode, settings.exceptions));
+  return { ok, removed: ok ? result.removed.length : 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -621,7 +759,8 @@ async function onCopiedLink(tabId: number, url: string | undefined): Promise<voi
   const active = mode !== 'bypass' && (await tabRules(tabId)).length === 0;
   const result = active ? cleanUrl(url, { mode, exceptions: settings.exceptions }) : undefined;
   const text = result?.status === 'cleaned' ? result.url : url;
-  await copyToClipboard(text, () => seq === copySeq);
+  const written = await copyToClipboard(text, () => seq === copySeq);
+  if (written && result !== undefined) recordStats(classifyRemoved(url, result, mode, settings.exceptions));
 }
 
 function createMenus(): void {
@@ -691,8 +830,11 @@ async function refreshIfNeeded(): Promise<void> {
 chrome.runtime.onInstalled.addListener(() => void refreshForThisVersion());
 chrome.runtime.onStartup.addListener(() => void refreshIfNeeded());
 
-chrome.storage.onChanged.addListener((_changes, area) => {
-  if (area === 'local') void applyRules();
+chrome.storage.onChanged.addListener((changes, area) => {
+  // Only settings affect the rules (statistics are stored in the same area).
+  if (area === 'local' && Object.keys(changes).some((k) => (SETTINGS_KEYS as string[]).includes(k))) {
+    void applyRules();
+  }
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -730,6 +872,8 @@ function isMessage(m: unknown): m is Message {
       return Number.isInteger(msg.tabId) && typeof msg.paused === 'boolean';
     case 'copyText':
       return typeof msg.text === 'string' && msg.text.length <= 32_768;
+    case 'copyCleanTab':
+      return Number.isInteger(msg.tabId);
     case 'openUnmodified':
       return typeof msg.url === 'string' && msg.url.length <= 32_768;
     case 'retryLoop':
@@ -780,6 +924,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   if (message.type === 'copyText') {
     const seq = ++copySeq;
     void copyToClipboard(message.text, () => seq === copySeq).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'copyCleanTab') {
+    void copyCleanTab(message.tabId).then(sendResponse);
     return true;
   }
   if (message.type === 'openUnmodified') {

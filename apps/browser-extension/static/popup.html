@@ -2,108 +2,175 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Untrackable</title>
     <link rel="stylesheet" href="common.css" />
-    <style>
-      body {
-        width: 320px;
-        padding: 0.75rem;
-      }
-      header {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        margin-bottom: 0.6rem;
-      }
-      footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 0.25rem;
-      }
-    </style>
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <header>
-      <h1>Untrackable</h1>
-      <span id="status" class="status" role="status" aria-live="polite"></span>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-logo" viewBox="0 0 24 24">
+        <rect width="24" height="24" rx="6" fill="currentColor" />
+        <g fill="none" stroke-width="2.2" stroke-linecap="round" style="stroke: var(--accent-fg)">
+          <path d="M5.5 12h6.5" />
+          <path d="M13.6 16.4 16.4 7.6" />
+          <path d="M18.6 12h0" stroke-opacity="0.55" />
+        </g>
+      </symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+        />
+      </symbol>
+      <symbol id="i-warn" viewBox="0 0 24 24">
+        <path d="M10.3 3.9 2.4 17.6A2 2 0 0 0 4.1 20.6h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+        <path d="M12 9.5v4" />
+        <path d="M12 17h0" />
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24">
+        <rect x="9" y="9" width="11" height="11" rx="2" />
+        <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+      </symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24">
+        <path d="M9 6v12M15 6v12" />
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <path d="M8 5.5v13l10-6.5z" />
+      </symbol>
+    </svg>
+
+    <header class="top">
+      <div class="brand">
+        <svg class="logo" aria-hidden="true"><use href="#i-logo" /></svg>
+        <h1>Untrackable</h1>
+      </div>
+      <button type="button" class="quiet icon-only" id="open-options" aria-label="Settings" title="Settings">
+        <svg aria-hidden="true"><use href="#i-gear" /></svg>
+      </button>
     </header>
 
-    <fieldset>
-      <legend>Protection</legend>
-      <label
-        ><input type="checkbox" id="enabled" />
-        <span>Clean links automatically <small>(off: Bypass)</small></span></label
-      >
-      <div role="radiogroup" aria-label="Cleaning mode">
-        <label
-          ><input type="radio" name="mode" value="clean" /> <span>Clean <small>(recommended)</small></span></label
-        >
-        <label
-          ><input type="radio" name="mode" value="strict" /> <span>Strict <small>(more aggressive)</small></span></label
-        >
-        <label
-          ><input type="radio" name="mode" value="experimental" />
-          <span>Experimental <small id="exp-hint">(strips all query parameters)</small></span></label
-        >
-      </div>
-      <div
-        id="exp-confirm"
-        class="notice"
-        role="group"
-        aria-label="Confirm Experimental mode"
-        aria-describedby="exp-confirm-text"
-        hidden
-      >
-        <p id="exp-confirm-text">
-          <strong>Experimental removes every query parameter</strong>, not only trackers. Searches, filters, carts,
-          sign-ins and other features may break. Recognised sign-in, payment and signed links are left alone – but not
-          every one is recognised.
-        </p>
-        <div class="row">
-          <button type="button" class="primary" id="exp-enable">Use Experimental</button>
-          <button type="button" id="exp-cancel">Cancel</button>
+    <main>
+      <section class="hero" aria-label="Automatic cleaning">
+        <div class="hero-text">
+          <p id="status" class="status-title" role="status" aria-live="polite"></p>
+          <p id="status-detail" class="muted"></p>
+          <p id="exp-active" class="hero-warn" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-warn" /></svg><span>Sites may break.</span>
+            <button type="button" class="quiet" id="exp-back">Back to Clean</button>
+          </p>
+        </div>
+        <input type="checkbox" class="switch" role="switch" id="enabled" aria-label="Clean links automatically" />
+      </section>
+
+      <div id="loop-section" class="banner" hidden>
+        <svg class="icon" aria-hidden="true"><use href="#i-warn" /></svg>
+        <div class="body">
+          <p>
+            <code id="loop-host"></code>
+            <span id="loop-text">failed with too many redirects. Tracker cleaning may be the cause.</span>
+          </p>
+          <div class="row">
+            <button type="button" class="primary" id="loop-retry">Reload once without cleaning</button>
+          </div>
         </div>
       </div>
-      <div id="exp-active" class="notice row" hidden>
-        <span>Experimental: query parameters are removed; sites may break.</span>
-        <button type="button" id="exp-back">Back to Clean</button>
+
+      <fieldset class="modes card">
+        <legend class="visually-hidden">Mode</legend>
+        <div role="radiogroup" aria-label="Cleaning mode">
+          <label class="mode"
+            ><input type="radio" name="mode" value="clean" />
+            <span
+              ><strong>Clean <span class="tag">Recommended</span></strong
+              ><small>Removes known trackers.</small></span
+            ></label
+          >
+          <label class="mode"
+            ><input type="radio" name="mode" value="strict" />
+            <span><strong>Strict</strong><small>Also referral and analytics parameters.</small></span></label
+          >
+          <label class="mode"
+            ><input type="radio" name="mode" value="experimental" />
+            <span
+              ><strong>Experimental</strong><small id="exp-hint">Removes the whole query. Sites may break.</small></span
+            ></label
+          >
+        </div>
+        <div
+          id="exp-confirm"
+          class="banner"
+          role="group"
+          aria-label="Confirm Experimental mode"
+          aria-describedby="exp-confirm-text"
+          hidden
+        >
+          <svg class="icon" aria-hidden="true"><use href="#i-warn" /></svg>
+          <div class="body">
+            <p id="exp-confirm-text">
+              <strong>Experimental removes every query parameter</strong>, not only trackers. Searches, filters, carts,
+              sign-ins and other features may break. Recognised sign-in, payment and signed links are left alone – but
+              not every one is recognised.
+            </p>
+            <div class="row">
+              <button type="button" class="primary" id="exp-enable">Use Experimental</button>
+              <button type="button" id="exp-cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <section id="site-section" class="card" aria-labelledby="site-title">
+        <h2 class="card-title" id="site-title">This site <code id="site-host">–</code></h2>
+        <label class="setting"
+          ><span>Never clean links to this site<small>Includes subdomains</small></span
+          ><input type="checkbox" class="switch" role="switch" id="site-exception"
+        /></label>
+        <p id="site-note" class="note muted"></p>
+        <label class="setting"
+          ><span>Pause in this tab<small>Until you turn it back on or close the tab</small></span
+          ><input type="checkbox" class="switch" role="switch" id="tab-paused"
+        /></label>
+      </section>
+
+      <div class="actions">
+        <button type="button" class="primary" id="copy">
+          <svg aria-hidden="true"><use href="#i-copy" /></svg><span>Copy clean link</span>
+        </button>
+        <button type="button" id="pause">
+          <svg aria-hidden="true"><use id="pause-icon" href="#i-pause" /></svg
+          ><span id="pause-label">Pause 15 min</span>
+        </button>
       </div>
-      <div class="row">
-        <button type="button" id="pause">Pause for 15 minutes</button>
-      </div>
-    </fieldset>
+      <p id="copy-result" class="muted result" role="status" aria-live="polite"></p>
 
-    <div id="loop-section" class="row" hidden>
-      <p class="status off" style="margin: 0 0 0.4rem">
-        <code id="loop-host"></code>
-        <span id="loop-text">failed with too many redirects. Tracker cleaning may be the cause.</span>
-      </p>
-      <button type="button" class="primary" id="loop-retry">Reload once without cleaning</button>
-    </div>
+      <section id="stats" class="card" aria-labelledby="stats-title">
+        <h2 class="card-title" id="stats-title">Tracking parameters removed</h2>
+        <div id="stats-on" hidden>
+          <dl class="stat-grid">
+            <div>
+              <dt>Today</dt>
+              <dd id="stats-today">0</dd>
+            </div>
+            <div>
+              <dt>7 days</dt>
+              <dd id="stats-week">0</dd>
+            </div>
+            <div>
+              <dt>Total</dt>
+              <dd id="stats-total">0</dd>
+            </div>
+          </dl>
+          <p id="stats-other" class="muted fine" hidden></p>
+        </div>
+        <div id="stats-off" class="stats-off" hidden>
+          <p class="muted fine">Count them on this device. Only numbers are stored.</p>
+          <button type="button" class="quiet" id="stats-enable">Turn on</button>
+        </div>
+      </section>
+    </main>
 
-    <fieldset id="site-section">
-      <legend>This site: <code id="site-host">–</code></legend>
-      <label
-        ><input type="checkbox" id="site-exception" />
-        <span>Never clean links to this site <small>(includes subdomains)</small></span></label
-      >
-      <p id="site-note" class="muted" style="margin: 0"></p>
-      <label
-        ><input type="checkbox" id="tab-paused" />
-        <span>Pause in this tab <small>(until you turn it back on or close the tab)</small></span></label
-      >
-    </fieldset>
-
-    <div class="row">
-      <button type="button" class="primary" id="copy">Copy clean link</button>
-      <span id="copy-result" class="muted" role="status" aria-live="polite"></span>
-    </div>
-
-    <footer>
-      <span class="muted">Processed locally. Nothing is collected.</span>
-      <button type="button" id="open-options">Settings</button>
-    </footer>
+    <footer class="foot muted">Everything is processed on this device.</footer>
     <script src="popup.js"></script>
   </body>
 </html>

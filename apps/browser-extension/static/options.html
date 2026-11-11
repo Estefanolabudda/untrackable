@@ -2,89 +2,93 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Untrackable – Settings</title>
     <link rel="stylesheet" href="common.css" />
-    <style>
-      main {
-        max-width: 720px;
-        margin: 0 auto;
-        padding: 1.5rem 1rem 3rem;
-      }
-      h1 {
-        font-size: 1.4rem;
-        margin-bottom: 0.25rem;
-      }
-      section {
-        margin-top: 1.25rem;
-      }
-      ul.exceptions {
-        list-style: none;
-        padding: 0;
-        margin: 0.5rem 0 0;
-      }
-      ul.exceptions li {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.25rem 0;
-        border-bottom: 1px solid var(--border);
-      }
-      form.row input {
-        flex: 1 1 14rem;
-        width: auto;
-      }
-      #preview-output ul {
-        margin: 0.25rem 0 0;
-        padding-left: 1.2rem;
-      }
-    </style>
+    <link rel="stylesheet" href="options.css" />
   </head>
   <body>
-    <main>
-      <h1>Untrackable settings</h1>
-      <p class="muted">All processing happens locally in your browser. Untrackable stores only these settings.</p>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-logo" viewBox="0 0 24 24">
+        <rect width="24" height="24" rx="6" fill="currentColor" />
+        <g fill="none" stroke-width="2.2" stroke-linecap="round" style="stroke: var(--accent-fg)">
+          <path d="M5.5 12h6.5" />
+          <path d="M13.6 16.4 16.4 7.6" />
+          <path d="M18.6 12h0" stroke-opacity="0.55" />
+        </g>
+      </symbol>
+      <symbol id="i-warn" viewBox="0 0 24 24">
+        <path d="M10.3 3.9 2.4 17.6A2 2 0 0 0 4.1 20.6h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+        <path d="M12 9.5v4" />
+        <path d="M12 17h0" />
+      </symbol>
+    </svg>
 
-      <section>
-        <fieldset>
-          <legend>Cleaning</legend>
-          <label
-            ><input type="checkbox" id="enabled" />
-            <span>Clean links automatically <small>(off: Bypass – nothing is cleaned)</small></span></label
-          >
+    <header class="top">
+      <div class="top-inner">
+        <div class="brand">
+          <svg class="logo" aria-hidden="true"><use href="#i-logo" /></svg>
+          <h1>Untrackable <span class="muted">Settings</span></h1>
+        </div>
+        <p class="muted lead">Everything is processed in your browser. Nothing is sent anywhere.</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="card" aria-labelledby="h-cleaning">
+        <h2 id="h-cleaning">Cleaning</h2>
+        <label class="setting"
+          ><span
+            >Clean links automatically<small>Off: nothing is cleaned (Bypass) until you turn it back on.</small></span
+          ><input type="checkbox" class="switch" role="switch" id="enabled"
+        /></label>
+        <p class="muted fine" id="pause-status" role="status" aria-live="polite"></p>
+        <fieldset class="modes">
+          <legend class="subhead">Mode</legend>
           <div role="radiogroup" aria-label="Cleaning mode">
-            <label
+            <label class="mode"
               ><input type="radio" name="mode" value="clean" />
               <span
-                ><strong>Clean</strong> (recommended) – removes well-known trackers such as <code>utm_*</code>,
-                <code>fbclid</code>, <code>gclid</code>.</span
+                ><strong>Clean <span class="tag">Recommended</span></strong
+                ><small
+                  >Removes well-known trackers such as <code>utm_*</code>, <code>fbclid</code> and <code>gclid</code>.
+                  Every parameter it does not know is kept.</small
+                ></span
               ></label
             >
-            <label
+            <label class="mode"
               ><input type="radio" name="mode" value="strict" />
               <span
-                ><strong>Strict</strong> – additionally removes referral and analytics parameters (e.g.
-                <code>ref</code>, Amazon/Google/eBay specifics) and trackers in link fragments. May occasionally affect
-                a site.</span
+                ><strong>Strict</strong
+                ><small
+                  >Also removes referral and analytics parameters (e.g. <code>ref</code>, Amazon, Google and eBay
+                  specifics) and trackers in link fragments. May occasionally affect a site.</small
+                ></span
               ></label
             >
-            <label
+            <label class="mode"
               ><input type="radio" name="mode" value="experimental" />
               <span id="exp-desc"
-                ><strong>Experimental – strip query parameters</strong> – removes the whole query string
-                (<code>?…</code>) of the pages you open, known tracker or not (links you copy with Ctrl/Cmd+C get the
-                Strict rules). Links Untrackable recognises as sign-in, payment, signed or expiring are left unchanged.
-                Expect broken searches, filters and other site features.</span
+                ><strong>Experimental – strip query parameters</strong
+                ><small
+                  >Removes the whole query string (<code>?…</code>) of the pages you open, known tracker or not (links
+                  you copy with Ctrl/Cmd+C get the Strict rules). Links Untrackable recognises as sign-in, payment,
+                  signed or expiring are left unchanged. Expect broken searches, filters and other site features.</small
+                ></span
               ></label
             >
           </div>
-          <div
-            id="exp-confirm"
-            class="notice"
-            role="group"
-            aria-label="Confirm Experimental mode"
-            aria-describedby="exp-confirm-text"
-            hidden
-          >
+        </fieldset>
+        <div
+          id="exp-confirm"
+          class="banner"
+          role="group"
+          aria-label="Confirm Experimental mode"
+          aria-describedby="exp-confirm-text"
+          hidden
+        >
+          <svg class="icon" aria-hidden="true"><use href="#i-warn" /></svg>
+          <div class="body">
             <p id="exp-confirm-text">
               <strong>Experimental removes every query parameter</strong>, not only trackers. Searches, filters,
               shopping carts, sign-ins, payments and other site features may break. Untrackable leaves sign-in, payment
@@ -96,64 +100,117 @@
               <button type="button" id="exp-cancel">Cancel</button>
             </div>
           </div>
-          <div id="exp-active" class="notice row" hidden>
-            <span>Experimental is on: query parameters are removed and sites may break.</span>
-            <button type="button" id="exp-back">Back to Clean</button>
+        </div>
+        <div id="exp-active" class="banner" role="note" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#i-warn" /></svg>
+          <div class="body">
+            <p><strong>Experimental is on:</strong> query parameters are removed and sites may break.</p>
+            <div class="row"><button type="button" id="exp-back">Back to Clean</button></div>
           </div>
-          <label
-            ><input type="checkbox" id="copy-cleaning" />
-            <span
-              >Clean a link when I copy it from a web page
-              <small>(only when the selection is exactly one link)</small></span
-            ></label
-          >
-          <label
-            ><input type="checkbox" id="loop-recovery" />
-            <span
-              >Offer a one-click retry when a site keeps redirecting back to a tracking link
-              <small
-                >(asks for permission to see navigation errors; only “too many redirects” errors of the page are used,
-                nothing is stored permanently)</small
-              ></span
-            ></label
-          >
-          <p class="muted" id="pause-status" role="status" aria-live="polite"></p>
-        </fieldset>
+        </div>
       </section>
 
-      <section>
-        <fieldset>
-          <legend>Sites that are never cleaned</legend>
-          <p class="muted">Links to these sites and their subdomains are left untouched.</p>
-          <form class="row" id="add-exception">
-            <label for="exception-input" class="muted">Domain</label>
-            <input type="text" id="exception-input" placeholder="example.com" autocomplete="off" spellcheck="false" />
-            <button type="submit">Add</button>
-          </form>
-          <p id="exception-error" class="status off" role="alert"></p>
-          <ul class="exceptions" id="exceptions" aria-label="Exceptions"></ul>
-          <p class="muted" id="no-exceptions">No exceptions.</p>
-        </fieldset>
-      </section>
-
-      <section>
-        <fieldset>
-          <legend>Check a link</legend>
-          <p class="muted">
-            See exactly what Untrackable would change with your current settings. Nothing is sent anywhere.
-          </p>
-          <label for="preview-input" class="muted">Link</label>
-          <input type="url" id="preview-input" placeholder="https://example.com/?utm_source=…" spellcheck="false" />
-          <div id="preview-output" role="status" aria-live="polite"></div>
-          <div class="row">
-            <button type="button" id="open-unmodified" disabled>Open original link without cleaning</button>
+      <section class="card" aria-labelledby="h-stats" id="stats">
+        <h2 id="h-stats">Statistics</h2>
+        <label class="setting"
+          ><span
+            >Count removed parameters on this device<small
+              >Shows how many tracking parameters Untrackable removed – today, in the last 7 days and in total.</small
+            ></span
+          ><input type="checkbox" class="switch" role="switch" id="stats-enabled"
+        /></label>
+        <div id="stats-on" hidden>
+          <dl class="stat-grid">
+            <div>
+              <dt>Today</dt>
+              <dd id="stats-today">0</dd>
+            </div>
+            <div>
+              <dt>Last 7 days</dt>
+              <dd id="stats-week">0</dd>
+            </div>
+            <div>
+              <dt>Total</dt>
+              <dd id="stats-total">0</dd>
+            </div>
+          </dl>
+          <p id="stats-other" class="muted fine" hidden></p>
+          <div class="row stats-actions">
+            <button type="button" id="stats-reset">Reset numbers</button>
+            <span id="stats-reset-result" class="muted fine" role="status" aria-live="polite"></span>
           </div>
-        </fieldset>
+        </div>
+        <div id="stats-off" hidden></div>
+        <details class="explain">
+          <summary>What is counted and stored</summary>
+          <ul class="muted fine">
+            <li>
+              Only removals Untrackable can confirm: parameters it removed from pages you open (it compares the
+              requested and the sent address of each page load) and from links you copy with it.
+            </li>
+            <li>
+              Parameters left in place – protected links, your exceptions, while paused – are not counted. Removals the
+              browser does not report may be missed. If another extension removes the very same parameters first, its
+              removals can be counted too.
+            </li>
+            <li>
+              Stored on this device only: one number per day for the last 7 days and a total. No addresses, sites,
+              parameter names or times. Turning statistics off deletes them.
+            </li>
+            <li>
+              Needs the browser permission to observe page loads (“webRequest”). It is used read-only and only while
+              statistics are on; Untrackable never blocks or changes requests through it.
+            </li>
+          </ul>
+        </details>
       </section>
 
-      <section>
-        <h2>Good to know</h2>
-        <ul class="muted">
+      <section class="card" aria-labelledby="h-more">
+        <h2 id="h-more">Copying and recovery</h2>
+        <label class="setting"
+          ><span
+            >Clean a link when I copy it from a web page<small
+              >Only when the selection is exactly one link.</small
+            ></span
+          ><input type="checkbox" class="switch" role="switch" id="copy-cleaning"
+        /></label>
+        <label class="setting"
+          ><span
+            >Offer a one-click retry when a site keeps redirecting back to a tracking link<small
+              >Asks for permission to see navigation errors; only “too many redirects” errors of the page are used,
+              nothing is stored permanently.</small
+            ></span
+          ><input type="checkbox" class="switch" role="switch" id="loop-recovery"
+        /></label>
+      </section>
+
+      <section class="card" aria-labelledby="h-exceptions">
+        <h2 id="h-exceptions">Sites that are never cleaned</h2>
+        <p class="muted fine">Links to these sites and their subdomains are left untouched.</p>
+        <form class="add-row" id="add-exception">
+          <label for="exception-input" class="visually-hidden">Domain</label>
+          <input type="text" id="exception-input" placeholder="example.com" autocomplete="off" spellcheck="false" />
+          <button type="submit">Add</button>
+        </form>
+        <p id="exception-error" class="error" role="alert"></p>
+        <ul class="exceptions" id="exceptions" aria-label="Exceptions"></ul>
+        <p class="muted fine" id="no-exceptions">No exceptions yet.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-check">
+        <h2 id="h-check">Check a link</h2>
+        <p class="muted fine">See exactly what Untrackable would change with your current settings.</p>
+        <label for="preview-input" class="visually-hidden">Link</label>
+        <input type="url" id="preview-input" placeholder="https://example.com/?utm_source=…" spellcheck="false" />
+        <div id="preview-output" role="status" aria-live="polite"></div>
+        <div class="row">
+          <button type="button" id="open-unmodified" disabled>Open original link without cleaning</button>
+        </div>
+      </section>
+
+      <section class="card plain" aria-labelledby="h-know">
+        <h2 id="h-know">Good to know</h2>
+        <ul class="muted fine">
           <li>
             Sign-in, password-reset, payment and signed download links are detected heuristically and left unchanged. If
             a site still misbehaves, add it above or use “Open link without cleaning” in the link context menu.
