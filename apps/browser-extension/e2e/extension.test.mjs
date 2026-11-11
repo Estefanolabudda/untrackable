@@ -42,6 +42,8 @@ function origin(host) {
  * which is harmless; `visit` then normalises it. Detected at startup.
  */
 const browserInfo = { major: 0, emptyQuery: false };
+/** Chrome 116 leaves an empty '?'; current versions (verified: 153, 157) do not. */
+const LEGACY_EMPTY_QUERY_BEFORE = 120;
 let launderHits = 0;
 
 const PAGE = `<!doctype html><html><body>
@@ -255,6 +257,13 @@ before(async () => {
   browserInfo.emptyQuery = probe.url().endsWith('?');
   await probe.close();
   console.log(`# browser: Chrome ${browserInfo.major}, empty '?' after removal: ${browserInfo.emptyQuery}`);
+  // Tolerating the empty '?' (and skipping the simulator check) is only for
+  // old browsers known to behave so. On a current browser it is a regression
+  // that must fail the run, not silently relax it (found in review).
+  assert.ok(
+    !browserInfo.emptyQuery || browserInfo.major < LEGACY_EMPTY_QUERY_BEFORE,
+    `Chrome ${browserInfo.major} unexpectedly leaves an empty '?' after removing the last parameter`,
+  );
 });
 
 async function launchWith(extensionDir, profileDir) {

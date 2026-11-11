@@ -326,3 +326,21 @@ describe('safety property: navigation never changes what the engine protects', (
     });
   }
 });
+
+describe('Experimental host-label protection (navigation)', () => {
+  const rules = compileDnrRules({ mode: 'experimental', exceptions: [] });
+  it.each([
+    ['https://login.example.com/start?id=1', 'https://login.example.com/start?id=1'],
+    ['https://LOGIN.example.com:8443/start?id=1', 'https://login.example.com:8443/start?id=1'],
+    ['https://user:pw@login.example.com/?id=1', 'https://user:pw@login.example.com/?id=1'],
+    ['https://login.example.com?id=1', 'https://login.example.com/?id=1'],
+    // The label must be the real host's first label (engine cleans these).
+    ['https://login.x@news.example/?id=1', 'https://login.x@news.example/'],
+    ['https://login.x:pw@news.example/?id=1', 'https://login.x:pw@news.example/'],
+    ['https://login./?id=1', 'https://login./'],
+    ['https://shop.login.example/?id=1', 'https://shop.login.example/'],
+  ])('%s', (input, expected) => {
+    expect(simulate(rules, new URL(input).href)).toBe(expected);
+    expect(cleanUrl(input, { mode: 'experimental' }).url === input).toBe(new URL(input).href === expected);
+  });
+});

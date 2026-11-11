@@ -2354,6 +2354,46 @@
         "experimental": "preserved"
       },
       "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://login.x@news.example/?id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Host-label protection (Experimental) must apply to the real host only: userinfo or a single-label host must not trigger it (DNR and engine agree)."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://login.x:pw@news.example/?id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Host-label protection (Experimental) must apply to the real host only: userinfo or a single-label host must not trigger it (DNR and engine agree)."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://login./?id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Host-label protection (Experimental) must apply to the real host only: userinfo or a single-label host must not trigger it (DNR and engine agree)."
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://login.example.com.:8443/start?id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Host label with trailing dot and port."
     }
   ]
 }

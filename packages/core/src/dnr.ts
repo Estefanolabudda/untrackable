@@ -305,11 +305,14 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
   allow({ regexFilter: `^https?://[^/?#]*/[^?#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   allow({ regexFilter: `[?&#][^=&#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   // Spec signal `host:<label>` (Experimental only): sign-in/payment hosts such
-  // as login.example.com. Userinfo before the host is tolerated.
+  // as login.example.com. Userinfo before the host is tolerated; the rest of
+  // the host must follow (no empty label, no '@' later), so neither
+  // `login.x@evil.example` nor the single-label host `login.` is matched –
+  // the engine cleans both (found in review).
   if (experimental) {
     for (const group of chunkWords(p.experimentalHostLabels ?? [])) {
       allow({
-        regexFilter: `^https?://(?:[^/?#@]*@)?(?:${group.map(escapeRe2).join('|')})\\.`,
+        regexFilter: `^https?://(?:[^/?#@]*@)?(?:${group.map(escapeRe2).join('|')})\\.[^./?#@:][^/?#@:]*(?::[0-9]*)?(?:[/?#]|$)`,
         isUrlFilterCaseSensitive: false,
       });
     }

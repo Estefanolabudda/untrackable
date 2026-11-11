@@ -654,15 +654,37 @@ function createMenus(): void {
  */
 const LIFECYCLE_KEY = 'lifecycleVersion';
 
-async function refreshForThisVersion(): Promise<void> {
-  createMenus();
-  await migrateStoredSettings().catch(() => {});
-  await chrome.storage.session.set({ [LIFECYCLE_KEY]: chrome.runtime.getManifest().version });
-  await applyRules();
+/**
+ * At most one refresh at a time: on install, update and browser start the
+ * top-level check and onInstalled/onStartup fire together, and two concurrent
+ * runs would interleave `contextMenus.removeAll`/`create` (found in review).
+ */
+let refreshing: Promise<void> | undefined;
+
+function refreshForThisVersion(): Promise<void> {
+  refreshing ??= (async () => {
+    createMenus();
+    // The marker is only set after a successful migration, so a failed one is
+    // retried on the next service-worker start (found in review).
+    const migrated = await migrateStoredSettings().then(
+      () => true,
+      () => false,
+    );
+    if (migrated) await chrome.storage.session.set({ [LIFECYCLE_KEY]: chrome.runtime.getManifest().version });
+    await applyRules();
+  })()
+    .catch(() => {})
+    .finally(() => {
+      refreshing = undefined;
+    });
+  return refreshing;
 }
 
 async function refreshIfNeeded(): Promise<void> {
-  const done = (await chrome.storage.session.get(LIFECYCLE_KEY))[LIFECYCLE_KEY];
+  const done = await chrome.storage.session.get(LIFECYCLE_KEY).then(
+    (r) => r[LIFECYCLE_KEY],
+    () => undefined,
+  );
   if (done !== chrome.runtime.getManifest().version) await refreshForThisVersion();
 }
 
