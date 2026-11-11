@@ -30,6 +30,10 @@
 * {
   box-sizing: border-box;
 }
+/* Author display rules (e.g. .row { display: flex }) must not un-hide [hidden] elements. */
+[hidden] {
+  display: none !important;
+}
 body {
   margin: 0;
   background: var(--bg);

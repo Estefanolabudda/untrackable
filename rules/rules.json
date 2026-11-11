@@ -419,7 +419,10 @@
       "access_code",
       "activation_code",
       "login_code",
-      "security_code"
+      "security_code",
+      "login_hint",
+      "id_token_hint",
+      "domain_hint"
     ],
     "paramPrefixes": ["x-amz-", "x-goog-", "oauth_", "openid.", "saml", "__cf_chl"],
     "paramSuffixes": ["token", "signature"],

@@ -283,16 +283,22 @@ const LOOP_PURGE_ALARM = 'untrackable-loop-purge';
 const LOOP_RETRY_WINDOW_MS = 60_000;
 const LOOP_OFFER_TTL_MS = 10 * 60_000;
 
-type LoopOffers = Record<string, { host: string; at: number }>;
+/**
+ * notOurs: the page failed again after a reload without cleaning its host –
+ * probably not caused by Untrackable. Only "probably": the reload bypass is
+ * limited to that host, so a loop through another (still cleaned) host can
+ * look the same (found in review); the popup points to "Pause in this tab".
+ */
+type LoopOffers = Record<string, { host: string; at: number; notOurs?: boolean }>;
 
 async function readLoopOffers(): Promise<LoopOffers> {
   const raw = (await chrome.storage.session.get(LOOP_OFFER_KEY))[LOOP_OFFER_KEY];
   const out: LoopOffers = {};
   if (typeof raw === 'object' && raw !== null) {
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      const o = v as { host?: unknown; at?: unknown };
+      const o = v as { host?: unknown; at?: unknown; notOurs?: unknown };
       if (typeof o?.host === 'string' && typeof o.at === 'number' && Date.now() - o.at < LOOP_OFFER_TTL_MS) {
-        out[k] = { host: o.host, at: o.at };
+        out[k] = o.notOurs === true ? { host: o.host, at: o.at, notOurs: true } : { host: o.host, at: o.at };
       }
     }
   }
@@ -300,12 +306,14 @@ async function readLoopOffers(): Promise<LoopOffers> {
 }
 
 /** Replace the offer for `tabId` (undefined removes it); also prunes expired offers. */
-function setLoopOffer(tabId: number, host: string | undefined): Promise<void> {
+function setLoopOffer(tabId: number, host: string | undefined, notOurs = false): Promise<void> {
   return serialised(async () => {
     const offers = Object.fromEntries(
       Object.entries(await readLoopOffers()).filter(([k]) => k !== String(tabId)),
     ) as LoopOffers;
-    if (host !== undefined) offers[String(tabId)] = { host, at: Date.now() };
+    if (host !== undefined) {
+      offers[String(tabId)] = notOurs ? { host, at: Date.now(), notOurs: true } : { host, at: Date.now() };
+    }
     await chrome.storage.session.set({ [LOOP_OFFER_KEY]: offers });
     await chrome.alarms.clear(LOOP_PURGE_ALARM);
     if (Object.keys(offers).length > 0) {
@@ -318,7 +326,12 @@ function setLoopOffer(tabId: number, host: string | undefined): Promise<void> {
       .catch(() => {});
     if (host !== undefined) {
       await chrome.action
-        .setTitle({ tabId, title: 'Untrackable – this page failed with too many redirects. Open for options.' })
+        .setTitle({
+          tabId,
+          title: notOurs
+            ? 'Untrackable – this page still fails with cleaning off for this site; the loop is probably not caused by Untrackable.'
+            : 'Untrackable – this page failed with too many redirects. Open for options.',
+        })
         .catch(() => {});
     }
   });
@@ -337,22 +350,53 @@ async function loopOfferHost(tabId: number): Promise<string | undefined> {
   return (await readLoopOffers())[String(tabId)]?.host;
 }
 
+async function loopOffer(tabId: number): Promise<LoopOffers[string] | undefined> {
+  return (await readLoopOffers())[String(tabId)];
+}
+
 /** Atomically claim the single retry for this tab. Returns false if one happened recently. */
-function claimLoopRetry(tabId: number): Promise<boolean> {
+function claimLoopRetry(tabId: number, host: string): Promise<boolean> {
   return serialised(async () => {
     const now = Date.now();
     const raw = (await chrome.storage.session.get(LOOP_RETRY_KEY))[LOOP_RETRY_KEY];
-    const retries: Record<string, number> = {};
-    if (typeof raw === 'object' && raw !== null) {
-      for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-        if (typeof v === 'number' && now - v < LOOP_RETRY_WINDOW_MS) retries[k] = v; // prune old entries
-      }
-    }
+    const retries = pruneRetries(raw, now);
     const claimed = retries[String(tabId)] === undefined;
-    if (claimed) retries[String(tabId)] = now;
+    if (claimed) retries[String(tabId)] = { at: now, host };
     await chrome.storage.session.set({ [LOOP_RETRY_KEY]: retries });
     return claimed;
   });
+}
+
+type LoopRetries = Record<string, { at: number; host: string }>;
+
+function pruneRetries(raw: unknown, now: number): LoopRetries {
+  const retries: LoopRetries = {};
+  if (typeof raw === 'object' && raw !== null) {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const r = v as { at?: unknown; host?: unknown };
+      if (typeof r?.at === 'number' && typeof r.host === 'string' && now - r.at < LOOP_RETRY_WINDOW_MS) {
+        retries[k] = { at: r.at, host: r.host };
+      }
+    }
+  }
+  return retries;
+}
+
+/** Forget the tab's retry once a top-level page loaded: a later loop is a new event (found in review). */
+function clearLoopRetry(tabId: number): Promise<void> {
+  return serialised(async () => {
+    const raw = (await chrome.storage.session.get(LOOP_RETRY_KEY))[LOOP_RETRY_KEY];
+    const retries = pruneRetries(raw, Date.now());
+    if (retries[String(tabId)] === undefined) return;
+    const rest = Object.fromEntries(Object.entries(retries).filter(([k]) => k !== String(tabId)));
+    await chrome.storage.session.set({ [LOOP_RETRY_KEY]: rest });
+  });
+}
+
+/** Host of a reload without cleaning in this tab within the retry window, if any. */
+async function recentRetryHost(tabId: number): Promise<string | undefined> {
+  const raw = (await chrome.storage.session.get(LOOP_RETRY_KEY))[LOOP_RETRY_KEY];
+  return pruneRetries(raw, Date.now())[String(tabId)]?.host;
 }
 
 /** Explicit user action from the popup: reload the failed page once without cleaning its host. */
@@ -360,7 +404,7 @@ async function retryLoopWithoutCleaning(tabId: number): Promise<boolean> {
   const host = await loopOfferHost(tabId);
   if (host === undefined) return false;
   await setLoopOffer(tabId, undefined);
-  if (!(await claimLoopRetry(tabId))) return false;
+  if (!(await claimLoopRetry(tabId, host))) return false;
   await serialised(() => setTabRule(tabId, 'once', true, host.startsWith('[') ? undefined : [host]));
   await chrome.alarms.create(ONCE_ALARM_PREFIX + tabId, { delayInMinutes: ONCE_TIMEOUT_MINUTES });
   await chrome.tabs.reload(tabId);
@@ -380,7 +424,11 @@ async function onRedirectLoop(tabId: number, url: string): Promise<void> {
   } catch {
     return;
   }
-  if (host !== '') await setLoopOffer(tabId, host);
+  if (host === '') return;
+  // Failing again right after a reload without cleaning on the same host means
+  // the loop is not caused by Untrackable – say so instead of blaming cleaning.
+  const notOurs = (await recentRetryHost(tabId)) === host;
+  await setLoopOffer(tabId, host, notOurs);
 }
 
 function onNavigationError(details: { tabId: number; frameId: number; url: string; error: string }): void {
@@ -390,8 +438,9 @@ function onNavigationError(details: { tabId: number; frameId: number; url: strin
 
 function onNavigationCommitted(details: { tabId: number; frameId: number }): void {
   if (details.frameId !== 0 || details.tabId < 0) return;
-  // A successful top-level load supersedes any pending offer for this tab.
+  // A successful top-level load supersedes any pending offer and retry for this tab.
   void loopOfferHost(details.tabId).then((h) => (h === undefined ? undefined : setLoopOffer(details.tabId, undefined)));
+  void clearLoopRetry(details.tabId);
 }
 
 function registerLoopRecovery(): void {
@@ -590,16 +639,18 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     // Content scripts may only ask about their own tab.
     const tabId = fromContentScript ? sender.tab?.id : (message.tabId ?? sender.tab?.id);
     if (tabId === undefined) return false;
-    void Promise.all([tabRules(tabId), fromContentScript ? undefined : loopOfferHost(tabId)]).then(
-      ([rules, loopHost]) => {
-        const state: TabState = {
-          paused: rules.length > 0,
-          pausedByUser: rules.some((r) => kindOf(r.id) === 'pause'),
-        };
-        if (loopHost !== undefined) state.loopHost = loopHost; // extension pages only
-        sendResponse(state);
-      },
-    );
+    void Promise.all([tabRules(tabId), fromContentScript ? undefined : loopOffer(tabId)]).then(([rules, offer]) => {
+      const state: TabState = {
+        paused: rules.length > 0,
+        pausedByUser: rules.some((r) => kindOf(r.id) === 'pause'),
+      };
+      if (offer !== undefined) {
+        // extension pages only
+        state.loopHost = offer.host;
+        if (offer.notOurs === true) state.loopNotOurs = true;
+      }
+      sendResponse(state);
+    });
     return true;
   }
   if (message.type === 'copied') {

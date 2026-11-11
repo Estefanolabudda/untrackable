@@ -8,7 +8,7 @@ All notable changes are documented here. The format follows
 
 Nothing yet.
 
-## [0.1.0] – 2026-11-10
+## [0.1.0] – 2026-11-11
 
 First release. Chromium extension (Phase 1) and reusable cleaning engines.
 
@@ -21,7 +21,7 @@ First release. Chromium extension (Phase 1) and reusable cleaning engines.
   verification, invitations, unsubscribe/preference centres, signed and
   expiring downloads (S3, GCS, Azure, CloudFront, Akamai) and payment pages.
 - **Engines:** TypeScript engine (extension) and Rust engine (future desktop
-  app, CLI example) with 150 shared conformance fixtures, property-based tests
+  app, CLI example) with 157 shared conformance fixtures, property-based tests
   and a differential test that requires identical results on >50,000 URLs
   generated from the rule file.
 - **Chromium MV3 extension:**
@@ -64,6 +64,26 @@ First release. Chromium extension (Phase 1) and reusable cleaning engines.
   disables redirects instead of cleaning unprotected.
 - Message authorisation by extension origin; offscreen clipboard writer only
   accepts the service worker; no network requests, telemetry or URL logging.
+
+### Fixed before release (maintainer test, 2026-11-11)
+
+- A ChatGPT e-mail deep link (`…/images?…&auth_modal=1&login_hint=…&utm_*`)
+  could end in "too many redirects": such links start a sign-in flow, and a
+  site that restores the original URL after sign-in loops if parameters are
+  stripped. URLs carrying the OpenID Connect hints `login_hint`,
+  `id_token_hint` or `domain_hint` are now protected (left unchanged).
+- The redirect-loop helper no longer blames tracker cleaning when the page
+  also fails after "Reload once without cleaning"; it says the loop is
+  probably not caused by Untrackable and points to "Pause in this tab".
+- The popup no longer shows the redirect-loop notice ("failed with too many
+  redirects" and its reload button) when there was no loop: a layout rule
+  overrode the `hidden` attribute.
+- Checked on report: `email_id` on `support.stripe.com` is intentionally kept
+  (also in Strict). Its observable use is Stripe's own analytics (passed to
+  the support widget, recorded via an analytics allowlist), but removing it is
+  not shown to be harmless for logged-in support flows. A Strict rule limited
+  to `support.stripe.com` is described in `docs/architecture/overview.md`,
+  pending a logged-in test.
 
 ### Known limitations
 

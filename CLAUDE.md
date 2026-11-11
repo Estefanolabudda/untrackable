@@ -44,10 +44,11 @@ to 1.63.0 to match it.
 - Rule files: both engines validate strictly (unknown fields rejected); `npm run test:conformance` also checks validation parity.
 - npm dependencies pinned exactly; Rust dependencies use semver ranges locked by `Cargo.lock` (CI uses `--locked`); GitHub Actions pinned by SHA.
 
-## Status (v0.1.0 released on GitHub)
+## Status (v0.1.0 release candidate, not yet published)
 
-Phase 1 (Chromium extension) released as v0.1.0 (GitHub release with ZIP;
-PR #1 merged).
+Phase 1 (Chromium extension) merged to `main` (PR #1, release workflow PR #4).
+No tag/release yet: the session cannot push tags (403); the maintainer pushes
+the annotated tag and `.github/workflows/release.yml` publishes the release.
 Release readiness, open items and manual test plan: `docs/release/`.
 Phase 2 (desktop) and Phase 3 not started – see `docs/roadmap/roadmap.md`.
 Not published to any store – Chrome Web Store submission and future releases need maintainer approval.

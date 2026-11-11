@@ -80,6 +80,11 @@ async function init(): Promise<void> {
     // Only offer the reload for the page that actually failed.
     if (state?.loopHost !== undefined && state.loopHost === host) {
       loopHostEl.textContent = state.loopHost;
+      if (state.loopNotOurs === true) {
+        $('loop-text').textContent =
+          'still fails with cleaning turned off for this site – the loop is probably not caused by Untrackable. If it involves another site, use “Pause in this tab” and reload; otherwise try again later or contact the site.';
+        loopRetry.hidden = true;
+      }
       loopSection.hidden = false;
     }
   }

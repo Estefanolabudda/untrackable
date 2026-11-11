@@ -1043,6 +1043,58 @@
       "expected": "https://api.github.com/repos/o/r/contents/README.md?ref=dev",
       "status": "protected",
       "reason": "domain:api.github.com"
+    },
+    {
+      "name": "email link carrying an OIDC login_hint is protected (OpenAI-style auth deep link)",
+      "input": "https://chatgpt.example/images?entry_id=11111111-2222-3333-4444-555555555555&deep_link_id=66666666-7777-8888-9999-000000000000&auth_modal=1&login_hint=user%40example.com&utm_campaign=EML_FE_NTF_CN_Images5_REC_EX&utm_medium=email&utm_source=sendgrid",
+      "mode": "strict",
+      "expected": "https://chatgpt.example/images?entry_id=11111111-2222-3333-4444-555555555555&deep_link_id=66666666-7777-8888-9999-000000000000&auth_modal=1&login_hint=user%40example.com&utm_campaign=EML_FE_NTF_CN_Images5_REC_EX&utm_medium=email&utm_source=sendgrid",
+      "status": "protected",
+      "reason": "param:login_hint"
+    },
+    {
+      "name": "same deep link without login_hint is cleaned and keeps functional ids",
+      "input": "https://chatgpt.example/images?entry_id=11111111-2222-3333-4444-555555555555&deep_link_id=66666666-7777-8888-9999-000000000000&utm_campaign=EML_FE_NTF_CN_Images5_REC_EX&utm_medium=email&utm_source=sendgrid",
+      "mode": "strict",
+      "expected": "https://chatgpt.example/images?entry_id=11111111-2222-3333-4444-555555555555&deep_link_id=66666666-7777-8888-9999-000000000000",
+      "status": "cleaned",
+      "removed": ["utm_campaign", "utm_medium", "utm_source"]
+    },
+    {
+      "name": "Microsoft domain_hint is protected",
+      "input": "https://portal.example.com/start?domain_hint=contoso.com&utm_source=x",
+      "expected": "https://portal.example.com/start?domain_hint=contoso.com&utm_source=x",
+      "status": "protected",
+      "reason": "param:domain_hint"
+    },
+    {
+      "name": "OIDC id_token_hint is protected",
+      "input": "https://idp.example.com/session/end?id_token_hint=eyJ&utm_source=x",
+      "expected": "https://idp.example.com/session/end?id_token_hint=eyJ&utm_source=x",
+      "status": "protected",
+      "reason": "param:id_token_hint"
+    },
+    {
+      "name": "Stripe support email_id is kept in strict mode (feeds the support conversation widget)",
+      "input": "https://support.stripe.com/questions/example?email_id=abc123&utm_source=email&utm_medium=support",
+      "mode": "strict",
+      "expected": "https://support.stripe.com/questions/example?email_id=abc123",
+      "status": "cleaned",
+      "removed": ["utm_source", "utm_medium"]
+    },
+    {
+      "name": "Stripe support email_id is kept in clean mode",
+      "input": "https://support.stripe.com/?email_id=abc123&utm_campaign=x",
+      "expected": "https://support.stripe.com/?email_id=abc123",
+      "status": "cleaned",
+      "removed": ["utm_campaign"]
+    },
+    {
+      "name": "Stripe support e-mail link with em_ id is left unchanged in strict mode (unknown parameter)",
+      "input": "https://support.stripe.com/?email_id=em_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mode": "strict",
+      "expected": "https://support.stripe.com/?email_id=em_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "unchanged"
     }
   ]
 }

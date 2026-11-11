@@ -122,6 +122,32 @@ before(async () => {
         return;
       }
     }
+    // Replica of a real OpenAI e-mail link (2026-11): SendGrid click tracker ->
+    // chatgpt.com/images?...&login_hint=...&utm_* -> 301 trailing slash -> 200.
+    if (req.url.startsWith('/ls/click')) {
+      const q =
+        'entry_id=11111111-2222&deep_link_id=33333333-4444&auth_modal=1&login_hint=user%40example.com' +
+        '&utm_campaign=EML_FE_NTF_CN_Images5_REC_EX&utm_medium=email&utm_source=sendgrid';
+      res.writeHead(302, { location: `http://chatgpt.test:${port}/images?${q}` });
+      res.end();
+      return;
+    }
+    if (req.url.startsWith('/images?')) {
+      res.writeHead(301, { location: req.url.replace('/images?', '/images/?') });
+      res.end();
+      return;
+    }
+    // A site whose sign-in round trip restores the full original URL (incl.
+    // utm_*) whenever the request differs from it – a loop if anything strips
+    // parameters from such auth deep links.
+    if (req.url.startsWith('/deeplink')) {
+      const full = '/deeplink?auth_modal=1&login_hint=user%40example.com&utm_source=sendgrid&utm_medium=email';
+      if (req.url !== full) {
+        res.writeHead(302, { location: full });
+        res.end();
+        return;
+      }
+    }
     // A broken server that loops no matter what (must not cause endless retries).
     if (req.url.startsWith('/selfloop')) {
       selfLoopHits++;
@@ -850,6 +876,17 @@ describe('popup for a real tab', () => {
     return { popup, tabId };
   }
 
+  test('popup shows no redirect-loop notice without a loop (regression: [hidden] overridden by CSS)', async () => {
+    const target = await context.newPage();
+    await target.goto(`http://news.test:${port}/fine`);
+    const { popup } = await popupFor(target);
+    await popup.waitForTimeout(300);
+    assert.equal(await popup.isVisible('#loop-section'), false);
+    assert.equal(await popup.isVisible('#loop-retry'), false);
+    await popup.close();
+    await target.close();
+  });
+
   test('site exception toggle adds and removes only the exact host', async () => {
     await setSettings({ exceptions: ['news.test'] });
     const target = await context.newPage();
@@ -939,6 +976,45 @@ describe('user interface', () => {
   });
 });
 
+describe('e-mail deep links (regression: OpenAI "too many redirects" report)', () => {
+  for (const mode of ['clean', 'strict']) {
+    test(`tracker -> deep link with login_hint -> trailing-slash redirect loads (${mode})`, async () => {
+      await setSettings({ mode });
+      const page = await context.newPage();
+      await page.goto(`http://r.openai.test:${port}/ls/click?upn=u001.abc`);
+      assert.match(page.url(), /^http:\/\/chatgpt\.test:\d+\/images\/\?/);
+      // OIDC login_hint => protected: the deep link reaches the site unchanged.
+      assert.ok(page.url().includes('login_hint=user%40example.com'));
+      assert.ok(page.url().includes('entry_id=11111111-2222&deep_link_id=33333333-4444&auth_modal=1'));
+      assert.ok(page.url().includes('utm_source=sendgrid'), 'protected auth deep link is not modified');
+      await page.close();
+    });
+
+    test(`auth round trip that restores the original URL does not loop (${mode})`, async () => {
+      await setSettings({ mode });
+      const page = await context.newPage();
+      seen.length = 0;
+      await page.goto(
+        `http://chatgpt.test:${port}/deeplink?auth_modal=1&login_hint=user%40example.com&utm_source=sendgrid&utm_medium=email`,
+      );
+      assert.match(page.url(), /\/deeplink\?auth_modal=1&login_hint=/);
+      assert.ok(seen.filter((u) => u.startsWith('/deeplink')).length <= 2, `no loop: ${seen.length} requests`);
+      await page.close();
+    });
+  }
+
+  test('without the login_hint signal the same e-mail deep link is cleaned and keeps its ids', async () => {
+    await setSettings({ mode: 'strict' });
+    assert.equal(
+      await visit(
+        '/images/?entry_id=1&deep_link_id=2&utm_campaign=EML_X&utm_medium=email&utm_source=sendgrid',
+        'chatgpt.test',
+      ),
+      '/images/?entry_id=1&deep_link_id=2',
+    );
+  });
+});
+
 describe('redirect loops', () => {
   test('without the optional permission a forced tracker loop fails as documented', async () => {
     const page = await context.newPage();
@@ -963,7 +1039,11 @@ describe('redirect loops', () => {
     const offerFor = (tabId) =>
       second.sw.evaluate(async (id) => {
         const offers = (await chrome.storage.session.get('loopOffers')).loopOffers ?? {};
-        return { offered: id in offers, badge: await chrome.action.getBadgeText({ tabId: id }) };
+        return {
+          offered: id in offers,
+          notOurs: offers[id]?.notOurs === true,
+          badge: await chrome.action.getBadgeText({ tabId: id }),
+        };
       }, tabId);
     const retry = async (tabId) => {
       const ext = await second.context.newPage();
@@ -1012,6 +1092,15 @@ describe('redirect loops', () => {
         async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,
         'bypass removed',
       );
+      // A successful load ends the retry window: a later loop is a new event, not "not ours".
+      await waitFor(
+        async () =>
+          !(
+            String(tabId) in
+            ((await second.sw.evaluate(() => chrome.storage.session.get('loopRetries'))).loopRetries ?? {})
+          ),
+        'retry forgotten after successful load',
+      );
       await page.goto(`http://news.test:${port}/after-loop?utm_source=x`);
       assert.match(page.url(), /\/after-loop$/);
 
@@ -1022,6 +1111,22 @@ describe('redirect loops', () => {
       await waitFor(async () => (await offerFor(selfTab)).offered, 'offer');
       assert.equal(await retry(selfTab), true);
       await waitFor(async () => (await offerFor(selfTab)).offered, 'offered again after failed retry', 10_000);
+      // It also failed without cleaning: Untrackable must not blame itself.
+      assert.equal((await offerFor(selfTab)).notOurs, true, 'loop classified as not caused by Untrackable');
+      // The popup says so (carefully) and offers no second reload.
+      const loopPopup = await second.context.newPage();
+      await loopPopup.addInitScript(
+        ({ id, url }) => {
+          const original = chrome.tabs.query.bind(chrome.tabs);
+          chrome.tabs.query = (q) => (q && q.active ? Promise.resolve([{ id, url, index: 0 }]) : original(q));
+        },
+        { id: selfTab, url: `http://news.test:${port}/selfloop` },
+      );
+      await loopPopup.goto(`chrome-extension://${extId}/popup.html`);
+      await loopPopup.waitForSelector('#loop-section:not([hidden])');
+      assert.match(await loopPopup.textContent('#loop-text'), /probably not caused by Untrackable/);
+      assert.equal(await loopPopup.isHidden('#loop-retry'), true, 'no second reload offered');
+      await loopPopup.close();
       assert.equal(await retry(selfTab), false, 'only one retry per tab per minute');
       // A stale offer disappears once the tab successfully loads something else.
       await waitFor(async () => (await offerFor(selfTab)).offered, 'offer present again', 10_000).catch(() => {});
