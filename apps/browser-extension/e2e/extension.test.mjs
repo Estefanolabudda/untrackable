@@ -273,6 +273,8 @@ async function launchWith(extensionDir, profileDir) {
       '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable',
       // Self-signed certificate of the local https test server (HSTS hosts).
       '--ignore-certificate-errors',
+      // All test traffic is local; never use a proxy from the environment.
+      '--no-proxy-server',
     ],
   };
   if (process.env.CHROMIUM_PATH) launch.executablePath = process.env.CHROMIUM_PATH;
@@ -871,6 +873,7 @@ describe('upgrades from published releases', () => {
         '--enable-unsafe-extension-debugging',
         '--host-resolver-rules=MAP * 127.0.0.1',
         '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable',
+        '--no-proxy-server',
         'about:blank',
       ],
       { stdio: 'ignore' },
