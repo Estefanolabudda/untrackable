@@ -477,6 +477,15 @@ describe('Experimental mode (strip query parameters)', () => {
     });
   }
 
+  test('sign-in and payment hosts keep their query (host label signal)', async () => {
+    await setSettings({ mode: 'experimental' });
+    assert.equal(await visit('/x?y=1', 'login.example.test'), '/x?y=1');
+    assert.equal(await visit('/start?x=1', 'secure.bank.test'), '/start?x=1');
+    assert.equal(await visit('/x?y=1', 'www.login.test'), '/x', 'only the first label counts');
+    await setSettings({ mode: 'clean' });
+    assert.equal(await visit('/x?y=1&utm_source=z', 'login.example.test'), '/x?y=1', 'Clean is unaffected');
+  });
+
   test('domain exceptions, global off, timed pause and tab pause still apply', async () => {
     await setSettings({ mode: 'experimental', exceptions: ['news.test'] });
     assert.equal(await visit('/a?id=1', 'eu.news.test'), '/a?id=1');

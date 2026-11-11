@@ -81,6 +81,11 @@ pub struct Protection {
     /// common to protect in clean/strict mode, where unknown keys are kept anyway.
     #[serde(default)]
     pub experimental_params: Vec<String>,
+    /// First host labels (e.g. `login`) that protect a URL in
+    /// [`Mode::Experimental`](crate::Mode::Experimental) only (optional,
+    /// default empty; `null` is rejected).
+    #[serde(default)]
+    pub experimental_host_labels: Vec<String>,
 }
 
 /// The complete rule set. Top-level keys are exactly `schemaVersion`, `rules`
@@ -180,6 +185,10 @@ impl RuleSet {
         check(
             "protection.experimentalParams".into(),
             &p.experimental_params,
+        )?;
+        check(
+            "protection.experimentalHostLabels".into(),
+            &p.experimental_host_labels,
         )?;
         Ok(())
     }

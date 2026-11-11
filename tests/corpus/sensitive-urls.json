@@ -52,7 +52,7 @@
       "expect": {
         "clean": "preserved",
         "strict": "preserved",
-        "experimental": "changed"
+        "experimental": "preserved"
       }
     },
     {
@@ -79,7 +79,7 @@
       "expect": {
         "clean": "preserved",
         "strict": "preserved",
-        "experimental": "changed"
+        "experimental": "preserved"
       }
     },
     {
@@ -88,7 +88,7 @@
       "expect": {
         "clean": "preserved",
         "strict": "preserved",
-        "experimental": "changed"
+        "experimental": "preserved"
       }
     },
     {
@@ -1420,7 +1420,7 @@
       "expect": {
         "clean": "preserved",
         "strict": "preserved",
-        "experimental": "changed"
+        "experimental": "preserved"
       }
     },
     {
@@ -1456,7 +1456,7 @@
       "expect": {
         "clean": "preserved",
         "strict": "preserved",
-        "experimental": "changed"
+        "experimental": "preserved"
       }
     },
     {
@@ -1483,7 +1483,7 @@
       "expect": {
         "clean": "preserved",
         "strict": "preserved",
-        "experimental": "changed"
+        "experimental": "preserved"
       }
     },
     {
@@ -2041,7 +2041,7 @@
       "expect": {
         "clean": "preserved",
         "strict": "preserved",
-        "experimental": "changed"
+        "experimental": "preserved"
       },
       "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
     },
@@ -2321,7 +2321,7 @@
       "expect": {
         "clean": "preserved",
         "strict": "preserved",
-        "experimental": "changed"
+        "experimental": "preserved"
       },
       "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
     },

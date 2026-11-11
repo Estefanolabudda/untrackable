@@ -304,6 +304,16 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
   const encodedWordChar = '%(?:[46][1-9a-f]|[57][0-9a]|2[def]|3[0-9]|5f)';
   allow({ regexFilter: `^https?://[^/?#]*/[^?#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   allow({ regexFilter: `[?&#][^=&#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
+  // Spec signal `host:<label>` (Experimental only): sign-in/payment hosts such
+  // as login.example.com. Userinfo before the host is tolerated.
+  if (experimental) {
+    for (const group of chunkWords(p.experimentalHostLabels ?? [])) {
+      allow({
+        regexFilter: `^https?://(?:[^/?#@]*@)?(?:${group.map(escapeRe2).join('|')})\\.`,
+        isUrlFilterCaseSensitive: false,
+      });
+    }
+  }
   // Spec signal `value:url` (Experimental only): a value that is an http(s) URL.
   if (experimental) {
     allow({ regexFilter: '[?&#][^=&#]*=https?(?::|%3a)(?:/|%2f)(?:/|%2f)', isUrlFilterCaseSensitive: false });

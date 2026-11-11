@@ -86,6 +86,9 @@ const neutralKeys = [
 ];
 const hostsBase = [
   'example.com',
+  'login.example.com',
+  'id.example.de',
+  'Secure.Bank.example',
   'shop.example',
   'news.example.org',
   'bücher.example',
@@ -273,6 +276,7 @@ const mutations = [
       'paramSuffixes',
       'paramCombinations',
       'experimentalParams',
+      'experimentalHostLabels',
     ]);
     rs.protection = Object.fromEntries(Object.entries(rs.protection).filter(([k]) => k !== key));
   },
@@ -281,6 +285,8 @@ const mutations = [
   (rs) => (rs.protection.experimentalParams = 'code'),
   (rs) => (rs.protection.experimentalParams ??= []).push('UPPER'),
   (rs) => (rs.protection.experimentalParams ??= []).push(''),
+  (rs) => (rs.protection.experimentalHostLabels = null),
+  (rs) => (rs.protection.experimentalHostLabels ??= []).push('Login'),
   (rs) => (rs.schemaVersion = 2),
   (rs) => (rs.rules = {}),
   () => {},

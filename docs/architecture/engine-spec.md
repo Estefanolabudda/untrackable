@@ -167,6 +167,10 @@ A URL is protected (never modified) if any of the following holds. The `reason`
 string is the first signal found, in this order:
 
 1. `domain:<d>` – host domain-matches `protection.domains`.
+   In `experimental` mode only: `host:<label>` – the host has at least two
+   labels and its first label equals a `protection.experimentalHostLabels`
+   entry (e.g. `login.example.com`, `id.bund.de`). Hosts dedicated to
+   sign-in or payment nearly always need their query.
 2. `path:<kw>` – the percent-decoded (fallback: raw), ASCII-lower-cased
    pathname matches `(^|[/_.-])(kw)($|[/_.0-9-])` for some `kw` in
    `protection.pathKeywords` (keywords are regex-escaped; first keyword in
@@ -216,7 +220,8 @@ compiles `rules.json` + settings into declarativeNetRequest rules
 - `experimental` compiles to a single `redirect` with
   `transform: { query: "" }` for `GET` main-frame requests whose query has a
   non-empty segment (`regexFilter` `^[^?#]*\?[^#]*[^&#]`), below the same
-  protection, `experimentalParams`, `value:url` and exception `allow` rules. The tracker
+  protection, `experimentalHostLabels`, `experimentalParams`, `value:url`
+  and exception `allow` rules. The tracker
   rules are not installed in this mode.
 
 See `docs/architecture/overview.md` for details.

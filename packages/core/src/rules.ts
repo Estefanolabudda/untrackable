@@ -29,6 +29,11 @@ export interface ProtectionRules {
    * default empty). Functional names too common to protect in Clean/Strict.
    */
   readonly experimentalParams?: readonly string[];
+  /**
+   * First host labels (e.g. `login`) that protect a URL in experimental mode
+   * only (optional, default empty).
+   */
+  readonly experimentalHostLabels?: readonly string[];
 }
 
 export interface RuleSet {
@@ -105,6 +110,7 @@ export function validateRuleSet(value: unknown): RuleSet {
       'paramSuffixes',
       'paramCombinations',
       'experimentalParams',
+      'experimentalHostLabels',
     ],
     'protection',
   );
@@ -124,6 +130,9 @@ export function validateRuleSet(value: unknown): RuleSet {
   if (p.experimentalParams !== undefined && !isStringArray(p.experimentalParams)) {
     throw new Error('protection.experimentalParams must be a string array');
   }
+  if (p.experimentalHostLabels !== undefined && !isStringArray(p.experimentalHostLabels)) {
+    throw new Error('protection.experimentalHostLabels must be a string array');
+  }
   if (!Array.isArray(p.paramCombinations) || !p.paramCombinations.every(isStringArray)) {
     throw new Error('protection.paramCombinations must be an array of string arrays');
   }
@@ -133,6 +142,7 @@ export function validateRuleSet(value: unknown): RuleSet {
     ),
     ...(p.paramCombinations as string[][]),
     (p.experimentalParams as string[] | undefined) ?? [],
+    (p.experimentalHostLabels as string[] | undefined) ?? [],
   ];
   for (const list of lists) {
     if (list.some((s) => s === '' || /[A-Z]/.test(s))) {

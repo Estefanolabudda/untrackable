@@ -316,6 +316,11 @@ export class Cleaner {
     const p = this.ruleSet.protection;
     const domain = p.domains.find((d) => domainMatches(host, d));
     if (domain !== undefined) return `domain:${domain}`;
+    if (experimental) {
+      const dot = host.indexOf('.');
+      const label = dot > 0 ? host.slice(0, dot) : '';
+      if (label !== '' && (p.experimentalHostLabels ?? []).includes(label)) return `host:${label}`;
+    }
 
     const path = asciiLower(percentDecodeOr(pathname));
     const kw = this.pathKeywordRes.find(({ re }) => re.test(path));

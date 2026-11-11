@@ -500,7 +500,27 @@
       "verify",
       "confirm",
       "invite",
-      "inviteid"
+      "inviteid",
+      "client_id",
+      "code_challenge",
+      "otc"
+    ],
+    "experimentalHostLabels": [
+      "login",
+      "signin",
+      "auth",
+      "oauth",
+      "sso",
+      "idp",
+      "id",
+      "accounts",
+      "account",
+      "secure",
+      "pay",
+      "payment",
+      "payments",
+      "checkout",
+      "banking"
     ]
   }
 }

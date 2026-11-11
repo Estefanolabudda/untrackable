@@ -6,7 +6,16 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Security and reliability
+
+- Regression corpus of 255 sensitive real-world URL shapes (sign-in, reset,
+  payment, signed downloads, banking/government, CSRF), checked per mode in
+  both engines and against the navigation rules.
+- Experimental mode keeps the query of sign-in and payment hosts (first host
+  label `login`, `signin`, `auth`, `oauth`, `sso`, `idp`, `id`, `accounts`,
+  `account`, `secure`, `pay`, `payment(s)`, `checkout`, `banking`) and of
+  OAuth requests (`client_id`, `code_challenge`) and Microsoft device login
+  (`otc`). Clean and Strict are unchanged.
 
 ## [0.2.0] – 2026-11-11
 
