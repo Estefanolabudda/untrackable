@@ -626,11 +626,26 @@ let statsQueue: Promise<void> = Promise.resolve();
  */
 const MAX_COUNT_PER_EVENT = 20;
 
+/**
+ * Incognito tabs only reach the extension when the user allowed it there
+ * (Chromium restarts the extension when that switch changes).
+ */
+const incognitoAllowed: Promise<boolean> = chrome.extension.isAllowedIncognitoAccess().catch(() => true);
+/** Tab id → incognito, learnt when a page load starts (the tab may be closed by the time it is counted). */
+const tabIncognito = new Map<number, boolean>();
+
+async function isIncognito(tab: chrome.tabs.Tab | number | undefined): Promise<boolean | undefined> {
+  if (!(await incognitoAllowed)) return false;
+  if (typeof tab !== 'number') return tab?.incognito;
+  const known = tabIncognito.get(tab);
+  if (known !== undefined) return known;
+  return (await chrome.tabs.get(tab).catch(() => undefined))?.incognito;
+}
+
 /** Count for a tab – never for an incognito one (the numbers would outlive the private session). */
 async function recordStatsFor(tab: chrome.tabs.Tab | number | undefined, add: Counts): Promise<void> {
   if (isZero(add)) return;
-  const t = typeof tab === 'number' ? await chrome.tabs.get(tab).catch(() => undefined) : tab;
-  if (t === undefined || t.incognito) return;
+  if ((await isIncognito(tab)) !== false) return;
   const trackers = Math.min(add.trackers, MAX_COUNT_PER_EVENT);
   recordStats({ trackers, other: Math.min(add.other, MAX_COUNT_PER_EVENT - trackers) });
 }
@@ -683,6 +698,16 @@ function onStatsBeforeRequest(d: chrome.webRequest.OnBeforeRequestDetails): unde
   }
   if (requested.size >= MAX_TRACKED_REQUESTS) requested.clear();
   requested.set(d.requestId, d.url);
+  const tabId = d.tabId;
+  if (!tabIncognito.has(tabId)) {
+    void incognitoAllowed.then(async (allowed) => {
+      if (!allowed) return;
+      const tab = await chrome.tabs.get(tabId).catch(() => undefined);
+      if (tab === undefined) return;
+      if (tabIncognito.size >= MAX_TRACKED_REQUESTS) tabIncognito.clear();
+      tabIncognito.set(tabId, tab.incognito);
+    });
+  }
   return undefined;
 }
 
@@ -720,10 +745,11 @@ function onStatsError(d: chrome.webRequest.OnErrorOccurredDetails): void {
   requested.delete(d.requestId);
 }
 
-function registerStats(): void {
+/** Returns whether the listeners are registered. */
+function registerStats(): boolean {
   // chrome.webRequest only exists while the optional permission is granted.
   const wr = (chrome as { webRequest?: typeof chrome.webRequest }).webRequest;
-  if (wr === undefined) return;
+  if (wr === undefined) return false;
   const filter: chrome.webRequest.RequestFilter = {
     urls: ['http://*/*', 'https://*/*'],
     types: [chrome.webRequest.ResourceType.MAIN_FRAME],
@@ -735,10 +761,20 @@ function registerStats(): void {
   }
   if (!wr.onCompleted.hasListener(onStatsCompleted)) wr.onCompleted.addListener(onStatsCompleted, filter);
   if (!wr.onErrorOccurred.hasListener(onStatsError)) wr.onErrorOccurred.addListener(onStatsError, filter);
+  return true;
+}
+
+/**
+ * Chrome 116 fires permissions.onAdded before chrome.webRequest appears in a
+ * running service worker (verified in e2e): try again briefly.
+ */
+function registerStatsSoon(attempt = 0): void {
+  if (registerStats() || attempt >= 20) return;
+  setTimeout(() => registerStatsSoon(attempt + 1), 100);
 }
 
 registerStats();
-chrome.permissions.onAdded.addListener(registerStats);
+chrome.permissions.onAdded.addListener(() => registerStatsSoon());
 function deleteStatsIfOff(): void {
   void chrome.permissions.contains(STATS_PERMISSION).then((granted) => {
     if (granted) return;

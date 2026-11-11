@@ -1999,6 +1999,14 @@ describe('local statistics (opt-in)', () => {
     // install warning, so Chromium grants it without a prompt.
     await options.click('#stats-enabled');
     await waitFor(granted, 'statistics permission granted');
+    // Chrome 116 makes chrome.webRequest available shortly after the grant;
+    // the service worker registers its listeners as soon as it appears.
+    const t0 = Date.now();
+    await waitFor(
+      () => sw.evaluate(() => chrome.webRequest?.onBeforeRequest.hasListeners() === true),
+      'statistics listeners registered',
+    );
+    console.log(`# statistics listeners registered after ${Date.now() - t0} ms`);
     await waitFor(() => options.isVisible('#stats-on'), 'numbers shown');
     assert.equal(await options.isChecked('#stats-enabled'), true);
     await options.close();
