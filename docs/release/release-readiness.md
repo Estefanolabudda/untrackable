@@ -1,8 +1,11 @@
 # Release readiness – Untrackable 0.1.0
 
-Status: **released as v0.1.0 on GitHub** (2026-11-10, approved by the
-maintainer). Not published in the Chrome Web Store – that needs a separate
-decision.
+Status: **release candidate, not yet published.** Release approved by the
+maintainer on 2026-11-10; tag `v0.1.0` not created yet (tag push needs the
+maintainer). A redirect-loop report from the maintainer's test on 2026-11-11
+(ChatGPT e-mail link) is fixed on top of the approved commit and needs a new
+approval before the release is published. Not published in the Chrome Web
+Store.
 
 ## Verification summary
 

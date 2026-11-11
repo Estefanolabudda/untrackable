@@ -85,4 +85,6 @@ export interface TabState {
   pausedByUser?: boolean;
   /** Host of a page in this tab that failed with a redirect loop (extension pages only). */
   loopHost?: string;
+  /** The loop persisted even without cleaning: not caused by Untrackable. */
+  loopNotOurs?: boolean;
 }

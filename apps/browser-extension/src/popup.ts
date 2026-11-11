@@ -80,6 +80,11 @@ async function init(): Promise<void> {
     // Only offer the reload for the page that actually failed.
     if (state?.loopHost !== undefined && state.loopHost === host) {
       loopHostEl.textContent = state.loopHost;
+      if (state.loopNotOurs === true) {
+        $('loop-text').textContent =
+          'also fails without cleaning – the redirect loop is not caused by Untrackable. Try again later or contact the site.';
+        loopRetry.hidden = true;
+      }
       loopSection.hidden = false;
     }
   }

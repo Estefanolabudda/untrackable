@@ -8,7 +8,7 @@ All notable changes are documented here. The format follows
 
 Nothing yet.
 
-## [0.1.0] – 2026-11-10
+## [0.1.0] – unreleased (release candidate)
 
 First release. Chromium extension (Phase 1) and reusable cleaning engines.
 
@@ -64,6 +64,17 @@ First release. Chromium extension (Phase 1) and reusable cleaning engines.
   disables redirects instead of cleaning unprotected.
 - Message authorisation by extension origin; offscreen clipboard writer only
   accepts the service worker; no network requests, telemetry or URL logging.
+
+### Fixed before release (maintainer test, 2026-11-11)
+
+- A ChatGPT e-mail deep link (`…/images?…&auth_modal=1&login_hint=…&utm_*`)
+  could end in "too many redirects": such links start a sign-in flow, and a
+  site that restores the original URL after sign-in loops if parameters are
+  stripped. URLs carrying the OpenID Connect hints `login_hint`,
+  `id_token_hint` or `domain_hint` are now protected (left unchanged).
+- The redirect-loop helper no longer blames tracker cleaning when the page
+  also fails after "Reload once without cleaning"; it says the loop is not
+  caused by Untrackable.
 
 ### Known limitations
 
