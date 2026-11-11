@@ -39,38 +39,57 @@
         <h2 id="h-cleaning">Cleaning</h2>
         <label class="setting"
           ><span
-            >Clean links automatically<small>Off: nothing is cleaned (Bypass) until you turn it back on.</small></span
-          ><input type="checkbox" class="switch" role="switch" id="enabled"
+            ><span id="l-enabled">Clean links automatically</span
+            ><small id="l-enabled-d">Off: nothing is cleaned until you turn it back on.</small></span
+          ><input
+            type="checkbox"
+            class="switch"
+            role="switch"
+            id="enabled"
+            aria-labelledby="l-enabled"
+            aria-describedby="l-enabled-d"
         /></label>
         <p class="muted fine" id="pause-status" role="status" aria-live="polite"></p>
         <fieldset class="modes">
-          <legend class="subhead">Mode</legend>
-          <div role="radiogroup" aria-label="Cleaning mode">
+          <legend class="subhead">Cleaning mode</legend>
+          <div class="mode-list">
             <label class="mode"
-              ><input type="radio" name="mode" value="clean" />
+              ><input type="radio" name="mode" value="clean" aria-labelledby="m-clean" aria-describedby="m-clean-d" />
               <span
-                ><strong>Clean <span class="tag">Recommended</span></strong
-                ><small
+                ><strong id="m-clean">Clean <span class="tag">Recommended</span></strong
+                ><small id="m-clean-d"
                   >Removes well-known trackers such as <code>utm_*</code>, <code>fbclid</code> and <code>gclid</code>.
                   Every parameter it does not know is kept.</small
                 ></span
               ></label
             >
             <label class="mode"
-              ><input type="radio" name="mode" value="strict" />
+              ><input
+                type="radio"
+                name="mode"
+                value="strict"
+                aria-labelledby="m-strict"
+                aria-describedby="m-strict-d"
+              />
               <span
-                ><strong>Strict</strong
-                ><small
+                ><strong id="m-strict">Strict</strong
+                ><small id="m-strict-d"
                   >Also removes referral and analytics parameters (e.g. <code>ref</code>, Amazon, Google and eBay
                   specifics) and trackers in link fragments. May occasionally affect a site.</small
                 ></span
               ></label
             >
             <label class="mode"
-              ><input type="radio" name="mode" value="experimental" />
+              ><input
+                type="radio"
+                name="mode"
+                value="experimental"
+                aria-labelledby="m-exp"
+                aria-describedby="m-exp-d"
+              />
               <span id="exp-desc"
-                ><strong>Experimental – strip query parameters</strong
-                ><small
+                ><strong id="m-exp">Experimental – strip query parameters</strong
+                ><small id="m-exp-d"
                   >Removes the whole query string (<code>?…</code>) of the pages you open, known tracker or not (links
                   you copy with Ctrl/Cmd+C get the Strict rules). Links Untrackable recognises as sign-in, payment,
                   signed or expiring are left unchanged. Expect broken searches, filters and other site features.</small
@@ -114,10 +133,17 @@
         <h2 id="h-stats">Statistics</h2>
         <label class="setting"
           ><span
-            >Count removed parameters on this device<small
+            ><span id="l-stats-enabled">Count removed parameters on this device</span
+            ><small id="l-stats-enabled-d"
               >Shows how many tracking parameters Untrackable removed – today, in the last 7 days and in total.</small
             ></span
-          ><input type="checkbox" class="switch" role="switch" id="stats-enabled"
+          ><input
+            type="checkbox"
+            class="switch"
+            role="switch"
+            id="stats-enabled"
+            aria-labelledby="l-stats-enabled"
+            aria-describedby="l-stats-enabled-d"
         /></label>
         <div id="stats-on" hidden>
           <dl class="stat-grid">
@@ -130,7 +156,7 @@
               <dd id="stats-week">0</dd>
             </div>
             <div>
-              <dt>Total</dt>
+              <dt>Since turned on</dt>
               <dd id="stats-total">0</dd>
             </div>
           </dl>
@@ -169,18 +195,31 @@
         <h2 id="h-more">Copying and recovery</h2>
         <label class="setting"
           ><span
-            >Clean a link when I copy it from a web page<small
-              >Only when the selection is exactly one link.</small
-            ></span
-          ><input type="checkbox" class="switch" role="switch" id="copy-cleaning"
+            ><span id="l-copy-cleaning">Clean a link when I copy it from a web page</span
+            ><small id="l-copy-cleaning-d">Only when the selection is exactly one link.</small></span
+          ><input
+            type="checkbox"
+            class="switch"
+            role="switch"
+            id="copy-cleaning"
+            aria-labelledby="l-copy-cleaning"
+            aria-describedby="l-copy-cleaning-d"
         /></label>
         <label class="setting"
           ><span
-            >Offer a one-click retry when a site keeps redirecting back to a tracking link<small
+            ><span id="l-loop-recovery"
+              >Offer a one-click retry when a site keeps redirecting back to a tracking link</span
+            ><small id="l-loop-recovery-d"
               >Asks for permission to see navigation errors; only “too many redirects” errors of the page are used,
               nothing is stored permanently.</small
             ></span
-          ><input type="checkbox" class="switch" role="switch" id="loop-recovery"
+          ><input
+            type="checkbox"
+            class="switch"
+            role="switch"
+            id="loop-recovery"
+            aria-labelledby="l-loop-recovery"
+            aria-describedby="l-loop-recovery-d"
         /></label>
       </section>
 

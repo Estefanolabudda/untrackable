@@ -46,10 +46,10 @@ keeps everything else, so the page still works.
 
 ## Screenshots
 
-| Popup                                         | Switching to Experimental                                                     | Settings with link check                      |
-| --------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------- |
-| ![Toolbar popup](docs/images/popup.png)       | ![Experimental confirmation in the popup](docs/images/popup-experimental.png) | ![Settings page](docs/images/options.png)     |
-| Mode, pause and per-site controls at a glance | Experimental is only switched on after an explicit confirmation               | Exceptions and a preview of what gets removed |
+| Popup                                                         | Switching to Experimental                                                     | Settings with link check                                  |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| ![Toolbar popup](docs/images/popup.png)                       | ![Experimental confirmation in the popup](docs/images/popup-experimental.png) | ![Settings page](docs/images/options.png)                 |
+| Status, mode, per-site controls and optional local statistics | Experimental is only switched on after an explicit confirmation               | Settings (dark theme) with a preview of what gets removed |
 
 ## Installation
 
@@ -190,13 +190,14 @@ Once installed, links are cleaned as you browse. The toolbar popup offers:
 
 | Control                        | Effect                                                        |
 | ------------------------------ | ------------------------------------------------------------- |
-| Clean links automatically      | Global on/off (off = Bypass)                                  |
+| Clean links automatically      | The main switch at the top (off = nothing is cleaned)         |
 | Clean / Strict / Experimental  | Choose the cleaning mode (Experimental asks for confirmation) |
 | Back to Clean                  | Leave Experimental with one click                             |
-| Pause for 15 minutes           | Temporary bypass that resumes automatically                   |
+| Pause all · 15 min             | Temporary pause everywhere that resumes automatically         |
 | Never clean links to this site | Adds a site exception (subdomains included)                   |
 | Pause in this tab              | Bypass for one tab until you turn it back on or close the tab |
 | Copy clean link                | Copies the current page's clean link                          |
+| Trackers removed (optional)    | Today, last 7 days and total – see **Statistics** below       |
 
 **Right-click a link** for:
 
@@ -214,6 +215,14 @@ Right-click a page for **Copy clean page link**, or press
 **Copy cleaning.** Select a single link on a page and press
 <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>C</kbd> (or <kbd>Ctrl</kbd>+<kbd>Insert</kbd>):
 the clipboard receives the clean link. You can switch this off in the settings.
+
+**Statistics (optional, off by default).** Turn them on in the popup or the
+settings to see how many tracking parameters Untrackable removed on this
+device – today, in the last 7 days and in total. Only removals Untrackable can
+confirm are counted (page loads and links you copy with it), and only numbers
+are stored, never links or sites. Incognito tabs are not counted. This uses the
+optional, read-only `webRequest` permission while switched on; turning
+statistics off removes the permission and deletes the numbers.
 
 **Settings page.** Add or remove site exceptions, enable the redirect-loop
 helper, and use **Check a link** to see exactly which parameters would be
@@ -262,7 +271,9 @@ normative [engine specification](docs/architecture/engine-spec.md).
   built-in rule engine and by the extension itself.
 - **No telemetry, no analytics, no network requests** of its own.
 - **No browsing data is stored.** Untrackable stores only your settings
-  (on/off, mode, pause end time, copy cleaning switch, site exceptions).
+  (on/off, mode, pause end time, copy cleaning switch, site exceptions) and –
+  only if you turn statistics on – daily counts for the last 7 days and a
+  total, no links or sites.
   The optional redirect-loop helper keeps the host name of a failed page in
   session storage for at most 10 minutes – never a full URL.
 - **Settings stay in the extension.** Web pages are never given your mode,

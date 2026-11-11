@@ -33,7 +33,8 @@ on http(s) pages. It uses that access only for:
   compares the requested and the actually sent address in memory and counts
   the query parameters that were removed, if the difference is exactly what
   Untrackable's own rules remove for that address. The addresses are dropped
-  as soon as the page load ends; only the numbers are kept.
+  as soon as the page load ends; only the numbers are kept. Incognito tabs and
+  prerendered pages are never counted, and one page load or copy adds at most 20.
 
 ## What is processed
 

@@ -31,7 +31,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 0 0.75rem 0.5rem;
+  padding: 0 0.75rem 0.75rem;
 }
 .hero {
   display: flex;
@@ -79,12 +79,44 @@ fieldset.card {
   gap: 0.4rem;
   min-width: 0;
 }
+.card-title > span {
+  flex: none;
+}
+/* Long hosts: keep the end (the registrable domain) visible, cut the start. */
 .card-title code {
   color: var(--fg);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  min-width: 0;
+}
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+button.small {
+  min-height: 24px;
+  padding: 0 0.35rem;
+  font-size: 12px;
+  font-weight: 500;
+  flex: none;
+}
+/* The popup shows the description of the selected mode only (all are on the settings page). */
+.mode:not(:has(input:checked)) small {
+  display: none;
+}
+.pending-tag {
+  display: none;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.modes:has(#exp-confirm:not([hidden])) .pending-tag {
+  display: inline-block;
 }
 fieldset.card .mode {
   padding: 0.4rem 0.5rem;
@@ -132,11 +164,6 @@ fieldset.card .mode {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-}
-.foot {
-  font-size: 12px;
-  text-align: center;
-  padding: 0 0.75rem 0.6rem;
 }
 .hero-warn {
   display: flex;

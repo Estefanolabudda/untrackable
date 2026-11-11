@@ -551,24 +551,24 @@ function copyToClipboard(text: string, stillWanted: () => boolean = () => true):
 }
 
 /**
- * Explicit user action ("Copy clean link"): clean with the configured mode even
- * while automatic cleaning is paused – the user asked for a clean link.
- * Domain exceptions are still honoured.
- */
-/**
  * Order of copies (keyboard copies seen by content scripts in all tabs and
  * explicit copy actions); a pending keyboard copy may only write while it is
  * the latest, so it never replaces a later explicit copy (found in review).
  */
 let copySeq = 0;
 
-async function copyClean(url: string): Promise<void> {
+/**
+ * Explicit user action ("Copy clean link"): clean with the configured mode even
+ * while automatic cleaning is paused – the user asked for a clean link.
+ * Domain exceptions are still honoured.
+ */
+async function copyClean(url: string, tab?: chrome.tabs.Tab): Promise<void> {
   const seq = ++copySeq;
   if (url.length > MAX_URL_LENGTH) return; // hostile pages can craft huge hrefs
   const settings = await loadSettings();
   const result = cleanUrl(url, { mode: settings.mode, exceptions: settings.exceptions });
   if (await copyToClipboard(result.url, () => seq === copySeq)) {
-    recordStats(classifyRemoved(url, result, settings.mode, settings.exceptions));
+    await recordStatsFor(tab, classifyRemoved(url, result, settings.mode, settings.exceptions));
   }
 }
 
@@ -611,11 +611,29 @@ async function openStripped(url: string, openerTab?: chrome.tabs.Tab): Promise<v
 //
 // Privacy: URLs live only in memory for the duration of a request; storage
 // holds aggregate numbers per local date for the last seven days and a total.
-// Turning statistics off removes the permission and deletes the numbers.
+// Incognito tabs and prerendered pages are never counted. Turning statistics
+// off removes the permission and deletes the numbers (found in review: every
+// write and delete runs in one queue, so a pending write cannot bring deleted
+// numbers back).
 
 let pendingStats: Counts = { ...ZERO };
 let statsTimer: ReturnType<typeof setTimeout> | undefined;
 let statsQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Upper bound per counted event. Real links carry a handful of trackers; a
+ * page could otherwise inflate the numbers with a crafted URL (found in review).
+ */
+const MAX_COUNT_PER_EVENT = 20;
+
+/** Count for a tab – never for an incognito one (the numbers would outlive the private session). */
+async function recordStatsFor(tab: chrome.tabs.Tab | number | undefined, add: Counts): Promise<void> {
+  if (isZero(add)) return;
+  const t = typeof tab === 'number' ? await chrome.tabs.get(tab).catch(() => undefined) : tab;
+  if (t === undefined || t.incognito) return;
+  const trackers = Math.min(add.trackers, MAX_COUNT_PER_EVENT);
+  recordStats({ trackers, other: Math.min(add.other, MAX_COUNT_PER_EVENT - trackers) });
+}
 
 function recordStats(add: Counts): void {
   if (isZero(add)) return;
@@ -632,6 +650,16 @@ async function flushStats(): Promise<void> {
   if (isZero(add) || !(await chrome.permissions.contains(STATS_PERMISSION))) return;
   const stored = (await chrome.storage.local.get(STATS_KEY))[STATS_KEY];
   await chrome.storage.local.set({ [STATS_KEY]: addToStats(stored, add) });
+  // Switched off meanwhile (e.g. in chrome://extensions): never leave numbers behind.
+  if (!(await chrome.permissions.contains(STATS_PERMISSION))) await chrome.storage.local.remove(STATS_KEY);
+}
+
+/** Delete the numbers, after any write already queued. */
+function deleteStats(): Promise<void> {
+  pendingStats = { ...ZERO };
+  const run = statsQueue.then(() => chrome.storage.local.remove(STATS_KEY));
+  statsQueue = run.catch(() => {});
+  return run;
 }
 
 /** Top-level request id → URL last requested for it (memory only, never stored). */
@@ -643,11 +671,16 @@ async function countNavigation(from: string, to: string, tabId: number): Promise
   const settings = await loadSettings();
   const mode = effectiveMode(settings);
   if (mode === 'bypass' || (await tabRules(tabId)).length > 0) return;
-  recordStats(verifiedRemovals(from, to, mode, settings.exceptions));
+  await recordStatsFor(tabId, verifiedRemovals(from, to, mode, settings.exceptions));
 }
 
 function onStatsBeforeRequest(d: chrome.webRequest.OnBeforeRequestDetails): undefined {
-  if (d.tabId < 0) return undefined;
+  // Prerendered pages may never be shown; their URL is not kept either.
+  const lifecycle = (d as { documentLifecycle?: string }).documentLifecycle;
+  if (d.tabId < 0 || lifecycle === 'prerender' || d.url.length > MAX_URL_LENGTH) {
+    requested.delete(d.requestId);
+    return undefined;
+  }
   if (requested.size >= MAX_TRACKED_REQUESTS) requested.clear();
   requested.set(d.requestId, d.url);
   return undefined;
@@ -665,7 +698,13 @@ function onStatsBeforeRedirect(d: chrome.webRequest.OnBeforeRedirectDetails): vo
   requested.delete(d.requestId);
   // Redirects made inside the browser (DNR, HSTS, other extensions) have no
   // server address; verifiedRemovals tells ours apart.
-  if (d.statusCode === 307 && d.ip === undefined && /Internal Redirect/i.test(d.statusLine)) {
+  const lifecycle = (d as { documentLifecycle?: string }).documentLifecycle;
+  if (
+    lifecycle !== 'prerender' &&
+    d.statusCode === 307 &&
+    d.ip === undefined &&
+    /Internal Redirect/i.test(d.statusLine)
+  ) {
     void countNavigation(d.url, d.redirectUrl, d.tabId);
   }
 }
@@ -677,6 +716,7 @@ function onStatsCompleted(d: chrome.webRequest.OnCompletedDetails): void {
 }
 
 function onStatsError(d: chrome.webRequest.OnErrorOccurredDetails): void {
+  if (d.tabId < 0) return;
   requested.delete(d.requestId);
 }
 
@@ -699,14 +739,16 @@ function registerStats(): void {
 
 registerStats();
 chrome.permissions.onAdded.addListener(registerStats);
-chrome.permissions.onRemoved.addListener(() => {
+function deleteStatsIfOff(): void {
   void chrome.permissions.contains(STATS_PERMISSION).then((granted) => {
     if (granted) return;
     requested.clear();
-    pendingStats = { ...ZERO };
-    return chrome.storage.local.remove(STATS_KEY);
+    return deleteStats();
   });
-});
+}
+chrome.permissions.onRemoved.addListener(deleteStatsIfOff);
+// Also on every service-worker start, in case a removal was missed.
+deleteStatsIfOff();
 
 /** Popup "Copy clean link": clean the tab's URL with the configured mode (also while paused). */
 async function copyCleanTab(tabId: number): Promise<{ ok: boolean; removed: number }> {
@@ -717,7 +759,7 @@ async function copyCleanTab(tabId: number): Promise<{ ok: boolean; removed: numb
   const settings = await loadSettings();
   const result = cleanUrl(url, { mode: settings.mode, exceptions: settings.exceptions });
   const ok = await copyToClipboard(result.url, () => seq === copySeq);
-  if (ok) recordStats(classifyRemoved(url, result, settings.mode, settings.exceptions));
+  if (ok) await recordStatsFor(tab, classifyRemoved(url, result, settings.mode, settings.exceptions));
   return { ok, removed: ok ? result.removed.length : 0 };
 }
 
@@ -760,7 +802,8 @@ async function onCopiedLink(tabId: number, url: string | undefined): Promise<voi
   const result = active ? cleanUrl(url, { mode, exceptions: settings.exceptions }) : undefined;
   const text = result?.status === 'cleaned' ? result.url : url;
   const written = await copyToClipboard(text, () => seq === copySeq);
-  if (written && result !== undefined) recordStats(classifyRemoved(url, result, mode, settings.exceptions));
+  if (written && result !== undefined)
+    await recordStatsFor(tabId, classifyRemoved(url, result, mode, settings.exceptions));
 }
 
 function createMenus(): void {
@@ -847,19 +890,19 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === MENU.copyLink && info.linkUrl) void copyClean(info.linkUrl);
+  if (info.menuItemId === MENU.copyLink && info.linkUrl) void copyClean(info.linkUrl, tab);
   else if (info.menuItemId === MENU.openUnmodified && info.linkUrl) void openUnmodified(info.linkUrl, tab);
   else if (info.menuItemId === MENU.copyStripped && info.linkUrl) void copyStripped(info.linkUrl);
   else if (info.menuItemId === MENU.openStripped && info.linkUrl) void openStripped(info.linkUrl, tab);
   else if (info.menuItemId === MENU.copyPage) {
     const pageUrl = info.pageUrl ?? tab?.url;
-    if (pageUrl !== undefined) void copyClean(pageUrl);
+    if (pageUrl !== undefined) void copyClean(pageUrl, tab);
   }
 });
 
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command !== 'copy-clean-link' || tab?.url === undefined) return;
-  void copyClean(tab.url);
+  void copyClean(tab.url, tab);
 });
 
 function isMessage(m: unknown): m is Message {
@@ -874,6 +917,8 @@ function isMessage(m: unknown): m is Message {
       return typeof msg.text === 'string' && msg.text.length <= 32_768;
     case 'copyCleanTab':
       return Number.isInteger(msg.tabId);
+    case 'resetStats':
+      return true;
     case 'openUnmodified':
       return typeof msg.url === 'string' && msg.url.length <= 32_768;
     case 'retryLoop':
@@ -924,6 +969,10 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   if (message.type === 'copyText') {
     const seq = ++copySeq;
     void copyToClipboard(message.text, () => seq === copySeq).then(sendResponse);
+    return true;
+  }
+  if (message.type === 'resetStats') {
+    void deleteStats().then(() => sendResponse(true));
     return true;
   }
   if (message.type === 'copyCleanTab') {

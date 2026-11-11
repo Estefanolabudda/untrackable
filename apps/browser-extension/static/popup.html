@@ -77,23 +77,27 @@
       </div>
 
       <fieldset class="modes card">
-        <legend class="visually-hidden">Mode</legend>
-        <div role="radiogroup" aria-label="Cleaning mode">
+        <legend class="visually-hidden">Cleaning mode</legend>
+        <div class="mode-list">
           <label class="mode"
-            ><input type="radio" name="mode" value="clean" />
+            ><input type="radio" name="mode" value="clean" aria-labelledby="m-clean" aria-describedby="m-clean-d" />
             <span
-              ><strong>Clean <span class="tag">Recommended</span></strong
-              ><small>Removes known trackers.</small></span
+              ><strong id="m-clean">Clean <span class="tag">Recommended</span></strong
+              ><small id="m-clean-d">Removes known trackers.</small></span
             ></label
           >
           <label class="mode"
-            ><input type="radio" name="mode" value="strict" />
-            <span><strong>Strict</strong><small>Also referral and analytics parameters.</small></span></label
+            ><input type="radio" name="mode" value="strict" aria-labelledby="m-strict" aria-describedby="m-strict-d" />
+            <span
+              ><strong id="m-strict">Strict</strong
+              ><small id="m-strict-d">Also removes referral and analytics tags.</small></span
+            ></label
           >
           <label class="mode"
-            ><input type="radio" name="mode" value="experimental" />
+            ><input type="radio" name="mode" value="experimental" aria-labelledby="m-exp" aria-describedby="exp-hint" />
             <span
-              ><strong>Experimental</strong><small id="exp-hint">Removes the whole query. Sites may break.</small></span
+              ><strong id="m-exp">Experimental <span class="tag pending-tag">Not active yet</span></strong
+              ><small id="exp-hint">Removes everything after “?”. Sites may break.</small></span
             ></label
           >
         </div>
@@ -121,15 +125,31 @@
       </fieldset>
 
       <section id="site-section" class="card" aria-labelledby="site-title">
-        <h2 class="card-title" id="site-title">This site <code id="site-host">–</code></h2>
+        <h2 class="card-title" id="site-title"><span>This site</span> <code id="site-host">–</code></h2>
         <label class="setting"
-          ><span>Never clean links to this site<small>Includes subdomains</small></span
-          ><input type="checkbox" class="switch" role="switch" id="site-exception"
+          ><span
+            ><span id="l-exception">Never clean links to this site</span
+            ><small id="l-exception-d">Includes subdomains</small></span
+          ><input
+            type="checkbox"
+            class="switch"
+            role="switch"
+            id="site-exception"
+            aria-labelledby="l-exception"
+            aria-describedby="l-exception-d site-note"
         /></label>
         <p id="site-note" class="note muted"></p>
         <label class="setting"
-          ><span>Pause in this tab<small>Until you turn it back on or close the tab</small></span
-          ><input type="checkbox" class="switch" role="switch" id="tab-paused"
+          ><span
+            ><span id="l-tab">Pause in this tab</span
+            ><small id="l-tab-d">Until you turn it back on or close the tab</small></span
+          ><input
+            type="checkbox"
+            class="switch"
+            role="switch"
+            id="tab-paused"
+            aria-labelledby="l-tab"
+            aria-describedby="l-tab-d"
         /></label>
       </section>
 
@@ -139,13 +159,16 @@
         </button>
         <button type="button" id="pause">
           <svg aria-hidden="true"><use id="pause-icon" href="#i-pause" /></svg
-          ><span id="pause-label">Pause 15 min</span>
+          ><span id="pause-label">Pause all · 15 min</span>
         </button>
       </div>
       <p id="copy-result" class="muted result" role="status" aria-live="polite"></p>
 
       <section id="stats" class="card" aria-labelledby="stats-title">
-        <h2 class="card-title" id="stats-title">Tracking parameters removed</h2>
+        <div class="card-head">
+          <h2 class="card-title" id="stats-title">Trackers removed on this device</h2>
+          <button type="button" class="quiet small" id="stats-about">What counts?</button>
+        </div>
         <div id="stats-on" hidden>
           <dl class="stat-grid">
             <div>
@@ -153,7 +176,7 @@
               <dd id="stats-today">0</dd>
             </div>
             <div>
-              <dt>7 days</dt>
+              <dt>Last 7 days</dt>
               <dd id="stats-week">0</dd>
             </div>
             <div>
@@ -164,13 +187,12 @@
           <p id="stats-other" class="muted fine" hidden></p>
         </div>
         <div id="stats-off" class="stats-off" hidden>
-          <p class="muted fine">Count them on this device. Only numbers are stored.</p>
+          <p class="muted fine">Off. Only numbers would be stored – no links.</p>
           <button type="button" class="quiet" id="stats-enable">Turn on</button>
         </div>
       </section>
     </main>
 
-    <footer class="foot muted">Everything is processed on this device.</footer>
     <script src="popup.js"></script>
   </body>
 </html>

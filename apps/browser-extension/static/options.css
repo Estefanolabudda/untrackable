@@ -131,7 +131,7 @@ input[type='url'] {
 }
 input::placeholder {
   color: var(--muted);
-  opacity: 0.8;
+  opacity: 1;
 }
 .add-row {
   display: flex;

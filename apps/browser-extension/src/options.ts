@@ -1,6 +1,6 @@
 import { cleanUrl, toAsciiDomain } from '@untrackable/core';
 import { setupModeControls } from './mode-controls.js';
-import { effectiveMode, loadSettings, MAX_EXCEPTIONS, saveSettings, type Settings } from './settings.js';
+import { effectiveMode, loadSettings, MAX_EXCEPTIONS, saveSettings, SETTINGS_KEYS, type Settings } from './settings.js';
 import { renderStats, resetStats, setStatsEnabled, statsEnabled, watchStats } from './stats-view.js';
 
 function $(id: string): HTMLElement {
@@ -126,8 +126,11 @@ openUnmodifiedBtn.addEventListener('click', () => {
   void chrome.runtime.sendMessage({ type: 'openUnmodified', url: previewInput.value.trim() });
 });
 
-chrome.storage.onChanged.addListener((_c, area) => {
-  if (area === 'local') void loadSettings().then(render);
+// Only settings changes re-render (statistics writes would steal focus).
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && Object.keys(changes).some((k) => (SETTINGS_KEYS as string[]).includes(k))) {
+    void loadSettings().then(render);
+  }
 });
 
 // Statistics: the optional permission is the setting (granted = on).

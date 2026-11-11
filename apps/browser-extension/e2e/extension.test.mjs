@@ -1610,7 +1610,7 @@ describe('user interface', () => {
         (await popup.textContent('#status')) === 'On' && /^Strict/.test(await popup.textContent('#status-detail')),
       'resumed status',
     );
-    assert.equal(await popup.textContent('#pause-label'), 'Pause 15 min');
+    assert.equal(await popup.textContent('#pause-label'), 'Pause all · 15 min');
     await popup.uncheck('#enabled');
     await waitFor(async () => (await popup.textContent('#status')) === 'Off', 'off status');
     await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === 'off', 'badge off');

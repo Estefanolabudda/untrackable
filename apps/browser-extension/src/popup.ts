@@ -1,5 +1,5 @@
 import { setupModeControls } from './mode-controls.js';
-import { loadSettings, saveSettings, type Settings, type TabState } from './settings.js';
+import { loadSettings, saveSettings, SETTINGS_KEYS, type Settings, type TabState } from './settings.js';
 import { renderStats, setStatsEnabled, watchStats } from './stats-view.js';
 
 const PAUSE_MINUTES = 15;
@@ -52,8 +52,8 @@ function coveringException(s: Settings): string | undefined {
 
 const MODE_DETAIL = {
   clean: 'Clean · removes known trackers',
-  strict: 'Strict · also referral and analytics parameters',
-  experimental: 'Experimental · strips whole queries',
+  strict: 'Strict · also removes referral and analytics tags',
+  experimental: 'Experimental · removes all after “?”',
 } as const;
 
 function render(s: Settings): void {
@@ -74,14 +74,15 @@ function render(s: Settings): void {
   } else if (paused) {
     const until = new Date(s.pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     status = `Paused until ${until}`;
-    detail = 'Links are not cleaned until then.';
+    detail = 'Resumes automatically, or choose Resume.';
     tone = 'off';
   } else {
     status = 'On';
     detail = MODE_DETAIL[s.mode];
     if (s.mode === 'experimental') tone = 'warn';
     if (host !== '' && tabPaused) {
-      detail = 'Paused in this tab · other tabs are cleaned';
+      status = 'Paused in this tab';
+      detail = 'Other tabs are still cleaned';
       tone = 'off';
     } else if (covering !== undefined) {
       detail = 'This site is never cleaned (exception)';
@@ -92,13 +93,14 @@ function render(s: Settings): void {
   hero?.classList.toggle('is-off', tone === 'off');
   hero?.classList.toggle('is-warn', tone === 'warn');
 
-  pauseLabel.textContent = paused ? 'Resume' : `Pause ${PAUSE_MINUTES} min`;
+  pauseLabel.textContent = paused ? 'Resume' : `Pause all · ${PAUSE_MINUTES} min`;
   pauseIcon.setAttribute('href', paused ? '#i-play' : '#i-pause');
   pauseBtn.title = paused ? 'Resume cleaning now' : `Pause cleaning everywhere for ${PAUSE_MINUTES} minutes`;
   pauseBtn.disabled = !s.enabled;
 
   siteSection.hidden = host === '';
   siteHost.textContent = host || '–';
+  siteHost.title = host;
   siteException.checked = covering !== undefined;
   // An exception for a parent domain is managed in the settings, not silently
   // removed from here (found in review).
@@ -171,9 +173,15 @@ loopRetry.addEventListener('click', async () => {
 });
 statsEnable.addEventListener('click', () => void setStatsEnabled(true).then(() => renderStats()));
 $('open-options').addEventListener('click', () => void chrome.runtime.openOptionsPage());
+$('stats-about').addEventListener('click', () => {
+  void chrome.tabs.create({ url: chrome.runtime.getURL('options.html#stats') }).then(() => window.close());
+});
 
-chrome.storage.onChanged.addListener((_c, area) => {
-  if (area === 'local') void loadSettings().then(render);
+// Only settings changes re-render (statistics writes would steal focus).
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && Object.keys(changes).some((k) => (SETTINGS_KEYS as string[]).includes(k))) {
+    void loadSettings().then(render);
+  }
 });
 watchStats(() => void renderStats());
 

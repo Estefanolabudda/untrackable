@@ -31,7 +31,7 @@ export async function renderStats(): Promise<boolean> {
   other.textContent =
     s.total.other === 0
       ? ''
-      : `Plus ${format.format(s.total.other)} other parameter${s.total.other === 1 ? '' : 's'} removed in Experimental mode (${format.format(s.week.other)} in the last 7 days).`;
+      : `+ ${format.format(s.total.other)} other parameter${s.total.other === 1 ? '' : 's'} (Experimental)`;
   return true;
 }
 
@@ -41,13 +41,14 @@ export async function setStatsEnabled(on: boolean): Promise<boolean> {
     await chrome.permissions.request(STATS_PERMISSION).catch(() => false);
   } else {
     await chrome.permissions.remove(STATS_PERMISSION).catch(() => false);
-    await chrome.storage.local.remove(STATS_KEY);
+    await resetStats();
   }
   return statsEnabled();
 }
 
+/** The service worker deletes the numbers after any pending write (no lost delete). */
 export async function resetStats(): Promise<void> {
-  await chrome.storage.local.remove(STATS_KEY);
+  await chrome.runtime.sendMessage({ type: 'resetStats' });
 }
 
 /** Re-render on changes of the numbers or of the permission. */
