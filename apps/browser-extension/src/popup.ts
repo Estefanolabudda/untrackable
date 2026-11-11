@@ -1,4 +1,5 @@
 import { cleanUrl } from '@untrackable/core';
+import { setupModeControls } from './mode-controls.js';
 import { effectiveMode, loadSettings, saveSettings, type Settings, type TabState } from './settings.js';
 
 const PAUSE_MINUTES = 15;
@@ -10,7 +11,7 @@ function $(id: string): HTMLElement {
 }
 
 const enabledBox = $('enabled') as HTMLInputElement;
-const modeRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mode"]')];
+const modeControls = setupModeControls();
 const pauseBtn = $('pause') as HTMLButtonElement;
 const statusEl = $('status');
 const siteSection = $('site-section');
@@ -45,17 +46,14 @@ function coveringException(s: Settings): string | undefined {
 function render(s: Settings): void {
   const mode = effectiveMode(s);
   enabledBox.checked = s.enabled;
-  for (const r of modeRadios) {
-    r.checked = r.value === s.mode;
-    r.disabled = !s.enabled;
-  }
+  modeControls.render(s);
   const paused = s.enabled && s.pausedUntil > Date.now();
   pauseBtn.textContent = paused ? 'Resume now' : `Pause for ${PAUSE_MINUTES} minutes`;
   pauseBtn.disabled = !s.enabled;
   if (!s.enabled) statusEl.textContent = 'Off';
   else if (paused)
     statusEl.textContent = `Paused until ${new Date(s.pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  else statusEl.textContent = mode === 'strict' ? 'Strict' : 'Active';
+  else statusEl.textContent = mode === 'strict' ? 'Strict' : mode === 'experimental' ? 'Experimental' : 'Active';
   statusEl.classList.toggle('off', mode === 'bypass');
 
   siteSection.hidden = host === '';
@@ -91,11 +89,6 @@ async function init(): Promise<void> {
 }
 
 enabledBox.addEventListener('change', () => void saveSettings({ enabled: enabledBox.checked, pausedUntil: 0 }));
-for (const r of modeRadios) {
-  r.addEventListener('change', () => {
-    if (r.checked) void saveSettings({ mode: r.value === 'strict' ? 'strict' : 'clean' });
-  });
-}
 pauseBtn.addEventListener('click', async () => {
   const s = await loadSettings();
   const paused = s.pausedUntil > Date.now();
@@ -118,7 +111,7 @@ copyBtn.addEventListener('click', async () => {
   copyResult.textContent = !ok
     ? 'Copy failed'
     : result.removed.length > 0
-      ? `Copied – removed ${result.removed.length} tracker${result.removed.length === 1 ? '' : 's'}`
+      ? `Copied – removed ${result.removed.length} ${s.mode === 'experimental' ? 'parameter' : 'tracker'}${result.removed.length === 1 ? '' : 's'}`
       : 'Copied';
 });
 loopRetry.addEventListener('click', async () => {

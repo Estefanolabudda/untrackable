@@ -4,8 +4,11 @@ import { toAsciiDomain, type Mode } from '@untrackable/core';
 export interface Settings {
   /** Master switch. false = global bypass. */
   enabled: boolean;
-  /** Cleaning mode when enabled. */
-  mode: 'clean' | 'strict';
+  /**
+   * Cleaning mode when enabled. 'experimental' strips whole query strings and
+   * is only ever set by an explicit, confirmed user choice (never a default).
+   */
+  mode: 'clean' | 'strict' | 'experimental';
   /** Domains (punycode) that are never cleaned, subdomains included. */
   exceptions: string[];
   /** Epoch milliseconds until which cleaning is paused (temporary bypass). 0 = not paused. */
@@ -43,7 +46,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     typeof r.pausedUntil === 'number' && Number.isFinite(r.pausedUntil) && r.pausedUntil > 0 ? r.pausedUntil : 0;
   return {
     enabled: typeof r.enabled === 'boolean' ? r.enabled : DEFAULT_SETTINGS.enabled,
-    mode: r.mode === 'strict' ? 'strict' : 'clean',
+    mode: r.mode === 'strict' || r.mode === 'experimental' ? r.mode : 'clean',
     exceptions: Array.isArray(r.exceptions) ? sanitizeExceptions(r.exceptions) : [],
     pausedUntil,
     copyCleaning: typeof r.copyCleaning === 'boolean' ? r.copyCleaning : DEFAULT_SETTINGS.copyCleaning,

@@ -2,7 +2,8 @@
  * Untrackable service worker.
  *
  * - Compiles settings into declarativeNetRequest rules (automatic navigation cleaning).
- * - Context menu: "Copy clean link", "Open link without cleaning", "Copy clean page link".
+ * - Context menu: "Copy clean link", "Open link without cleaning", "Copy clean page link",
+ *   "Copy link without query parameters", "Open link without query parameters".
  * - Keyboard command: copy clean link of the current page.
  * - Per-tab pause and one-time bypass via DNR session rules.
  *
@@ -12,7 +13,7 @@
  * page that hit a redirect loop, for at most 10 minutes) and disappears with
  * the browser session.
  */
-import { cleanUrl, compileDnrRules, PRIORITY } from '@untrackable/core';
+import { cleanUrl, compileDnrRules, PRIORITY, stripQuery } from '@untrackable/core';
 import { effectiveMode, loadSettings, saveSettings, type Message, type Settings, type TabState } from './settings.js';
 
 const RESUME_ALARM = 'untrackable-resume';
@@ -25,6 +26,8 @@ const MENU = {
   copyLink: 'copy-clean-link',
   openUnmodified: 'open-link-unmodified',
   copyPage: 'copy-clean-page-link',
+  copyStripped: 'copy-link-without-query',
+  openStripped: 'open-link-without-query',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -114,15 +117,19 @@ async function updateBadge(settings: Settings): Promise<void> {
     });
     return;
   }
-  const text = mode === 'bypass' ? 'off' : mode === 'strict' ? 'S' : '';
+  const text = { bypass: 'off', strict: 'S', experimental: 'E', clean: '' }[mode];
   await chrome.action.setBadgeText({ text });
-  await chrome.action.setBadgeBackgroundColor({ color: mode === 'bypass' ? '#8a3b12' : '#1f5f3a' });
+  await chrome.action.setBadgeBackgroundColor({
+    color: mode === 'bypass' ? '#8a3b12' : mode === 'experimental' ? '#5b2a86' : '#1f5f3a',
+  });
   const title =
     mode === 'bypass'
       ? settings.enabled
         ? 'Untrackable – paused'
         : 'Untrackable – off'
-      : `Untrackable – ${mode === 'strict' ? 'Strict' : 'Clean'} mode`;
+      : mode === 'experimental'
+        ? 'Untrackable – Experimental mode: removes all query parameters (sites may break)'
+        : `Untrackable – ${mode === 'strict' ? 'Strict' : 'Clean'} mode`;
   await chrome.action.setTitle({ title });
 }
 
@@ -525,6 +532,30 @@ async function copyClean(url: string): Promise<void> {
   await copyToClipboard(result.url);
 }
 
+/**
+ * Explicit user actions "Copy/Open link without query parameters". They strip
+ * the whole query even where automatic cleaning would protect the link (the
+ * user asked for exactly that) – but only on a click, never automatically, and
+ * never for anything but http(s). Opening is a single new-tab navigation: no
+ * bypass rule, no retry; the stripped URL is cleaned like any other.
+ */
+async function copyStripped(url: string): Promise<void> {
+  if (url.length > MAX_URL_LENGTH) return;
+  const result = stripQuery(url);
+  if (result.status !== 'cleaned' && result.status !== 'unchanged') return;
+  await copyToClipboard(result.url);
+}
+
+async function openStripped(url: string, openerTab?: chrome.tabs.Tab): Promise<void> {
+  if (url.length > MAX_URL_LENGTH) return;
+  const result = stripQuery(url);
+  if (result.status !== 'cleaned' && result.status !== 'unchanged') return;
+  const createProps: chrome.tabs.CreateProperties = { url: result.url, active: true };
+  if (openerTab?.id !== undefined) createProps.openerTabId = openerTab.id;
+  if (openerTab?.index !== undefined) createProps.index = openerTab.index + 1;
+  await chrome.tabs.create(createProps);
+}
+
 // ---------------------------------------------------------------------------
 // Event wiring
 // ---------------------------------------------------------------------------
@@ -568,6 +599,16 @@ function createMenus(): void {
     chrome.contextMenus.create({ id: MENU.copyLink, title: 'Copy clean link', contexts: ['link'] });
     chrome.contextMenus.create({ id: MENU.openUnmodified, title: 'Open link without cleaning', contexts: ['link'] });
     chrome.contextMenus.create({ id: MENU.copyPage, title: 'Copy clean page link', contexts: ['page'] });
+    chrome.contextMenus.create({
+      id: MENU.copyStripped,
+      title: 'Copy link without query parameters',
+      contexts: ['link'],
+    });
+    chrome.contextMenus.create({
+      id: MENU.openStripped,
+      title: 'Open link without query parameters',
+      contexts: ['link'],
+    });
   });
 }
 
@@ -596,6 +637,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === MENU.copyLink && info.linkUrl) void copyClean(info.linkUrl);
   else if (info.menuItemId === MENU.openUnmodified && info.linkUrl) void openUnmodified(info.linkUrl, tab);
+  else if (info.menuItemId === MENU.copyStripped && info.linkUrl) void copyStripped(info.linkUrl);
+  else if (info.menuItemId === MENU.openStripped && info.linkUrl) void openStripped(info.linkUrl, tab);
   else if (info.menuItemId === MENU.copyPage) {
     const pageUrl = info.pageUrl ?? tab?.url;
     if (pageUrl !== undefined) void copyClean(pageUrl);

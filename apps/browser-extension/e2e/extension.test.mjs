@@ -55,6 +55,11 @@ async function setSettings(patch) {
     const rules = await sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules());
     if (!expectRules) return rules.length === 0;
     const mode = patch.mode ?? 'clean';
+    if (mode === 'experimental') {
+      const exceptionRule = rules.find((r) => r.id === 2000);
+      const exceptionsOk = (patch.exceptions ?? []).length === 0 ? !exceptionRule : !!exceptionRule;
+      return rules.some((r) => r.id === 50) && !rules.some((r) => r.id === 1) && exceptionsOk;
+    }
     const global = rules.find((r) => r.id === 1);
     const hasStrict = global?.action.redirect.transform.queryTransform.removeParams.includes('ref');
     const exceptionRule = rules.find((r) => r.id === 2000);
@@ -98,6 +103,12 @@ before(async () => {
     // A click tracker redirecting to another host with a tracker parameter.
     if (req.url.startsWith('/r?to=dest')) {
       res.writeHead(302, { location: `http://dest.test:${port}/landing?mkt_tok=ABC` });
+      res.end();
+      return;
+    }
+    // A plain server redirect to a destination with parameters.
+    if (req.url.startsWith('/hop')) {
+      res.writeHead(302, { location: '/landing?id=1&utm_source=x' });
       res.end();
       return;
     }
@@ -225,7 +236,7 @@ describe('installation', () => {
     assert.deepEqual(manifest.optional_permissions, ['webNavigation']);
   });
 
-  test('installs every compiled rule in both modes (none silently dropped)', async () => {
+  test('installs every compiled rule in every mode (none silently dropped)', async () => {
     const bundle = await build({
       entryPoints: [fileURLToPath(new URL('../../../packages/core/src/index.ts', import.meta.url))],
       bundle: true,
@@ -237,7 +248,7 @@ describe('installation', () => {
     const core = await import(
       `data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`
     );
-    for (const mode of ['clean', 'strict']) {
+    for (const mode of ['clean', 'strict', 'experimental']) {
       await setSettings({ mode, exceptions: ['a.example'] });
       const expected = core
         .compileDnrRules({ mode, exceptions: ['a.example'] })
@@ -247,10 +258,15 @@ describe('installation', () => {
         .map((r) => r.id)
         .sort((a, b) => a - b);
       assert.deepEqual(installed, expected, mode);
-      assert.ok(
-        installed.some((id) => id >= 500 && id < 1000),
-        'case-insensitive fallback rules installed',
-      );
+      if (mode === 'experimental') {
+        assert.ok(installed.includes(50) && !installed.some((id) => id < 1000 && id !== 50), 'only the strip rule');
+        assert.equal(await sw.evaluate(() => chrome.action.getBadgeText({})), 'E');
+      } else {
+        assert.ok(
+          installed.some((id) => id >= 500 && id < 1000),
+          'case-insensitive fallback rules installed',
+        );
+      }
     }
   });
 });
@@ -389,6 +405,164 @@ describe('modes and user control', () => {
     assert.deepEqual(items, ['xn--bcher-kva.test']);
     assert.equal(await options.isChecked('input[name="mode"][value="clean"]'), true);
     await options.close();
+  });
+});
+
+describe('Experimental mode (strip query parameters)', () => {
+  test('strips trackers, functional and unknown parameters before the request is sent', async () => {
+    await setSettings({ mode: 'experimental' });
+    assert.equal(await visit('/article?utm_source=email&id=123&ref=newsletter'), '/article');
+    assert.equal(await visit('/search?q=shoes&page=2'), '/search');
+    assert.equal(await visit('/?email_id=example123', 'support.stripe.test'), '/');
+    // The original URL never reached the server (no consumed one-time links).
+    assert.deepEqual(
+      seen.filter((u) => !u.startsWith('/favicon')),
+      ['/article', '/search', '/'],
+      JSON.stringify(seen),
+    );
+  });
+
+  test('keeps the fragment and leaves URLs without a query alone', async () => {
+    await setSettings({ mode: 'experimental' });
+    const page = await context.newPage();
+    await page.goto(`http://news.test:${port}/a?x=1&y=2#section`);
+    assert.equal(page.url(), `http://news.test:${port}/a#section`);
+    await page.goto(`http://news.test:${port}/plain`);
+    assert.equal(page.url(), `http://news.test:${port}/plain`);
+    await page.goto(`http://news.test:${port}/empty?`);
+    assert.equal(page.url(), `http://news.test:${port}/empty?`);
+    await page.goto(`http://news.test:${port}/amp?&&`);
+    assert.equal(page.url(), `http://news.test:${port}/amp?&&`);
+    await page.close();
+  });
+
+  const protectedPaths = [
+    '/oauth2/authorize?client_id=1&redirect_uri=x&utm_source=a',
+    '/welcome?code=abc',
+    '/welcome?state=xyz&utm_source=a',
+    '/account/reset-password?uid=1',
+    '/email/verify/1/abc?utm_source=a',
+    '/file.pdf?X-Amz-Signature=abc&utm_source=a',
+    '/m?login_token=abc',
+    '/action?csrf=1&utm_source=a',
+    '/order/complete?payment_intent=pi_1&payment_intent_client_secret=s&redirect_status=succeeded',
+    '/account?next=%2Forders',
+    '/f.zip?expires=1700000000&id=2',
+    '/images/?entry_id=1&login_hint=user%40example.com&utm_source=a',
+    '/checkout/step-2?utm_source=a',
+    '/x%2Fsso?id=1',
+  ];
+  for (const path of protectedPaths) {
+    test(`protected: ${path}`, async () => {
+      await setSettings({ mode: 'experimental' });
+      assert.equal(await visit(path), path);
+    });
+  }
+
+  test('domain exceptions, global off, timed pause and tab pause still apply', async () => {
+    await setSettings({ mode: 'experimental', exceptions: ['news.test'] });
+    assert.equal(await visit('/a?id=1', 'eu.news.test'), '/a?id=1');
+    assert.equal(await visit('/a?id=1', 'other.test'), '/a');
+    await setSettings({ mode: 'experimental', enabled: false });
+    assert.equal(await visit('/a?id=1'), '/a?id=1');
+    await setSettings({ mode: 'experimental', pausedUntil: Date.now() + 60_000 });
+    assert.equal(await visit('/a?id=1'), '/a?id=1');
+    await setSettings({ mode: 'experimental' });
+    const page = await context.newPage();
+    await page.goto(`http://news.test:${port}/first`);
+    const tabId = await sw.evaluate(
+      async (u) => (await chrome.tabs.query({})).find((t) => t.url === u)?.id,
+      page.url(),
+    );
+    const ext = await extensionPage('options.html');
+    await ext.evaluate((id) => chrome.runtime.sendMessage({ type: 'setTabPaused', tabId: id, paused: true }), tabId);
+    await page.goto(`http://news.test:${port}/a?id=1`);
+    assert.match(page.url(), /\/a\?id=1$/);
+    await ext.evaluate((id) => chrome.runtime.sendMessage({ type: 'setTabPaused', tabId: id, paused: false }), tabId);
+    await page.goto(`http://news.test:${port}/b?id=1`);
+    assert.match(page.url(), /\/b$/);
+    await ext.close();
+    await page.close();
+  });
+
+  test('"Open link without cleaning" opens the original once, then stripping resumes', async () => {
+    await setSettings({ mode: 'experimental' });
+    const ext = await extensionPage('options.html');
+    await ext.fill('#preview-input', `http://news.test:${port}/once-exp?id=1&utm_source=x`);
+    await ext.click('#open-unmodified');
+    const tab = await waitFor(
+      () => context.pages().find((p) => p.url().includes('/once-exp')),
+      'tab opened without cleaning',
+      15_000,
+    );
+    assert.match(tab.url(), /\/once-exp\?id=1&utm_source=x$/);
+    assert.equal(seen.filter((u) => u.startsWith('/once-exp')).length, 1, 'requested exactly once');
+    await waitFor(
+      async () => (await sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,
+      'bypass rule removal',
+    );
+    await tab.goto(`http://news.test:${port}/again?id=1`);
+    assert.match(tab.url(), /\/again$/);
+    await tab.close();
+    await ext.close();
+  });
+
+  test('form submissions (POST) keep their target query', async () => {
+    await setSettings({ mode: 'experimental' });
+    const page = await context.newPage();
+    await page.goto(`http://news.test:${port}/form`);
+    await Promise.all([
+      page.waitForURL(/\/submit/),
+      page.evaluate(() => {
+        const f = document.createElement('form');
+        f.method = 'post';
+        f.action = '/submit?step=2';
+        document.body.append(f);
+        f.submit();
+      }),
+    ]);
+    assert.ok(seen.includes('/submit?step=2'), JSON.stringify(seen));
+    await page.close();
+  });
+
+  test('server redirect chains terminate; a server insisting on a query fails as documented', async () => {
+    await setSettings({ mode: 'experimental' });
+    // Each hop is stripped: redirect -> destination query stripped too.
+    assert.equal(await visit('/hop?utm_source=a'), '/landing');
+    assert.deepEqual(seen, ['/hop', '/landing'], JSON.stringify(seen));
+    seen.length = 0;
+    const page = await context.newPage();
+    await assert.rejects(page.goto(`http://news.test:${port}/loop`), /ERR_TOO_MANY_REDIRECTS/);
+    await page.close();
+  });
+
+  test('"Open link without query parameters" opens one stripped tab, no bypass left behind', async () => {
+    await setSettings({ mode: 'clean' });
+    const before = context.pages().length;
+    await sw.evaluate(
+      (linkUrl) =>
+        chrome.contextMenus.onClicked.dispatch({ menuItemId: 'open-link-without-query', linkUrl, editable: false }),
+      `http://news.test:${port}/opened?code=abc&utm_source=x#frag`,
+    );
+    const tab = await waitFor(() => context.pages().find((p) => p.url().includes('/opened')), 'stripped tab', 10_000);
+    await tab.waitForLoadState();
+    assert.equal(tab.url(), `http://news.test:${port}/opened#frag`);
+    assert.deepEqual(
+      seen.filter((u) => u.startsWith('/opened')),
+      ['/opened'],
+    );
+    assert.equal((await sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length, 0);
+    // javascript: and other schemes are ignored.
+    await sw.evaluate(() =>
+      chrome.contextMenus.onClicked.dispatch({
+        menuItemId: 'open-link-without-query',
+        linkUrl: 'javascript:alert(1)',
+        editable: false,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(context.pages().length, before + 1);
+    await tab.close();
   });
 });
 
@@ -800,6 +974,46 @@ describe('copy cleaning', () => {
     await page.close();
   });
 
+  test('Experimental: copying a link strips its whole query, a protected link stays unchanged', async () => {
+    await setSettings({ mode: 'experimental' });
+    const page = await context.newPage();
+    await page.goto(`http://localhost:${port}/copy`);
+    await page.waitForTimeout(200);
+    const stripped = await copySelection(page, () => {
+      const p = document.getElementById('para');
+      p.textContent = 'https://shop.example/search?q=shoes&page=2#results';
+      getSelection().selectAllChildren(p);
+    });
+    assert.equal(stripped, 'https://shop.example/search#results');
+    const kept = await copySelection(page, () => {
+      const p = document.getElementById('para');
+      p.textContent = 'https://shop.example/order/complete?payment_intent=pi_1&redirect_status=succeeded';
+      getSelection().selectAllChildren(p);
+    });
+    assert.equal(kept, 'https://shop.example/order/complete?payment_intent=pi_1&redirect_status=succeeded');
+    await page.close();
+  });
+
+  test('"Copy link without query parameters" strips on explicit request, even protected links', async () => {
+    const ext = await extensionPage('options.html');
+    const clip = () => ext.evaluate(() => navigator.clipboard.readText());
+    const menu = (id, linkUrl) =>
+      sw.evaluate(
+        ({ id, linkUrl }) => chrome.contextMenus.onClicked.dispatch({ menuItemId: id, linkUrl, editable: false }),
+        { id, linkUrl },
+      );
+    await ext.evaluate(() => navigator.clipboard.writeText('sentinel'));
+    // Works in the default Clean mode too: it is a manual action.
+    await menu('copy-link-without-query', 'https://example.com/login?token=abc&utm_source=x#top');
+    await waitFor(async () => (await clip()) === 'https://example.com/login#top', 'stripped link copied', 5_000);
+    // Non-http(s) links are ignored (clipboard untouched).
+    await ext.evaluate(() => navigator.clipboard.writeText('sentinel'));
+    await menu('copy-link-without-query', 'javascript:alert(1)?x=1');
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(await clip(), 'sentinel');
+    await ext.close();
+  });
+
   test('"Copy clean link" path writes through the offscreen document', async () => {
     const ext = await extensionPage('options.html');
     const ok = await ext.evaluate(() =>
@@ -957,6 +1171,40 @@ describe('user interface', () => {
     await waitFor(async () => (await popup.textContent('#status')) === 'Off', 'off status');
     await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === 'off', 'badge off');
     await popup.close();
+  });
+
+  test('Experimental needs an explicit confirmation and can be left with one click', async () => {
+    const popup = await extensionPage('popup.html');
+    const mode = async () => (await sw.evaluate(() => chrome.storage.local.get('mode'))).mode ?? 'clean';
+    // Choosing the radio only shows the warning; focus goes to the safe button.
+    await popup.check('input[name="mode"][value="experimental"]');
+    assert.equal(await popup.isVisible('#exp-confirm'), true);
+    assert.equal(await popup.evaluate(() => document.activeElement?.id), 'exp-cancel');
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(await mode(), 'clean', 'not activated without confirmation');
+    await popup.keyboard.press('Enter'); // Enter on "Cancel"
+    assert.equal(await popup.isHidden('#exp-confirm'), true);
+    assert.equal(await popup.isChecked('input[name="mode"][value="clean"]'), true);
+    assert.equal(await mode(), 'clean');
+    // Confirmed: mode, badge, status and the "Back to Clean" notice.
+    await popup.check('input[name="mode"][value="experimental"]');
+    await popup.click('#exp-enable');
+    await waitFor(async () => (await mode()) === 'experimental', 'experimental saved');
+    await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === 'E', 'badge E');
+    await waitFor(async () => (await popup.textContent('#status')) === 'Experimental', 'status');
+    assert.equal(await popup.isVisible('#exp-active'), true);
+    await popup.close();
+    // The options page shows the same notice; "Back to Clean" switches back at once.
+    const options = await extensionPage('options.html');
+    await options.fill('#preview-input', 'https://example.com/a?id=1&utm_source=x#top');
+    assert.match(await options.textContent('#preview-output'), /https:\/\/example\.com\/a#top/);
+    assert.equal(await options.isVisible('#exp-active'), true);
+    await options.click('#exp-back');
+    await waitFor(async () => (await mode()) === 'clean', 'back to clean');
+    await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === '', 'badge cleared');
+    assert.equal(await options.isHidden('#exp-active'), true);
+    assert.equal(await options.isChecked('input[name="mode"][value="clean"]'), true);
+    await options.close();
   });
 
   test('options page previews what would be removed', async () => {
@@ -1172,7 +1420,6 @@ describe('DNR model vs Chromium', () => {
     const mod = await import(
       `data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`
     );
-    const rules = mod.compileDnrRules({ mode: 'clean', exceptions: [] });
     let seed = 7;
     const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     const pick = (xs) => xs[Math.floor(rand() * xs.length)];
@@ -1198,7 +1445,13 @@ describe('DNR model vs Chromium', () => {
     const vals = ['', '=1', '=a%20b', '=x&', '=1#frag'];
     const paths = ['/a', '/login', '/watch', '/x%2Fsso', '/p/q'];
     const mismatches = [];
-    for (let i = 0; i < 200; i++) {
+    let rules = mod.compileDnrRules({ mode: 'clean', exceptions: [] });
+    for (let i = 0; i < 260; i++) {
+      if (i === 200) {
+        // Experimental mode (query stripping) on the remaining URLs.
+        await setSettings({ mode: 'experimental' });
+        rules = mod.compileDnrRules({ mode: 'experimental', exceptions: [] });
+      }
       const n = 1 + Math.floor(rand() * 5);
       const query =
         Array.from({ length: n }, () => pick(keys) + pick(vals.slice(0, 3))).join('&') + (rand() < 0.15 ? '&' : '');

@@ -47,21 +47,51 @@
       <section>
         <fieldset>
           <legend>Cleaning</legend>
-          <label><input type="checkbox" id="enabled" /> <span>Clean links automatically</span></label>
           <label
-            ><input type="radio" name="mode" value="clean" />
-            <span
-              ><strong>Clean</strong> (recommended) – removes well-known trackers such as <code>utm_*</code>,
-              <code>fbclid</code>, <code>gclid</code>.</span
-            ></label
+            ><input type="checkbox" id="enabled" />
+            <span>Clean links automatically <small>(off: Bypass – nothing is cleaned)</small></span></label
           >
-          <label
-            ><input type="radio" name="mode" value="strict" />
-            <span
-              ><strong>Strict</strong> – additionally removes referral and analytics parameters (e.g. <code>ref</code>,
-              Amazon/Google/eBay specifics) and trackers in link fragments. May occasionally affect a site.</span
-            ></label
-          >
+          <div role="radiogroup" aria-label="Cleaning mode">
+            <label
+              ><input type="radio" name="mode" value="clean" />
+              <span
+                ><strong>Clean</strong> (recommended) – removes well-known trackers such as <code>utm_*</code>,
+                <code>fbclid</code>, <code>gclid</code>.</span
+              ></label
+            >
+            <label
+              ><input type="radio" name="mode" value="strict" />
+              <span
+                ><strong>Strict</strong> – additionally removes referral and analytics parameters (e.g.
+                <code>ref</code>, Amazon/Google/eBay specifics) and trackers in link fragments. May occasionally affect
+                a site.</span
+              ></label
+            >
+            <label
+              ><input type="radio" name="mode" value="experimental" aria-describedby="exp-desc" />
+              <span id="exp-desc"
+                ><strong>Experimental – strip query parameters</strong> – removes the whole query string
+                (<code>?…</code>) of every link, known tracker or not. Links Untrackable recognises as sign-in, payment,
+                signed or expiring are left unchanged. Expect broken searches, filters and other site features.</span
+              ></label
+            >
+          </div>
+          <div id="exp-confirm" class="notice" role="group" aria-labelledby="exp-confirm-text" hidden>
+            <p id="exp-confirm-text">
+              <strong>Experimental removes every query parameter</strong>, not only trackers. Searches, filters,
+              shopping carts, sign-ins, payments and other site features may break. Untrackable leaves sign-in, payment
+              and signed links alone when it recognises them, but it cannot recognise every one. It does not make you
+              anonymous.
+            </p>
+            <div class="row">
+              <button type="button" class="primary" id="exp-enable">Use Experimental</button>
+              <button type="button" id="exp-cancel">Cancel</button>
+            </div>
+          </div>
+          <div id="exp-active" class="notice row" hidden>
+            <span>Experimental is on: query parameters are removed and sites may break.</span>
+            <button type="button" id="exp-back">Back to Clean</button>
+          </div>
           <label
             ><input type="checkbox" id="copy-cleaning" />
             <span
@@ -123,6 +153,10 @@
           <li>
             Removing tracking parameters does not stop cookies, IP-based tracking or browser fingerprinting. Untrackable
             does not make you anonymous.
+          </li>
+          <li>
+            Right-click a link for “Copy link without query parameters” or “Open link without query parameters” to strip
+            one link on purpose – in any mode, also where automatic cleaning would leave it alone.
           </li>
           <li>Keyboard shortcut for “Copy clean link” can be changed at <code>chrome://extensions/shortcuts</code>.</li>
         </ul>
