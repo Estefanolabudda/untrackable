@@ -1073,6 +1073,21 @@
       "expected": "https://idp.example.com/session/end?id_token_hint=eyJ&utm_source=x",
       "status": "protected",
       "reason": "param:id_token_hint"
+    },
+    {
+      "name": "Stripe support email_id is kept in strict mode (feeds the support conversation widget)",
+      "input": "https://support.stripe.com/questions/example?email_id=abc123&utm_source=email&utm_medium=support",
+      "mode": "strict",
+      "expected": "https://support.stripe.com/questions/example?email_id=abc123",
+      "status": "cleaned",
+      "removed": ["utm_source", "utm_medium"]
+    },
+    {
+      "name": "Stripe support email_id is kept in clean mode",
+      "input": "https://support.stripe.com/?email_id=abc123&utm_campaign=x",
+      "expected": "https://support.stripe.com/?email_id=abc123",
+      "status": "cleaned",
+      "removed": ["utm_campaign"]
     }
   ]
 }

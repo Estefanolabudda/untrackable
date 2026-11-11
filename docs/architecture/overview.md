@@ -48,6 +48,17 @@ properties:
   responsible rule id, which powers the transparent preview in the options
   page.
 
+### Rule decisions for reported parameters
+
+Parameters reported as "not removed" are only added to a rule once their
+purpose is established as tracking. Parameters with a possible function stay
+unknown (and are therefore kept); the decision is recorded here and pinned by
+a fixture in `tests/fixtures/cases.json`.
+
+| Parameter  | Site                 | Decision                | Evidence (2026-11-11)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `email_id` | `support.stripe.com` | Kept (Clean and Strict) | Not a protection rule – the name is simply not in any rule (unknown parameters are kept). Stripe's server copies the value into the URL of its support conversation widget (`support-conversations.stripe.com/widget?…&email_id=…`), i.e. it links the visit to a support e-mail/conversation. That is a support function, not demonstrably pure tracking; removing it could break continuing a support case. No global rule for `email_id` either: the name is generic and used by other sites with different meanings. |
+
 ### Why two engine implementations?
 
 Rust + WebAssembly was considered for the extension. We evaluated it

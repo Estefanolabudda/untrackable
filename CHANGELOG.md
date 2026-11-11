@@ -21,7 +21,7 @@ First release. Chromium extension (Phase 1) and reusable cleaning engines.
   verification, invitations, unsubscribe/preference centres, signed and
   expiring downloads (S3, GCS, Azure, CloudFront, Akamai) and payment pages.
 - **Engines:** TypeScript engine (extension) and Rust engine (future desktop
-  app, CLI example) with 150 shared conformance fixtures, property-based tests
+  app, CLI example) with 156 shared conformance fixtures, property-based tests
   and a differential test that requires identical results on >50,000 URLs
   generated from the rule file.
 - **Chromium MV3 extension:**
@@ -75,6 +75,10 @@ First release. Chromium extension (Phase 1) and reusable cleaning engines.
 - The redirect-loop helper no longer blames tracker cleaning when the page
   also fails after "Reload once without cleaning"; it says the loop is not
   caused by Untrackable.
+- Checked on report: `email_id` on `support.stripe.com` is intentionally kept
+  (also in Strict). Stripe passes it to its support conversation widget, so it
+  is part of the support flow rather than pure tracking; documented in
+  `docs/architecture/overview.md` and pinned by fixtures.
 
 ### Known limitations
 
