@@ -112,10 +112,10 @@ release to `artifacts/`.
 
 At installation Chrome shows two warnings:
 
-| Warning                                         | Why Untrackable needs it                                                                                                                               |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| _Read and change all your data on all websites_ | Rewriting navigation URLs requires host access, and copy cleaning runs on every page. Untrackable does not read page content beyond the link you copy. |
-| _Modify data you copy and paste_                | Writing the clean link to the clipboard when you copy a link or use "Copy clean link".                                                                 |
+| Warning                                         | Why Untrackable needs it                                                                                                                                                                                                      |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| _Read and change all your data on all websites_ | Rewriting navigation URLs requires host access, and copy cleaning runs on every page. When you copy with the keyboard, Untrackable only checks whether the copied text is a single link; it does not read other page content. |
+| _Modify data you copy and paste_                | Writing the clean link to the clipboard when you copy a link or use "Copy clean link".                                                                                                                                        |
 
 The redirect-loop helper uses the optional `webNavigation` permission. It is
 off by default and only requested when you enable it in the settings. Details:
@@ -123,12 +123,12 @@ off by default and only requested when you enable it in the settings. Details:
 
 ## Cleaning modes
 
-| Mode                             | What it removes                                                                                                                                                                                                                                                             | When to use it                                                   |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| **Clean** (default, recommended) | Known trackers only: campaign parameters (`utm_*`), ad click IDs (`fbclid`, `gclid`, `msclkid`, …), newsletter and marketing IDs (Mailchimp, HubSpot, Marketo, …) and share IDs on YouTube, Spotify, Instagram and X. **Unknown parameters are always kept.**               | Everyday browsing. Designed to be conservative.                  |
-| **Strict**                       | Everything in Clean, plus referral and analytics parameters (`ref`, Matomo `pk_*`/`mtm_*`, …), site-specific trackers for Amazon, Google search, eBay, AliExpress and social networks, and trackers in link fragments (`#utm_source=…`). Unknown parameters are still kept. | More removal, with a slightly higher chance that a site notices. |
-| **Experimental** (opt-in)        | The **entire query string** (`?…`) of the pages you open – trackers, functional and unknown parameters alike. Recognised sign-in, payment and signed links are left unchanged. See [Experimental mode](#experimental-mode).                                                 | Maximum URL minimisation when you accept that sites will break.  |
-| **Bypass**                       | Nothing. Turn off "Clean links automatically", pause for 15 minutes, pause a single tab, open one link without cleaning, or add a site exception.                                                                                                                           | When a site misbehaves, or you want links unchanged.             |
+| Mode                             | What it removes                                                                                                                                                                                                                                                                            | When to use it                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| **Clean** (default, recommended) | Known trackers only: campaign parameters (`utm_*`), ad click IDs (`fbclid`, `gclid`, `msclkid`, …), newsletter and marketing IDs (Mailchimp, HubSpot, Marketo, …) and share IDs on YouTube, Spotify, Instagram and X. **Unknown parameters are always kept.**                              | Everyday browsing. Designed to be conservative.                  |
+| **Strict**                       | Everything in Clean, plus referral and analytics parameters (`ref`, Matomo `pk_*`/`mtm_*`, …), site-specific trackers for Amazon, Google search, eBay, AliExpress and social networks; when copying, also trackers in link fragments (`#utm_source=…`). Unknown parameters are still kept. | More removal, with a slightly higher chance that a site notices. |
+| **Experimental** (opt-in)        | The **entire query string** (`?…`) of the pages you open – trackers, functional and unknown parameters alike. Recognised sign-in, payment and signed links are left unchanged. See [Experimental mode](#experimental-mode).                                                                | Maximum URL minimisation when you accept that sites will break.  |
+| **Bypass**                       | Nothing. Turn off "Clean links automatically", pause for 15 minutes, pause a single tab, open one link without cleaning, or add a site exception.                                                                                                                                          | When a site misbehaves, or you want links unchanged.             |
 
 The complete list of trackers and protection signals is in
 [`rules/rules.json`](rules/rules.json).
@@ -280,8 +280,8 @@ See the [privacy statement](docs/privacy/privacy.md) and the
   scripts are unaffected.
 - Protection of sign-in, payment and signed links is heuristic (see
   [above](#how-links-are-protected)).
-- Only top-level page loads are cleaned – not frames, scripts or requests made
-  by a page.
+- Automatic cleaning applies to top-level page loads only – not to frames,
+  scripts or requests made by a page.
 - Redirect-based click tracking (`tracker.example/click?u=…`) is not unwrapped
   yet.
 
