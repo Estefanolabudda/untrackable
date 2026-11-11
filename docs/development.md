@@ -30,7 +30,23 @@ npm ci
 | Regenerate icons                                        | `node scripts/gen-icons.mjs`                                                        |
 
 Set `CHROMIUM_PATH=/path/to/chromium` to run the e2e suite with a specific
-browser binary.
+browser binary. CI runs the suite against Playwright's Chromium and against
+[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/)
+116 (minimum supported version) and a recent stable release (job `compat`,
+archives pinned by SHA-256). Branded Google Chrome cannot be used: it no
+longer loads extensions from the command line. The suite detects older
+behaviour at startup (an empty `?` left after removal) and skips checks that a
+browser version cannot support (no `clipboardchange` event, no CDP
+`Extensions` domain for the upgrade tests) with a reason.
+
+Regression safety nets:
+
+- `tests/corpus/sensitive-urls.json` – 255 real-world sign-in, payment,
+  signed-download and similar URL shapes with per-mode expectations, checked
+  in both engines and against the navigation rules. Changing an expectation is
+  a reviewed decision.
+- `apps/browser-extension/e2e/releases/` – the published release ZIPs
+  (SHA-256 checked) used by the upgrade tests.
 
 ## Loading the extension manually
 
