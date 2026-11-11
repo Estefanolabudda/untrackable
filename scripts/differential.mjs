@@ -185,6 +185,11 @@ for (const mode of ['clean', 'strict', 'experimental']) {
   }
   for (const d of p.domains) requests.push({ input: `https://sub.${d}/x?utm_source=1`, mode, exceptions: [] });
 }
+// 1b. Sensitive URL regression corpus, every mode and the explicit strip action.
+for (const { url: input } of JSON.parse(readFileSync(`${root}/tests/corpus/sensitive-urls.json`, 'utf8')).entries) {
+  for (const mode of ['clean', 'strict', 'experimental', 'bypass']) requests.push({ input, mode, exceptions: [] });
+  requests.push({ input, strip: true });
+}
 // 2. Random corpus.
 for (let i = 0; i < RANDOM_CASES; i++) {
   const exceptions = chance(0.1)
