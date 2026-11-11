@@ -13,6 +13,12 @@
 - [x] Unit, property-based and Chromium end-to-end tests; CI
 - [ ] Chrome Web Store listing (requires maintainer account and approval)
 
+## v0.2 – Experimental mode (in development)
+
+- Opt-in "Experimental – strip query parameters" mode with protection of
+  recognised sign-in/payment/signed links and an explicit confirmation.
+- Context-menu actions "Copy/Open link without query parameters".
+
 ## Phase 2 – macOS and Linux
 
 Not started. Will only begin once the extension is stable.

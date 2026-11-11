@@ -11,8 +11,9 @@ https://example.com/article?utm_source=newsletter&utm_medium=email&id=123
 https://example.com/article?id=123
 ```
 
-Status: **v0.1.0 release candidate** – Chromium extension (Phase 1); once released, available as a ZIP on the
-GitHub releases page for manual installation. Not yet in the Chrome Web Store.
+Status: **v0.2.0 in development** (adds the Experimental mode); v0.1.0 is the
+first release – available as a ZIP on the GitHub releases page for manual
+installation. Not in the Chrome Web Store.
 
 ## Features
 
@@ -26,8 +27,9 @@ GitHub releases page for manual installation. Not yet in the Chrome Web Store.
   reset, e-mail verification, invitations, signed/expiring downloads (S3,
   GCS, Azure, CloudFront) and payment pages are detected and left untouched.
   Unknown parameters are always kept.
-- **Three modes** – _Clean_ (default), _Strict_ (more aggressive, optional),
-  _Bypass_ (off).
+- **Four modes** – _Clean_ (default), _Strict_ (more aggressive, optional),
+  _Experimental_ (strips the whole query string, explicit opt-in), _Bypass_
+  (off).
 - **You stay in control** – per-site exceptions, pause for 15 minutes, pause
   in a single tab, "Open link without cleaning" for one-off bypasses.
 - **Transparent** – the settings page shows exactly which parameters would be
@@ -63,25 +65,30 @@ Nothing to do – links are cleaned as you browse. The toolbar popup offers:
 | Control                        | Effect                                        |
 | ------------------------------ | --------------------------------------------- |
 | Clean links automatically      | Global on/off (Bypass mode when off)          |
-| Clean / Strict                 | Choose the cleaning mode                      |
+| Clean / Strict / Experimental  | Choose the cleaning mode                      |
+| Back to Clean                  | Leave Experimental with one click             |
 | Pause for 15 minutes           | Temporary bypass, resumes automatically       |
 | Never clean links to this site | Adds a domain exception (subdomains included) |
 | Pause in this tab              | Bypass for one tab until re-enabled or closed |
 | Copy clean link                | Copies the current page's clean link          |
 
-The badge shows `S` in Strict mode, `off` when cleaning is off or paused,
+The badge shows `S` in Strict mode, `E` in Experimental mode, `off` when cleaning is off or paused,
 `!` if this browser could not install the protection rules (navigation
 cleaning is then disabled) and `↻` on a tab that hit a redirect loop (only
 with the optional retry offer).
-Right-click a link for **Copy clean link** and **Open link without cleaning**.
+Right-click a link for **Copy clean link**, **Open link without cleaning**,
+**Copy link without query parameters** and **Open link without query
+parameters** (the last two strip the whole query on purpose, in any mode –
+also links that automatic cleaning would protect).
 
 ## Cleaning modes
 
-| Mode                | Removes                                                                                                                                                                  | Notes                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| **Clean** (default) | Campaign parameters (`utm_*`), ad click ids, newsletter/marketing ids, share ids on YouTube, Spotify, Instagram, X                                                       | Designed to never break sites                                                |
-| **Strict**          | Everything in Clean plus referral/analytics parameters (`ref`, Matomo `pk_*`/`mtm_*`, …), Amazon/Google/eBay/AliExpress/social specifics, and trackers in link fragments | Unknown parameters are still kept                                            |
-| **Bypass**          | Nothing                                                                                                                                                                  | Global off, timed pause, per-tab pause, one-time bypass, per-site exceptions |
+| Mode                | Removes                                                                                                                                                                  | Notes                                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Clean** (default) | Campaign parameters (`utm_*`), ad click ids, newsletter/marketing ids, share ids on YouTube, Spotify, Instagram, X                                                       | Designed to never break sites                                                                                                               |
+| **Strict**          | Everything in Clean plus referral/analytics parameters (`ref`, Matomo `pk_*`/`mtm_*`, …), Amazon/Google/eBay/AliExpress/social specifics, and trackers in link fragments | Unknown parameters are still kept                                                                                                           |
+| **Experimental**    | The **whole query string** of every link – trackers, functional and unknown parameters alike (`/article?id=1&utm_source=x` → `/article`); fragments are kept             | Opt-in with a warning. Searches, filters and other features may break. Recognised sign-in, payment and signed links keep **all** parameters |
+| **Bypass**          | Nothing                                                                                                                                                                  | Global off, timed pause, per-tab pause, one-time bypass, per-site exceptions                                                                |
 
 The full list lives in [`rules/rules.json`](rules/rules.json).
 
@@ -110,6 +117,12 @@ The full list lives in [`rules/rules.json`](rules/rules.json).
   The clean link is written right after the copy (as plain text); pasting
   within a few milliseconds may still give the original.
 - Redirect-based click tracking (`tracker.example/click?u=…`) is not handled yet.
+- **Experimental** breaks sites that need query parameters (search results,
+  filters, pagination, some sign-in or payment steps it does not recognise).
+  Use _Back to Clean_, a site exception or _Open link without cleaning_. A
+  server that insists on its query ends in "too many redirects". Form
+  submissions (POST) and links protected as sign-in/payment/signed keep their
+  query. It does not make you anonymous.
 
 Details: [architecture overview](docs/architecture/overview.md).
 

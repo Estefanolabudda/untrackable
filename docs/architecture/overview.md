@@ -231,6 +231,47 @@ installs **no** redirects if any protection rule is unsupported (fail safe),
 and retries without the optional fallback rules if an update still fails. An
 e2e test asserts that every compiled rule is actually installed.
 
+### Experimental mode – strip query parameters (v0.2)
+
+An opt-in fourth mode for maximum URL minimisation. It is never the default
+and needs an explicit confirmation in the popup or settings.
+
+| Aspect               | Behaviour                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| What is removed      | The whole query string (`?…`) – trackers, functional and unknown parameters alike; no allow- or blocklist. Empty queries (`?`, `?&&`) are left alone.                                                                                                                                                        |
+| What is kept         | Scheme, host, port, path and fragment, byte for byte (raw string surgery, same as Clean/Strict).                                                                                                                                                                                                             |
+| Protected links      | Everything protected in Clean/Strict, plus the Experimental-only names in `protection.experimentalParams` (OAuth `code`/`state`/`error`, CSRF, Stripe/PayPal/3-D Secure payment return, `expires`/`exp`/`key`, login-redirect targets such as `next`, `return_to`). Such URLs keep **all** their parameters. |
+| Exceptions, bypasses | Unchanged: domain exceptions, global off, timed pause, tab pause, one-time bypass and the redirect-loop helper behave as in the other modes.                                                                                                                                                                 |
+| Navigation (DNR)     | One `redirect` rule with `transform: { query: "" }`, `GET` main-frame requests only, guarded by `regexFilter` `^[^?#]*\?[^#]*[^&#]` so no no-op redirect can match. Same protection/exception `allow` rules above it; tracker rules are not installed.                                                       |
+| Copy cleaning        | Same engine, same rules: a copied link loses its query unless protected or excepted.                                                                                                                                                                                                                         |
+
+Design decisions:
+
+- **Query only, fragment kept.** The request specification asked to keep the
+  fragment; navigation cannot see it anyway, and fragments often carry SPA
+  routes or text anchors.
+- **Protection still wins.** Stripping is far more likely to break sign-in,
+  payment and signed links than tracker removal, so the existing signals plus
+  `experimentalParams` apply. A protected URL is left completely unchanged –
+  Experimental therefore does **not** remove every query.
+- **`experimentalParams` is Experimental-only.** Names such as `code`,
+  `state` or `next` are common; protecting them in Clean/Strict would let
+  trackers ride along on many ordinary links, where unknown names are kept
+  anyway.
+- **GET only.** A form `POST` to `/submit?step=2` keeps its query: the target
+  query is part of the form's function, and a 307 redirect would resend the
+  body.
+- **No loop amplification.** The first request already goes out stripped (the
+  original URL is never sent, so one-time links are not consumed). A server
+  that insists on a query loops until Chromium's 20-redirect limit
+  (`ERR_TOO_MANY_REDIRECTS`), the same deterministic failure as in Clean; the
+  optional loop helper offers one host-scoped reload.
+- **Manual actions** "Copy link without query parameters" and "Open link
+  without query parameters" (context menu on links, all modes) call
+  `stripQuery`, which ignores protection and exceptions – the click is the
+  user's explicit intent. "Open" is a plain new-tab navigation to the
+  stripped URL: no bypass rule, no retry, later hops are cleaned normally.
+
 ### Copy cleaning
 
 How it works: the content script listens for a trusted Ctrl/Cmd+C or

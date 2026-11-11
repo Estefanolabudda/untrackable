@@ -8,6 +8,30 @@ All notable changes are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.0] – unreleased (in development)
+
+### Added
+
+- **Experimental mode – strip query parameters** (opt-in, never default):
+  removes the whole query string of links, known tracker or not, while
+  keeping scheme, host, path and fragment. Sign-in, payment, signed and
+  expiring links that Untrackable recognises keep all their parameters; an
+  Experimental-only protection list (`experimentalParams`: OAuth
+  `code`/`state`, CSRF, payment return, expiry, login-redirect targets) adds
+  names that are too common to protect in Clean/Strict. Only `GET`
+  navigations are rewritten. Badge `E`.
+- Activating Experimental shows a warning and needs an explicit confirmation;
+  a "Back to Clean" button is shown while it is active (popup and settings).
+- Context menu on links: **Copy link without query parameters** and **Open
+  link without query parameters** – explicit one-off actions in every mode.
+- Rule schema: optional `protection.experimentalParams`; both engines and the
+  differential test support the new mode.
+
+### Changed
+
+- The popup labels the master switch as Bypass when off and describes the
+  three cleaning modes.
+
 ## [0.1.0] – 2026-11-11
 
 First release. Chromium extension (Phase 1) and reusable cleaning engines.
