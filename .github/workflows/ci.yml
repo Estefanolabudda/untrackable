@@ -86,7 +86,16 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install Chromium for Playwright
-        run: npx playwright install --with-deps chromium
+        # The runner image already ships Chromium's shared libraries; --with-deps
+        # only adds optional fonts. If the Ubuntu mirrors are unreachable (seen
+        # 2026-11-11: 'Temporary failure resolving azure.archive.ubuntu.com'),
+        # install the browser alone instead of failing before any test runs.
+        # A missing library would still fail the e2e step below.
+        run: |
+          npx playwright install --with-deps chromium || {
+            echo "::warning::system dependencies could not be installed; installing Chromium only"
+            npx playwright install chromium
+          }
       - run: npm run test:e2e
 
   conformance:
