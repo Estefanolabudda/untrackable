@@ -1088,6 +1088,13 @@
       "expected": "https://support.stripe.com/?email_id=abc123",
       "status": "cleaned",
       "removed": ["utm_campaign"]
+    },
+    {
+      "name": "Stripe support e-mail link with em_ id is left unchanged in strict mode (unknown parameter)",
+      "input": "https://support.stripe.com/?email_id=em_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mode": "strict",
+      "expected": "https://support.stripe.com/?email_id=em_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "unchanged"
     }
   ]
 }

@@ -51,13 +51,54 @@ properties:
 ### Rule decisions for reported parameters
 
 Parameters reported as "not removed" are only added to a rule once their
-purpose is established as tracking. Parameters with a possible function stay
-unknown (and are therefore kept); the decision is recorded here and pinned by
-a fixture in `tests/fixtures/cases.json`.
+purpose is established as tracking **and** removing them is shown not to break
+a legitimate function. Otherwise they stay unknown (and are therefore kept);
+the decision is recorded here and pinned by fixtures in
+`tests/fixtures/cases.json`.
 
-| Parameter  | Site                 | Decision                | Evidence (2026-11-11)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------- | -------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `email_id` | `support.stripe.com` | Kept (Clean and Strict) | Not a protection rule – the name is simply not in any rule (unknown parameters are kept). Stripe's server copies the value into the URL of its support conversation widget (`support-conversations.stripe.com/widget?…&email_id=…`), i.e. it links the visit to a support e-mail/conversation. That is a support function, not demonstrably pure tracking; removing it could break continuing a support case. No global rule for `email_id` either: the name is generic and used by other sites with different meanings. |
+#### `email_id` on `support.stripe.com` – kept (Clean and Strict)
+
+Reported twice from maintainer tests (links from Stripe e-mails, e.g.
+`https://support.stripe.com/?email_id=em_…`). Findings (2026-11-11, logged
+out, synthetic `em_…` values):
+
+- **No protection rule is involved.** `email_id` is in no rule at all; the
+  engine returns `unchanged` (not `protected`), because unknown parameters are
+  always kept. `support.stripe.com` is not a protected domain (only
+  `checkout.stripe.com` is).
+- **Observable use is analytics/attribution.** The server copies the value
+  into the URL of the support conversation widget
+  (`support-conversations.stripe.com/widget?…&email_id=…`). In the JavaScript
+  of both the support site and the widget the name appears only in
+  `defaultQueryParamsAllowList` – the list of URL parameters Stripe's analytics
+  client may record unredacted, next to `utm_campaign` and similar. Status
+  code, redirects and cookies are identical with and without the parameter.
+  The `em_` prefix marks a Stripe e-mail message id, i.e. it ties the visit to
+  one sent e-mail.
+- **Not proven harmless.** Server-side use cannot be observed, and the
+  logged-in case (a support e-mail about an open case, chat continuation) was
+  not tested. Stripe support is a support/billing flow, so the safe variant is
+  kept.
+
+A Strict-only domain rule (`domains: ["support.stripe.com"]`,
+`params: ["email_id"]`) would be technically safe in scope – it cannot affect
+other sites or `checkout.stripe.com` / `dashboard.stripe.com` – and is the
+intended fix **if** a logged-in test shows that a support e-mail link behaves
+identically without `email_id`. A global `email_id` rule is ruled out: the
+name is generic, and other senders use it functionally (for example in
+unsubscribe or preference links, which are protected by path anyway).
+
+#### Other e-mail parameters (checked 2026-11-11)
+
+Removed in Clean already: Mailchimp `mc_cid`/`mc_eid`, HubSpot
+`_hsenc`/`_hsmi`, Marketo `mkt_tok`, Vero `vero_id`/`vero_conv`; Omeda
+`oly_enc_id` in Strict. Not removed today (unknown, kept) and candidates for a
+later, separately reviewed rule change: Klaviyo `_kx`, Eloqua `elqTrackId` /
+`elqTrack`, Salesforce Marketing Cloud `sfmc_id` / `sfmc_activityid`,
+Listrak `trk_contact`, Bronto `_bta_tid`. Several of these identify the
+recipient, but some vendors also use them for on-site sign-in or preference
+features (e.g. Kit/ConvertKit `ck_subscriber_id`, MailerLite
+`ml_subscriber*`), so each needs its own evidence before it is added.
 
 ### Why two engine implementations?
 
