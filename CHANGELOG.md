@@ -73,8 +73,8 @@ First release. Chromium extension (Phase 1) and reusable cleaning engines.
   stripped. URLs carrying the OpenID Connect hints `login_hint`,
   `id_token_hint` or `domain_hint` are now protected (left unchanged).
 - The redirect-loop helper no longer blames tracker cleaning when the page
-  also fails after "Reload once without cleaning"; it says the loop is not
-  caused by Untrackable.
+  also fails after "Reload once without cleaning"; it says the loop is
+  probably not caused by Untrackable and points to "Pause in this tab".
 - Checked on report: `email_id` on `support.stripe.com` is intentionally kept
   (also in Strict). Its observable use is Stripe's own analytics (passed to
   the support widget, recorded via an analytics allowlist), but removing it is
