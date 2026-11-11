@@ -205,7 +205,8 @@ compiles `rules.json` + settings into declarativeNetRequest rules
   URL whose path or a parameter key contains a percent-encoded letter, `-`,
   `_` or `.` is additionally allowed (left alone) during navigation.
 - Fragments are never sent in HTTP requests and are not touched by navigation
-  cleaning.
+  cleaning. Chromium matches rules against the URL including the fragment, so
+  parameter protection signals are matched after `?`, `&` or `#`.
 - `experimental` compiles to a single `redirect` with
   `transform: { query: "" }` for `GET` main-frame requests whose query has a
   non-empty segment (`regexFilter` `^[^?#]*\?[^#]*[^&#]`), below the same
