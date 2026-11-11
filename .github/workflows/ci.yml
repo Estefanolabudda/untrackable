@@ -55,6 +55,16 @@ jobs:
       - run: npm test
       - name: Build and package extension
         run: npm run package --workspace apps/browser-extension
+      - name: Check the zip is reproducible (independent of umask and file modes)
+        run: |
+          set -euo pipefail
+          first="$(sha256sum artifacts/*.zip | cut -d' ' -f1)"
+          chmod -R g+w apps/browser-extension/static
+          (umask 002 && npm run package --workspace apps/browser-extension)
+          chmod -R g-w apps/browser-extension/static
+          second="$(sha256sum artifacts/*.zip | cut -d' ' -f1)"
+          echo "first=$first second=$second"
+          test "$first" = "$second"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: untrackable-chromium
