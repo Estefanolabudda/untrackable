@@ -535,7 +535,15 @@ function copyToClipboard(text: string, stillWanted: () => boolean = () => true):
  * while automatic cleaning is paused – the user asked for a clean link.
  * Domain exceptions are still honoured.
  */
+/**
+ * Order of copies (keyboard copies seen by content scripts in all tabs and
+ * explicit copy actions); a pending keyboard copy may only write while it is
+ * the latest, so it never replaces a later explicit copy (found in review).
+ */
+let copySeq = 0;
+
 async function copyClean(url: string): Promise<void> {
+  copySeq++;
   if (url.length > MAX_URL_LENGTH) return; // hostile pages can craft huge hrefs
   const settings = await loadSettings();
   const result = cleanUrl(url, { mode: settings.mode, exceptions: settings.exceptions });
@@ -550,6 +558,7 @@ async function copyClean(url: string): Promise<void> {
  * bypass rule, no retry; the stripped URL is cleaned like any other.
  */
 async function copyStripped(url: string): Promise<void> {
+  copySeq++;
   if (url.length > MAX_URL_LENGTH) return;
   const result = stripQuery(url);
   if (result.status !== 'cleaned' && result.status !== 'unchanged') return;
@@ -569,9 +578,6 @@ async function openStripped(url: string, openerTab?: chrome.tabs.Tab): Promise<v
 // ---------------------------------------------------------------------------
 // Event wiring
 // ---------------------------------------------------------------------------
-
-/** Order of keyboard copies seen by content scripts (all tabs); only the latest may write. */
-let copySeq = 0;
 
 /**
  * Copy cleaning, decided here so settings never reach web pages.
@@ -597,7 +603,13 @@ async function onCopiedLink(tabId: number, url: string | undefined): Promise<voi
   // Switched off means no clipboard writes at all. (A page can therefore tell
   // whether copy cleaning is switched on – but not mode, pauses or exceptions.)
   if (!settings.enabled || !settings.copyCleaning) return;
-  const mode = effectiveMode(settings);
+  const effective = effectiveMode(settings);
+  // Experimental strips whole queries on purpose while navigating, but a
+  // keyboard copy must not silently replace the user's clipboard with a link
+  // that may no longer work (search, video, wrapped links – found in review):
+  // copies are cleaned with the Strict rules. Explicit "Copy clean link" and
+  // "Copy link without query parameters" still strip.
+  const mode = effective === 'experimental' ? 'strict' : effective;
   const active = mode !== 'bypass' && (await tabRules(tabId)).length === 0;
   const result = active ? cleanUrl(url, { mode, exceptions: settings.exceptions }) : undefined;
   const text = result?.status === 'cleaned' ? result.url : url;
@@ -718,6 +730,7 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return true;
   }
   if (message.type === 'copyText') {
+    copySeq++;
     void copyToClipboard(message.text).then(sendResponse);
     return true;
   }

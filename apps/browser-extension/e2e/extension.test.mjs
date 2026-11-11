@@ -422,6 +422,12 @@ describe('Experimental mode (strip query parameters)', () => {
     );
   });
 
+  test('plain anchors never stop cleaning (Clean and Experimental)', async () => {
+    assert.equal(await visit('/guide?id=1&utm_source=x#api-token'), '/guide?id=1#api-token');
+    await setSettings({ mode: 'experimental' });
+    assert.equal(await visit('/guide?id=1&utm_source=x#session'), '/guide#session');
+  });
+
   test('keeps the fragment and leaves URLs without a query alone', async () => {
     await setSettings({ mode: 'experimental' });
     const page = await context.newPage();
@@ -439,7 +445,7 @@ describe('Experimental mode (strip query parameters)', () => {
   const protectedPaths = [
     '/oauth2/authorize?client_id=1&redirect_uri=x&utm_source=a',
     '/welcome?code=abc',
-    '/welcome?state=xyz&utm_source=a',
+    '/welcome?error=access_denied&utm_source=a',
     '/account/reset-password?uid=1',
     '/email/verify/1/abc?utm_source=a',
     '/file.pdf?X-Amz-Signature=abc&utm_source=a',
@@ -452,7 +458,10 @@ describe('Experimental mode (strip query parameters)', () => {
     '/checkout/step-2?utm_source=a',
     '/x%2Fsso?id=1',
     // Review findings: protection signals in the fragment, more flows.
-    '/cb?tenant=a#state=xyz',
+    '/cb?tenant=a#code=xyz',
+    '/l.php?u=https%3A%2F%2Fshop.example%2Freset%3Ftoken%3Dabc&h=AT0',
+    '/gc/return?redirect_flow_id=RE123',
+    '/ct?Len=10&Data=abcdef',
     '/cb?tenant=a#access_token=abc&token_type=bearer',
     '/finish?mode=signIn&oobCode=abc',
     '/adfs/ls/?wa=wsignin1.0&wtrealm=urn%3Aapp',
@@ -1104,17 +1113,17 @@ describe('copy cleaning', () => {
     await page.close();
   });
 
-  test('Experimental: copying a link strips its whole query, a protected link stays unchanged', async () => {
+  test('Experimental: keyboard copies are cleaned with the Strict rules (no silent stripping), protected links unchanged', async () => {
     await setSettings({ mode: 'experimental' });
     const page = await context.newPage();
     await page.goto(`http://localhost:${port}/copy`);
     await page.waitForTimeout(200);
     const stripped = await copySelection(page, () => {
       const p = document.getElementById('para');
-      p.textContent = 'https://shop.example/search?q=shoes&page=2#results';
+      p.textContent = 'https://shop.example/search?q=shoes&utm_source=x&ref=a#results';
       getSelection().selectAllChildren(p);
     });
-    assert.equal(stripped, 'https://shop.example/search#results');
+    assert.equal(stripped, 'https://shop.example/search?q=shoes#results');
     const kept = await copySelection(page, () => {
       const p = document.getElementById('para');
       p.textContent = 'https://shop.example/order/complete?payment_intent=pi_1&redirect_status=succeeded';
