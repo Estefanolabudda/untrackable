@@ -876,6 +876,17 @@ describe('popup for a real tab', () => {
     return { popup, tabId };
   }
 
+  test('popup shows no redirect-loop notice without a loop (regression: [hidden] overridden by CSS)', async () => {
+    const target = await context.newPage();
+    await target.goto(`http://news.test:${port}/fine`);
+    const { popup } = await popupFor(target);
+    await popup.waitForTimeout(300);
+    assert.equal(await popup.isVisible('#loop-section'), false);
+    assert.equal(await popup.isVisible('#loop-retry'), false);
+    await popup.close();
+    await target.close();
+  });
+
   test('site exception toggle adds and removes only the exact host', async () => {
     await setSettings({ exceptions: ['news.test'] });
     const target = await context.newPage();

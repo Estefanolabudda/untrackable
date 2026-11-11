@@ -75,6 +75,9 @@ First release. Chromium extension (Phase 1) and reusable cleaning engines.
 - The redirect-loop helper no longer blames tracker cleaning when the page
   also fails after "Reload once without cleaning"; it says the loop is
   probably not caused by Untrackable and points to "Pause in this tab".
+- The popup no longer shows the redirect-loop notice ("failed with too many
+  redirects" and its reload button) when there was no loop: a layout rule
+  overrode the `hidden` attribute.
 - Checked on report: `email_id` on `support.stripe.com` is intentionally kept
   (also in Strict). Its observable use is Stripe's own analytics (passed to
   the support widget, recorded via an analytics allowlist), but removing it is
