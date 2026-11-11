@@ -1,11 +1,11 @@
 # Release readiness – Untrackable 0.1.0
 
-Status: **release candidate, not yet published.** Release approved by the
-maintainer on 2026-11-10; tag `v0.1.0` not created yet (tag push needs the
-maintainer). A redirect-loop report from the maintainer's test on 2026-11-11
-(ChatGPT e-mail link) is fixed on top of the approved commit and needs a new
-approval before the release is published. Not published in the Chrome Web
-Store.
+Status: **approved for release by the maintainer (2026-11-11).** Includes the
+fix for e-mail sign-in deep links found in the maintainer's test on
+2026-11-11 (PR #5), re-tested by the maintainer on Chrome for macOS: the
+ChatGPT e-mail link opens and UTM cleaning still works. The release is
+published by the tag-triggered workflow once the annotated tag `v0.1.0` is
+pushed. Not published in the Chrome Web Store.
 
 ## Verification summary
 
@@ -13,11 +13,11 @@ Store.
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Engine correctness  | 157 shared fixtures pass in TypeScript, Rust and inside Chromium's URL parser; property tests (fast-check, proptest)                                                                                                                                                    |
 | Engine consistency  | Differential test: >51,000 URLs generated from `rules/rules.json` give identical results in TS and Rust; validation parity on 60 mutated rule sets (CI job)                                                                                                             |
-| Browser behaviour   | 60 Chromium end-to-end tests against the built extension (navigation, protection, modes, exceptions, pauses, bypasses, copy cleaning, privacy of storage, loop helper, popup per-tab controls, DNR model vs real Chromium on 200 generated URLs); stable under CPU load |
+| Browser behaviour   | 65 Chromium end-to-end tests against the built extension (navigation, protection, modes, exceptions, pauses, bypasses, copy cleaning, privacy of storage, loop helper, popup per-tab controls, DNR model vs real Chromium on 200 generated URLs); stable under CPU load |
 | Static checks       | Prettier, ESLint, TypeScript strict, rustfmt, clippy `-D warnings`                                                                                                                                                                                                      |
 | Dependencies        | `npm audit --audit-level=high`, `cargo audit`: no findings (10 moderate dev-only npm advisories in eslint's `minimatch`)                                                                                                                                                |
 | Packaging           | Reproducible zip (identical SHA-256 across clean clones); unzipped artifact loads in Chromium, installs all rules                                                                                                                                                       |
-| Independent reviews | Five rounds (code, security, privacy, release, focused re-verification) by separate reviewers; all confirmed findings fixed with regression tests – see commit history of PR #1                                                                                         |
+| Independent reviews | Five rounds (plus a focused review of the pre-release fix) (code, security, privacy, release, focused re-verification) by separate reviewers; all confirmed findings fixed with regression tests – see commit history of PR #1                                          |
 
 ## Permissions
 
