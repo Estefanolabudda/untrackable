@@ -66,9 +66,15 @@ export async function loadSettings(): Promise<Settings> {
   return sanitizeSettings({ ...DEFAULT_SETTINGS, ...stored });
 }
 
+/**
+ * Write only the keys in `patch` (sanitised). Writing the whole merged object
+ * could undo a concurrent change of another key – e.g. bring back
+ * Experimental mode after "Back to Clean" (found in review).
+ */
 export async function saveSettings(patch: Partial<Settings>): Promise<Settings> {
   const next = sanitizeSettings({ ...(await loadSettings()), ...patch });
-  await chrome.storage.local.set(next);
+  const keys = (Object.keys(patch) as (keyof Settings)[]).filter((k) => SETTINGS_KEYS.includes(k));
+  await chrome.storage.local.set(Object.fromEntries(keys.map((k) => [k, next[k]])));
   return next;
 }
 

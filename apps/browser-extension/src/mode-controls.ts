@@ -63,17 +63,21 @@ export function setupModeControls(): ModeControls {
   enableBtn.addEventListener('click', () => {
     confirmBox.hidden = true;
     void saveSettings({ mode: 'experimental' });
+    // The focused button just disappeared: keep focus on a visible control.
+    radios.find((r) => r.value === 'experimental')?.focus();
   });
   cancelBtn.addEventListener('click', () => {
     closeConfirm();
     radios.find((r) => r.checked)?.focus();
   });
-  confirmBox.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+  const cancelOnEscape = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && !confirmBox.hidden) {
       e.preventDefault();
       cancelBtn.click();
     }
-  });
+  };
+  confirmBox.addEventListener('keydown', cancelOnEscape);
+  for (const r of radios) r.addEventListener('keydown', cancelOnEscape);
   backBtn.addEventListener('click', () => {
     confirmBox.hidden = true;
     void saveSettings({ mode: 'clean' });
@@ -83,8 +87,9 @@ export function setupModeControls(): ModeControls {
   return {
     render(s: Settings): void {
       current = s;
-      // Keep a pending (unconfirmed) Experimental choice visible.
-      if (confirmBox.hidden || s.mode === 'experimental') {
+      // Keep a pending (unconfirmed) Experimental choice visible – unless
+      // cleaning was switched off meanwhile (the choice cannot be confirmed).
+      if (confirmBox.hidden || s.mode === 'experimental' || !s.enabled) {
         confirmBox.hidden = true;
         showRadios(s.mode);
       }

@@ -13,7 +13,7 @@
  * page that hit a redirect loop, for at most 10 minutes) and disappears with
  * the browser session.
  */
-import { cleanUrl, compileDnrRules, PRIORITY, stripQuery } from '@untrackable/core';
+import { cleanUrl, compileDnrRules, ID_BASE, PRIORITY, stripQuery } from '@untrackable/core';
 import { effectiveMode, loadSettings, saveSettings, type Message, type Settings, type TabState } from './settings.js';
 
 const RESUME_ALARM = 'untrackable-resume';
@@ -52,6 +52,7 @@ async function supportedRules(
 ): Promise<chrome.declarativeNetRequest.Rule[]> {
   const kept: chrome.declarativeNetRequest.Rule[] = [];
   let protectionBroken = false;
+  let stripBroken = false;
   for (const rule of rules) {
     const regex = rule.condition.regexFilter;
     if (regex !== undefined) {
@@ -63,12 +64,14 @@ async function supportedRules(
       });
       if (!isSupported) {
         if (rule.action.type === chrome.declarativeNetRequest.RuleActionType.ALLOW) protectionBroken = true;
+        // Without its single strip rule, Experimental would silently do nothing (badge 'E'): say so.
+        if (rule.id === ID_BASE.stripQuery) stripBroken = true;
         continue;
       }
     }
     kept.push(rule);
   }
-  rulesDegraded = protectionBroken;
+  rulesDegraded = protectionBroken || stripBroken;
   return protectionBroken
     ? kept.filter((r) => r.action.type !== chrome.declarativeNetRequest.RuleActionType.REDIRECT)
     : kept;
@@ -92,9 +95,15 @@ async function applyRulesNow(): Promise<void> {
     // An update is atomic: one bad rule would leave the previous rule set in
     // place. Retry without the optional regex fallback rules.
     const essential = compiled.filter((r) => r.action.redirect?.regexSubstitution === undefined);
-    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: essential }).catch(() => {
-      /* keep previous rules; nothing else is safe to do */
-    });
+    try {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: essential });
+    } catch {
+      // Still failing: the previous rules may belong to another mode (e.g.
+      // Experimental after switching to Clean). Remove them all and show '!'
+      // rather than keep cleaning with stale rules (found in review).
+      rulesDegraded = true;
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds }).catch(() => {});
+    }
   }
   await scheduleResume(settings);
   await updateBadge(settings);
@@ -113,7 +122,8 @@ async function updateBadge(settings: Settings): Promise<void> {
     await chrome.action.setBadgeText({ text: '!' });
     await chrome.action.setBadgeBackgroundColor({ color: '#8a3b12' });
     await chrome.action.setTitle({
-      title: 'Untrackable – navigation cleaning disabled: this browser could not install the protection rules',
+      title:
+        'Untrackable – navigation cleaning disabled: this browser could not install the cleaning or protection rules',
     });
     return;
   }

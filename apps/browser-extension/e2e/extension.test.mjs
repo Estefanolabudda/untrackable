@@ -446,11 +446,17 @@ describe('Experimental mode (strip query parameters)', () => {
     '/m?login_token=abc',
     '/action?csrf=1&utm_source=a',
     '/order/complete?payment_intent=pi_1&payment_intent_client_secret=s&redirect_status=succeeded',
-    '/account?next=%2Forders',
+    '/account?return_to=%2Forders',
     '/f.zip?expires=1700000000&id=2',
     '/images/?entry_id=1&login_hint=user%40example.com&utm_source=a',
     '/checkout/step-2?utm_source=a',
     '/x%2Fsso?id=1',
+    // Review findings: protection signals in the fragment, more flows.
+    '/cb?tenant=a#state=xyz',
+    '/cb?tenant=a#access_token=abc&token_type=bearer',
+    '/finish?mode=signIn&oobCode=abc',
+    '/adfs/ls/?wa=wsignin1.0&wtrealm=urn%3Aapp',
+    '/attachments/f.png?ex=1&is=2&hm=3&utm_source=a',
   ];
   for (const path of protectedPaths) {
     test(`protected: ${path}`, async () => {
@@ -1187,8 +1193,19 @@ describe('user interface', () => {
     assert.equal(await popup.isChecked('input[name="mode"][value="clean"]'), true);
     assert.equal(await mode(), 'clean');
     // Confirmed: mode, badge, status and the "Back to Clean" notice.
+    // Escape on the radio group also cancels.
+    await popup.check('input[name="mode"][value="experimental"]');
+    await popup.focus('input[name="mode"][value="experimental"]');
+    await popup.keyboard.press('Escape');
+    assert.equal(await popup.isHidden('#exp-confirm'), true);
+    assert.equal(await mode(), 'clean');
     await popup.check('input[name="mode"][value="experimental"]');
     await popup.click('#exp-enable');
+    assert.equal(
+      await popup.evaluate(() => document.activeElement?.getAttribute('value')),
+      'experimental',
+      'focus stays on a visible control',
+    );
     await waitFor(async () => (await mode()) === 'experimental', 'experimental saved');
     await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === 'E', 'badge E');
     await waitFor(async () => (await popup.textContent('#status')) === 'Experimental', 'status');

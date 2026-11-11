@@ -68,15 +68,23 @@
               ></label
             >
             <label
-              ><input type="radio" name="mode" value="experimental" aria-describedby="exp-desc" />
+              ><input type="radio" name="mode" value="experimental" />
               <span id="exp-desc"
                 ><strong>Experimental – strip query parameters</strong> – removes the whole query string
-                (<code>?…</code>) of every link, known tracker or not. Links Untrackable recognises as sign-in, payment,
-                signed or expiring are left unchanged. Expect broken searches, filters and other site features.</span
+                (<code>?…</code>) of the pages you open and the links you copy, known tracker or not. Links Untrackable
+                recognises as sign-in, payment, signed or expiring are left unchanged. Expect broken searches, filters
+                and other site features.</span
               ></label
             >
           </div>
-          <div id="exp-confirm" class="notice" role="group" aria-labelledby="exp-confirm-text" hidden>
+          <div
+            id="exp-confirm"
+            class="notice"
+            role="group"
+            aria-label="Confirm Experimental mode"
+            aria-describedby="exp-confirm-text"
+            hidden
+          >
             <p id="exp-confirm-text">
               <strong>Experimental removes every query parameter</strong>, not only trackers. Searches, filters,
               shopping carts, sign-ins, payments and other site features may break. Untrackable leaves sign-in, payment

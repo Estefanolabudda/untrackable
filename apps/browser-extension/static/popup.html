@@ -43,11 +43,18 @@
           ><input type="radio" name="mode" value="strict" /> <span>Strict <small>(more aggressive)</small></span></label
         >
         <label
-          ><input type="radio" name="mode" value="experimental" aria-describedby="exp-hint" />
+          ><input type="radio" name="mode" value="experimental" />
           <span>Experimental <small id="exp-hint">(strips all query parameters)</small></span></label
         >
       </div>
-      <div id="exp-confirm" class="notice" role="group" aria-labelledby="exp-confirm-text" hidden>
+      <div
+        id="exp-confirm"
+        class="notice"
+        role="group"
+        aria-label="Confirm Experimental mode"
+        aria-describedby="exp-confirm-text"
+        hidden
+      >
         <p id="exp-confirm-text">
           <strong>Experimental removes every query parameter</strong>, not only trackers. Searches, filters, carts,
           sign-ins and other features may break. Recognised sign-in, payment and signed links are left alone – but not
