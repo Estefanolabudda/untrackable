@@ -1316,11 +1316,11 @@
     },
     {
       "name": "experimental: login redirect target is protected",
-      "input": "https://shop.example/account?next=%2Forders",
+      "input": "https://shop.example/account?return_to=%2Forders",
       "mode": "experimental",
-      "expected": "https://shop.example/account?next=%2Forders",
+      "expected": "https://shop.example/account?return_to=%2Forders",
       "status": "protected",
-      "reason": "param:next"
+      "reason": "param:return_to"
     },
     {
       "name": "experimental: OIDC e-mail deep link is protected",
@@ -1345,6 +1345,109 @@
       "exceptions": ["example.com"],
       "expected": "https://www.example.com/a?x=1",
       "status": "excepted"
+    },
+    {
+      "name": "experimental: German eID client link is protected",
+      "input": "http://127.0.0.1:24727/eID-Client?tcTokenURL=https%3A%2F%2Fid.example%2Ftc",
+      "mode": "experimental",
+      "expected": "http://127.0.0.1:24727/eID-Client?tcTokenURL=https%3A%2F%2Fid.example%2Ftc",
+      "status": "protected",
+      "reason": "param:tctokenurl"
+    },
+    {
+      "name": "experimental: WS-Federation sign-in is protected",
+      "input": "https://sts.example/adfs/ls/?wa=wsignin1.0&wtrealm=urn%3Aapp&wctx=rm%3D0",
+      "mode": "experimental",
+      "expected": "https://sts.example/adfs/ls/?wa=wsignin1.0&wtrealm=urn%3Aapp&wctx=rm%3D0",
+      "status": "protected",
+      "reason": "param:wa"
+    },
+    {
+      "name": "experimental: Dropbox share link key is protected",
+      "input": "https://www.dropbox.com/scl/fi/abc/file.pdf?rlkey=xyz&dl=0",
+      "mode": "experimental",
+      "expected": "https://www.dropbox.com/scl/fi/abc/file.pdf?rlkey=xyz&dl=0",
+      "status": "protected",
+      "reason": "param:rlkey"
+    },
+    {
+      "name": "experimental: Akamai token-auth URL is protected",
+      "input": "https://cdn.example/v.mp4?__token__=exp%3D1~hmac%3Dab",
+      "mode": "experimental",
+      "expected": "https://cdn.example/v.mp4?__token__=exp%3D1~hmac%3Dab",
+      "status": "protected",
+      "reason": "param:__token__"
+    },
+    {
+      "name": "experimental: Firebase e-mail action link is protected",
+      "input": "https://app.example/__/auth/action?mode=signIn&oobCode=abc",
+      "mode": "experimental",
+      "expected": "https://app.example/__/auth/action?mode=signIn&oobCode=abc",
+      "status": "protected",
+      "reason": "path:auth"
+    },
+    {
+      "name": "experimental: Firebase oobCode on a neutral path is protected",
+      "input": "https://app.example/finish?mode=signIn&oobCode=abc",
+      "mode": "experimental",
+      "expected": "https://app.example/finish?mode=signIn&oobCode=abc",
+      "status": "protected",
+      "reason": "param:oobcode"
+    },
+    {
+      "name": "experimental: Supabase token_hash link is protected",
+      "input": "https://app.example/confirm-signup?token_hash=abc&type=recovery",
+      "mode": "experimental",
+      "expected": "https://app.example/confirm-signup?token_hash=abc&type=recovery",
+      "status": "protected",
+      "reason": "path:confirm"
+    },
+    {
+      "name": "experimental: Supabase token_hash on a neutral path is protected",
+      "input": "https://app.example/welcome?token_hash=abc&type=recovery",
+      "mode": "experimental",
+      "expected": "https://app.example/welcome?token_hash=abc&type=recovery",
+      "status": "protected",
+      "reason": "param:token_hash"
+    },
+    {
+      "name": "experimental: WordPress nonce action is protected",
+      "input": "https://blog.example/wp-admin/edit.php?action=trash&_wpnonce=abc",
+      "mode": "experimental",
+      "expected": "https://blog.example/wp-admin/edit.php?action=trash&_wpnonce=abc",
+      "status": "protected",
+      "reason": "param:_wpnonce"
+    },
+    {
+      "name": "Discord CDN signed attachment (ex+hm) is protected in every mode",
+      "input": "https://cdn.discordapp.com/attachments/1/2/f.png?ex=65&is=64&hm=ab&utm_source=x",
+      "expected": "https://cdn.discordapp.com/attachments/1/2/f.png?ex=65&is=64&hm=ab&utm_source=x",
+      "status": "protected",
+      "reason": "combination:ex+hm"
+    },
+    {
+      "name": "experimental: OAuth state only in the fragment protects the query",
+      "input": "https://app.example/cb?tenant=a#state=xyz&id_token=1",
+      "mode": "experimental",
+      "expected": "https://app.example/cb?tenant=a#state=xyz&id_token=1",
+      "status": "protected",
+      "reason": "param:state"
+    },
+    {
+      "name": "experimental: coupon code over-protects (documented): all parameters kept",
+      "input": "https://shop.example/promo?code=SUMMER10&utm_source=x",
+      "mode": "experimental",
+      "expected": "https://shop.example/promo?code=SUMMER10&utm_source=x",
+      "status": "protected",
+      "reason": "param:code"
+    },
+    {
+      "name": "experimental: pagination next is stripped (no longer protected)",
+      "input": "https://shop.example/list?next=2&utm_source=x",
+      "mode": "experimental",
+      "expected": "https://shop.example/list",
+      "status": "cleaned",
+      "removed": ["next", "utm_source"]
     }
   ]
 }

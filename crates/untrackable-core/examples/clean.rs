@@ -9,7 +9,8 @@
 //! Prints one cleaned URL per line (or one JSON result per line with `--json`).
 //!
 //! `--jsonl` reads one JSON request per stdin line,
-//! `{"input": "...", "mode": "clean|strict|experimental|bypass", "exceptions": [...]}`,
+//! `{"input": "...", "mode": "clean|strict|experimental|bypass", "exceptions": [...]}`
+//! (with `"strip": true` it runs `strip_query` instead of `clean`),
 //! and prints one JSON result per line. Used by `scripts/differential.mjs`
 //! to compare this engine with the TypeScript engine.
 //!
@@ -24,7 +25,7 @@ use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 
 use serde::Deserialize;
-use untrackable_core::{default_engine, CleanOptions, Engine, Mode};
+use untrackable_core::{default_engine, strip_query, CleanOptions, Engine, Mode};
 
 #[derive(Deserialize)]
 struct Request {
@@ -33,6 +34,9 @@ struct Request {
     mode: Mode,
     #[serde(default)]
     exceptions: Vec<String>,
+    /// Run `strip_query` (explicit "without query parameters" action) instead of `clean`.
+    #[serde(default)]
+    strip: bool,
 }
 
 const USAGE: &str = "usage: clean [--strict|--experimental] [--json] [--rules FILE] [URL ...]  (reads stdin lines if no URL)\n       clean [--rules FILE] --jsonl\n       clean [--rules FILE] --validate";
@@ -55,7 +59,11 @@ fn run_jsonl(engine: &Engine) -> ExitCode {
             mode: request.mode,
             exceptions: request.exceptions,
         };
-        let result = engine.clean(&request.input, &opts);
+        let result = if request.strip {
+            strip_query(&request.input)
+        } else {
+            engine.clean(&request.input, &opts)
+        };
         let Ok(text) = serde_json::to_string(&result) else {
             return ExitCode::FAILURE;
         };

@@ -268,7 +268,9 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
       condition: { resourceTypes: ['main_frame'], regexFilter: `\\?(?:[^&]*&){${MAX_FALLBACK_SEGMENTS}}` },
     });
 
-  // 3. Protection allow rules.
+  // 3. Protection allow rules. Parameter signals match after `?`, `&` or `#`:
+  //    Chromium matches rules against the URL including the fragment, and the
+  //    engine also protects on fragment keys (e.g. `#access_token=`).
   const p = ruleSet.protection;
   let pid: number = ID_BASE.protection;
   const allow = (condition: Omit<DnrRule['condition'], 'resourceTypes'>): void => {
@@ -301,25 +303,27 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
   const protectedParams = experimental ? [...p.params, ...(p.experimentalParams ?? [])] : p.params;
   for (const group of chunkWords(protectedParams)) {
     allow({
-      regexFilter: `[?&](?:${group.map(escapeRe2).join('|')})(?:[=&#]|$)`,
+      regexFilter: `[?&#](?:${group.map(escapeRe2).join('|')})(?:[=&#]|$)`,
       isUrlFilterCaseSensitive: false,
     });
   }
   if (p.paramPrefixes.length > 0) {
-    allow({ regexFilter: `[?&](?:${p.paramPrefixes.map(escapeRe2).join('|')})`, isUrlFilterCaseSensitive: false });
+    allow({ regexFilter: `[?&#](?:${p.paramPrefixes.map(escapeRe2).join('|')})`, isUrlFilterCaseSensitive: false });
   }
   if (p.paramSuffixes.length > 0) {
     allow({
-      regexFilter: `[?&][^=&#]*(?:${p.paramSuffixes.map(escapeRe2).join('|')})(?:[=&#]|$)`,
+      regexFilter: `[?&#][^=&#]*(?:${p.paramSuffixes.map(escapeRe2).join('|')})(?:[=&#]|$)`,
       isUrlFilterCaseSensitive: false,
     });
   }
   for (const combo of p.paramCombinations) {
     if (combo.length !== 2) continue; // only pairs are expressible compactly
-    // Key `a` (with optional value), then optionally more segments, then key `b`.
-    // The '&' between them must not be consumed twice (e.g. `?code&state`).
+    // Key `a` (with optional value), then optionally more segments, then key
+    // `b` – in the query and/or the fragment (the engine looks at both; the URL
+    // Chromium matches includes the fragment). The separator between them must
+    // not be consumed twice (e.g. `?code&state`).
     const [x, y] = combo.map(escapeRe2) as [string, string];
-    const pair = (p: string, q: string) => `[?&]${p}(?:=[^&#]*)?&(?:[^#]*&)?${q}(?:[=&#]|$)`;
+    const pair = (p: string, q: string) => `[?&#]${p}(?:=[^&#]*)?[&#](?:.*[&#])?${q}(?:[=&#]|$)`;
     allow({ regexFilter: `${pair(x, y)}|${pair(y, x)}`, isUrlFilterCaseSensitive: false });
   }
 

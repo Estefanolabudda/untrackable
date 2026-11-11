@@ -191,6 +191,8 @@ for (let i = 0; i < RANDOM_CASES; i++) {
     ? [pick([...ruleDomains, ...hostsBase, '*.example.com', 'https://shop.example/x', 'bad host'])]
     : [];
   requests.push({ input: url(), mode: pick(['clean', 'clean', 'strict', 'experimental', 'bypass']), exceptions });
+  // Explicit "without query parameters" action on the same kind of input.
+  if (chance(0.25)) requests.push({ input: url(), strip: true });
 }
 
 // TypeScript engine (bundled in memory, same code as the extension).
@@ -232,7 +234,9 @@ const summarise = (r) =>
 const diffs = [];
 const statuses = {};
 requests.forEach((req, i) => {
-  const ts = core.cleanUrl(req.input, { mode: req.mode, exceptions: req.exceptions });
+  const ts = req.strip
+    ? core.stripQuery(req.input)
+    : core.cleanUrl(req.input, { mode: req.mode, exceptions: req.exceptions });
   statuses[ts.status] = (statuses[ts.status] ?? 0) + 1;
   if (summarise(ts) !== summarise(rustResults[i]))
     diffs.push({ req, ts: summarise(ts), rust: summarise(rustResults[i]) });

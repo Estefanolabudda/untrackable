@@ -85,11 +85,7 @@ describe('compileDnrRules', () => {
  * Documented divergences (docs/architecture/overview.md, "Navigation cleaning"):
  * DNR never sees URL fragments and matches the raw, still percent-encoded URL.
  */
-// Protection signals that exist only in the fragment are invisible to navigation rules.
-const KNOWN_DNR_DIVERGENCES = new Set([
-  'OIDC implicit flow token in fragment is protected',
-  'experimental: experimental protection name in the fragment counts',
-]);
+const KNOWN_DNR_DIVERGENCES = new Set<string>([]);
 
 describe('DNR approximation vs engine (shared fixtures)', () => {
   const navigable = cases.filter(
