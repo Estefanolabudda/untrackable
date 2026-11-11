@@ -268,9 +268,13 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
       condition: { resourceTypes: ['main_frame'], regexFilter: `\\?(?:[^&]*&){${MAX_FALLBACK_SEGMENTS}}` },
     });
 
-  // 3. Protection allow rules. Parameter signals match after `?`, `&` or `#`:
-  //    Chromium matches rules against the URL including the fragment, and the
-  //    engine also protects on fragment keys (e.g. `#access_token=`).
+  // 3. Protection allow rules. Parameter signals are matched in the query
+  //    (after `?` or `&`, as in v0.1) and – in separate rules – at the start of
+  //    the fragment. Chromium matches rules against the URL including the
+  //    fragment; the engine looks at fragment keys only when the fragment
+  //    contains `=`, so the fragment rules require `=` right after the key: a
+  //    plain anchor such as `#api-token` must not stop cleaning (found in
+  //    review). A valueless first fragment key (`#token&a=1`) is not seen.
   const p = ruleSet.protection;
   let pid: number = ID_BASE.protection;
   const allow = (condition: Omit<DnrRule['condition'], 'resourceTypes'>): void => {
@@ -300,31 +304,38 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
   const encodedWordChar = '%(?:[46][1-9a-f]|[57][0-9a]|2[def]|3[0-9]|5f)';
   allow({ regexFilter: `^https?://[^/?#]*/[^?#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   allow({ regexFilter: `[?&][^=&#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
+  allow({ regexFilter: `#[^=&#]*${encodedWordChar}[^=&#]*=`, isUrlFilterCaseSensitive: false });
+  // Spec signal `value:url` (Experimental only): a value that is an http(s) URL.
+  if (experimental) {
+    allow({ regexFilter: '[?&#][^=&#]*=https?(?::|%3a)(?:/|%2f)(?:/|%2f)', isUrlFilterCaseSensitive: false });
+  }
   const protectedParams = experimental ? [...p.params, ...(p.experimentalParams ?? [])] : p.params;
   for (const group of chunkWords(protectedParams)) {
-    allow({
-      regexFilter: `[?&#](?:${group.map(escapeRe2).join('|')})(?:[=&#]|$)`,
-      isUrlFilterCaseSensitive: false,
-    });
+    const names = group.map(escapeRe2).join('|');
+    allow({ regexFilter: `[?&](?:${names})(?:[=&#]|$)`, isUrlFilterCaseSensitive: false });
+    allow({ regexFilter: `#(?:${names})=`, isUrlFilterCaseSensitive: false });
   }
   if (p.paramPrefixes.length > 0) {
-    allow({ regexFilter: `[?&#](?:${p.paramPrefixes.map(escapeRe2).join('|')})`, isUrlFilterCaseSensitive: false });
+    const names = p.paramPrefixes.map(escapeRe2).join('|');
+    allow({ regexFilter: `[?&](?:${names})`, isUrlFilterCaseSensitive: false });
+    allow({ regexFilter: `#(?:${names})[^=&#]*=`, isUrlFilterCaseSensitive: false });
   }
   if (p.paramSuffixes.length > 0) {
-    allow({
-      regexFilter: `[?&#][^=&#]*(?:${p.paramSuffixes.map(escapeRe2).join('|')})(?:[=&#]|$)`,
-      isUrlFilterCaseSensitive: false,
-    });
+    const names = p.paramSuffixes.map(escapeRe2).join('|');
+    allow({ regexFilter: `[?&][^=&#]*(?:${names})(?:[=&#]|$)`, isUrlFilterCaseSensitive: false });
+    allow({ regexFilter: `#[^=&#]*(?:${names})=`, isUrlFilterCaseSensitive: false });
   }
   for (const combo of p.paramCombinations) {
     if (combo.length !== 2) continue; // only pairs are expressible compactly
-    // Key `a` (with optional value), then optionally more segments, then key
-    // `b` – in the query and/or the fragment (the engine looks at both; the URL
-    // Chromium matches includes the fragment). The separator between them must
-    // not be consumed twice (e.g. `?code&state`).
     const [x, y] = combo.map(escapeRe2) as [string, string];
-    const pair = (p: string, q: string) => `[?&#]${p}(?:=[^&#]*)?[&#](?:.*[&#])?${q}(?:[=&#]|$)`;
-    allow({ regexFilter: `${pair(x, y)}|${pair(y, x)}`, isUrlFilterCaseSensitive: false });
+    // Both keys in the query (values optional; the '&' between them must not be
+    // consumed twice, e.g. `?code&state`) – as in v0.1.
+    const inQuery = (a: string, b: string) => `[?&]${a}(?:=[^&#]*)?&(?:[^#]*&)?${b}(?:[=&#]|$)`;
+    allow({ regexFilter: `${inQuery(x, y)}|${inQuery(y, x)}`, isUrlFilterCaseSensitive: false });
+    // Across query and fragment or within the fragment: both keys with a value,
+    // so a plain anchor never counts.
+    const anywhere = (a: string, b: string) => `[?&#]${a}=[^&#]*[&#](?:.*[&#])?${b}=`;
+    allow({ regexFilter: `${anywhere(x, y)}|${anywhere(y, x)}`, isUrlFilterCaseSensitive: false });
   }
 
   // 4. User exceptions.

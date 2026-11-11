@@ -360,8 +360,35 @@ impl Engine {
             .param_combinations
             .iter()
             .find(|c| c.iter().all(|needed| keys.iter().any(|k| k == needed)));
-        combo.map(|c| format!("combination:{}", c.join("+")))
+        if let Some(c) = combo {
+            return Some(format!("combination:{}", c.join("+")));
+        }
+
+        // 5. Experimental only: a value that is itself an (encoded) http(s) URL.
+        if experimental {
+            let query_segments = parts.query.into_iter().flat_map(|q| q.split('&'));
+            let fragment_segments = parts
+                .fragment
+                .filter(|f| f.contains('='))
+                .into_iter()
+                .flat_map(|f| f.split('&'));
+            if query_segments.chain(fragment_segments).any(value_is_url) {
+                return Some("value:url".to_owned());
+            }
+        }
+        None
     }
+}
+
+/// Spec signal `value:url`: the segment's raw value starts with an (encoded) http(s) URL.
+fn value_is_url(segment: &str) -> bool {
+    let Some((_, value)) = segment.split_once('=') else {
+        return false;
+    };
+    let v = value.as_bytes();
+    ["http://", "https://", "http%3a%2f%2f", "https%3a%2f%2f"]
+        .iter()
+        .any(|p| v.len() >= p.len() && v[..p.len()].eq_ignore_ascii_case(p.as_bytes()))
 }
 
 /// Trailing whitespace guard: replaces every trailing char `<= U+0020` with its

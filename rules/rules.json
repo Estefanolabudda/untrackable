@@ -422,7 +422,10 @@
       "security_code",
       "login_hint",
       "id_token_hint",
-      "domain_hint"
+      "domain_hint",
+      "hdnea",
+      "sesskey",
+      "logouthash"
     ],
     "paramPrefixes": ["x-amz-", "x-goog-", "oauth_", "openid.", "saml", "__cf_chl"],
     "paramSuffixes": ["token", "signature"],
@@ -434,11 +437,12 @@
       ["expires", "h"],
       ["exp", "h"],
       ["ex", "hm"],
-      ["oh", "oe"]
+      ["oh", "oe"],
+      ["len", "data"],
+      ["st", "e"]
     ],
     "experimentalParams": [
       "code",
-      "state",
       "error",
       "csrf",
       "_csrf",
@@ -464,7 +468,6 @@
       "redirect_url",
       "redirect_to",
       "callback_url",
-      "error_description",
       "tctokenurl",
       "wa",
       "wtrealm",
@@ -487,7 +490,17 @@
       "shasign",
       "seal",
       "resourcepath",
-      "merchantsig"
+      "merchantsig",
+      "authorization",
+      "redirect_flow_id",
+      "amazoncheckoutsessionid",
+      "orderkey",
+      "mac2",
+      "resultcode",
+      "verify",
+      "confirm",
+      "invite",
+      "inviteid"
     ]
   }
 }

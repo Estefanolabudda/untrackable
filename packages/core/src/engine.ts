@@ -197,6 +197,14 @@ export function stripQuery(input: string): CleanResult {
   return stripParts(input, prefix, query, fragment);
 }
 
+/** Spec signal `value:url`: the segment's raw value starts with an (encoded) http(s) URL. */
+function valueIsUrl(segment: string): boolean {
+  const eq = segment.indexOf('=');
+  if (eq === -1) return false;
+  const v = asciiLower(segment.slice(eq + 1, eq + 1 + 14));
+  return ['http://', 'https://', 'http%3a%2f%2f', 'https%3a%2f%2f'].some((x) => v.startsWith(x));
+}
+
 /** `ruleId` reported for parameters removed by experimental query stripping. */
 export const EXPERIMENTAL_RULE_ID = 'experimental';
 
@@ -334,6 +342,10 @@ export class Cleaner {
     const keySet = new Set(keys);
     const combo = p.paramCombinations.find((c) => c.every((k) => keySet.has(k)));
     if (combo !== undefined) return `combination:${combo.join('+')}`;
+    if (experimental) {
+      const segments = [...(query?.split('&') ?? []), ...(fragment?.includes('=') ? fragment.split('&') : [])];
+      if (segments.some(valueIsUrl)) return 'value:url';
+    }
     return undefined;
   }
 }

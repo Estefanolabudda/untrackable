@@ -239,3 +239,52 @@ describe('DNR vs engine (property, random case)', () => {
     expect(global.length).toBeGreaterThan(0);
   });
 });
+
+describe('fragment protection in navigation rules (v0.2 review regression)', () => {
+  const nav = (mode: 'clean' | 'strict' | 'experimental', url: string) =>
+    simulate(compileDnrRules({ mode, exceptions: [] }), url);
+
+  it('plain anchors that look like protected names do not stop cleaning (as in v0.1 and the engine)', () => {
+    for (const anchor of [
+      'api-token',
+      'access-token',
+      'session',
+      'signature',
+      'hash',
+      'nonce',
+      'auth',
+      'saml-setup',
+      'token&x',
+    ]) {
+      const url = `https://docs.example.com/guide?id=1&utm_source=newsletter#${anchor}`;
+      expect(cleanUrl(url).status, anchor).toBe('cleaned');
+      expect(nav('clean', url), anchor).toBe(`https://docs.example.com/guide?id=1#${anchor}`);
+      expect(nav('experimental', url), anchor).toBe(`https://docs.example.com/guide#${anchor}`);
+    }
+  });
+
+  it('a combination does not span from the query into a plain anchor', () => {
+    const url = 'https://app.example/p?code=1&utm_source=x#state';
+    expect(cleanUrl(url).status).toBe('cleaned');
+    expect(nav('clean', url)).toBe('https://app.example/p?code=1#state');
+  });
+
+  it('protected keys with a value in the fragment are honoured', () => {
+    for (const url of [
+      'https://app.example/cb?utm_source=x#access_token=abc&token_type=bearer',
+      'https://app.example/cb?utm_source=x#sig=abc',
+      'https://app.example/cb?utm_source=x#x-amz-signature=1',
+      'https://app.example/cb?tenant=a&utm_source=x#code=1&state=2',
+    ]) {
+      expect(cleanUrl(url).status, url).toBe('protected');
+      expect(nav('clean', url), url).toBe(url);
+      expect(nav('experimental', url), url).toBe(url);
+    }
+  });
+
+  it('a percent-encoded Experimental-only key in the fragment is honoured in Experimental', () => {
+    const url = 'https://app.example/cb?x=1#%63ode=1';
+    expect(cleanUrl(url, { mode: 'experimental' }).status).toBe('protected');
+    expect(nav('experimental', url)).toBe(url);
+  });
+});

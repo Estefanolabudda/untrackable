@@ -187,6 +187,12 @@ string is the first signal found, in this order:
    to protect in Clean and Strict, where unknown parameters are kept anyway.
 4. `combination:<a>+<b>` – all keys of a `paramCombinations` entry are present
    among the query and fragment keys.
+5. `value:url` – **`experimental` mode only**: the raw value (text after the
+   first `=`) of some segment of the query, or of the fragment when it
+   contains `=`, starts – ASCII case-insensitively – with `http://`,
+   `https://`, `http%3a%2f%2f` or `https%3a%2f%2f`. Such URLs wrap another
+   link (Outlook SafeLinks `?url=`, Google `/url?q=`, Facebook `l.php?u=`,
+   login `?returnUrl=`); stripping them leaves a dead wrapper.
 
 Protection is a heuristic. It intentionally errs on the side of not cleaning.
 
@@ -210,7 +216,7 @@ compiles `rules.json` + settings into declarativeNetRequest rules
 - `experimental` compiles to a single `redirect` with
   `transform: { query: "" }` for `GET` main-frame requests whose query has a
   non-empty segment (`regexFilter` `^[^?#]*\?[^#]*[^&#]`), below the same
-  protection, `experimentalParams` and exception `allow` rules. The tracker
+  protection, `experimentalParams`, `value:url` and exception `allow` rules. The tracker
   rules are not installed in this mode.
 
 See `docs/architecture/overview.md` for details.
