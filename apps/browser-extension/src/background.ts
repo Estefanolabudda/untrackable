@@ -283,7 +283,12 @@ const LOOP_PURGE_ALARM = 'untrackable-loop-purge';
 const LOOP_RETRY_WINDOW_MS = 60_000;
 const LOOP_OFFER_TTL_MS = 10 * 60_000;
 
-/** notOurs: the page failed again after a reload without cleaning – Untrackable is not the cause. */
+/**
+ * notOurs: the page failed again after a reload without cleaning its host –
+ * probably not caused by Untrackable. Only "probably": the reload bypass is
+ * limited to that host, so a loop through another (still cleaned) host can
+ * look the same (found in review); the popup points to "Pause in this tab".
+ */
 type LoopOffers = Record<string, { host: string; at: number; notOurs?: boolean }>;
 
 async function readLoopOffers(): Promise<LoopOffers> {
@@ -324,7 +329,7 @@ function setLoopOffer(tabId: number, host: string | undefined, notOurs = false):
         .setTitle({
           tabId,
           title: notOurs
-            ? 'Untrackable – this page also fails without cleaning; the redirect loop is not caused by Untrackable.'
+            ? 'Untrackable – this page still fails with cleaning off for this site; the loop is probably not caused by Untrackable.'
             : 'Untrackable – this page failed with too many redirects. Open for options.',
         })
         .catch(() => {});
@@ -377,6 +382,17 @@ function pruneRetries(raw: unknown, now: number): LoopRetries {
   return retries;
 }
 
+/** Forget the tab's retry once a top-level page loaded: a later loop is a new event (found in review). */
+function clearLoopRetry(tabId: number): Promise<void> {
+  return serialised(async () => {
+    const raw = (await chrome.storage.session.get(LOOP_RETRY_KEY))[LOOP_RETRY_KEY];
+    const retries = pruneRetries(raw, Date.now());
+    if (retries[String(tabId)] === undefined) return;
+    const rest = Object.fromEntries(Object.entries(retries).filter(([k]) => k !== String(tabId)));
+    await chrome.storage.session.set({ [LOOP_RETRY_KEY]: rest });
+  });
+}
+
 /** Host of a reload without cleaning in this tab within the retry window, if any. */
 async function recentRetryHost(tabId: number): Promise<string | undefined> {
   const raw = (await chrome.storage.session.get(LOOP_RETRY_KEY))[LOOP_RETRY_KEY];
@@ -422,8 +438,9 @@ function onNavigationError(details: { tabId: number; frameId: number; url: strin
 
 function onNavigationCommitted(details: { tabId: number; frameId: number }): void {
   if (details.frameId !== 0 || details.tabId < 0) return;
-  // A successful top-level load supersedes any pending offer for this tab.
+  // A successful top-level load supersedes any pending offer and retry for this tab.
   void loopOfferHost(details.tabId).then((h) => (h === undefined ? undefined : setLoopOffer(details.tabId, undefined)));
+  void clearLoopRetry(details.tabId);
 }
 
 function registerLoopRecovery(): void {

@@ -1081,6 +1081,15 @@ describe('redirect loops', () => {
         async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,
         'bypass removed',
       );
+      // A successful load ends the retry window: a later loop is a new event, not "not ours".
+      await waitFor(
+        async () =>
+          !(
+            String(tabId) in
+            ((await second.sw.evaluate(() => chrome.storage.session.get('loopRetries'))).loopRetries ?? {})
+          ),
+        'retry forgotten after successful load',
+      );
       await page.goto(`http://news.test:${port}/after-loop?utm_source=x`);
       assert.match(page.url(), /\/after-loop$/);
 
@@ -1093,6 +1102,20 @@ describe('redirect loops', () => {
       await waitFor(async () => (await offerFor(selfTab)).offered, 'offered again after failed retry', 10_000);
       // It also failed without cleaning: Untrackable must not blame itself.
       assert.equal((await offerFor(selfTab)).notOurs, true, 'loop classified as not caused by Untrackable');
+      // The popup says so (carefully) and offers no second reload.
+      const loopPopup = await second.context.newPage();
+      await loopPopup.addInitScript(
+        ({ id, url }) => {
+          const original = chrome.tabs.query.bind(chrome.tabs);
+          chrome.tabs.query = (q) => (q && q.active ? Promise.resolve([{ id, url, index: 0 }]) : original(q));
+        },
+        { id: selfTab, url: `http://news.test:${port}/selfloop` },
+      );
+      await loopPopup.goto(`chrome-extension://${extId}/popup.html`);
+      await loopPopup.waitForSelector('#loop-section:not([hidden])');
+      assert.match(await loopPopup.textContent('#loop-text'), /probably not caused by Untrackable/);
+      assert.equal(await loopPopup.isHidden('#loop-retry'), true, 'no second reload offered');
+      await loopPopup.close();
       assert.equal(await retry(selfTab), false, 'only one retry per tab per minute');
       // A stale offer disappears once the tab successfully loads something else.
       await waitFor(async () => (await offerFor(selfTab)).offered, 'offer present again', 10_000).catch(() => {});

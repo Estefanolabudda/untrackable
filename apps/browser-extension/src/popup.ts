@@ -82,7 +82,7 @@ async function init(): Promise<void> {
       loopHostEl.textContent = state.loopHost;
       if (state.loopNotOurs === true) {
         $('loop-text').textContent =
-          'also fails without cleaning – the redirect loop is not caused by Untrackable. Try again later or contact the site.';
+          'still fails with cleaning turned off for this site – the loop is probably not caused by Untrackable. If it involves another site, use “Pause in this tab” and reload; otherwise try again later or contact the site.';
         loopRetry.hidden = true;
       }
       loopSection.hidden = false;
