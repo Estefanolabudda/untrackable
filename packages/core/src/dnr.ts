@@ -26,7 +26,10 @@ export interface DnrRule {
     | { type: 'allow' }
     | {
         type: 'redirect';
-        redirect: { transform: { queryTransform: { removeParams: string[] } } } | { regexSubstitution: string };
+        redirect:
+          | { transform: { queryTransform: { removeParams: string[] } } }
+          | { transform: { query: string } }
+          | { regexSubstitution: string };
       };
   condition: {
     resourceTypes: ['main_frame'];
@@ -34,11 +37,12 @@ export interface DnrRule {
     excludedRequestDomains?: string[];
     regexFilter?: string;
     isUrlFilterCaseSensitive?: boolean;
+    requestMethods?: ['get'];
   };
 }
 
 export interface DnrSettings {
-  readonly mode: 'clean' | 'strict';
+  readonly mode: 'clean' | 'strict' | 'experimental';
   readonly exceptions: readonly string[];
 }
 
@@ -57,6 +61,8 @@ export const PRIORITY = {
 /** Rule id ranges, so callers can recognise rule kinds. */
 export const ID_BASE = {
   globalRedirect: 1,
+  /** Experimental mode: the single query-stripping redirect. */
+  stripQuery: 50,
   domainRedirect: 100,
   caseInsensitiveFallback: 500,
   fallbackGuard: 999,
@@ -136,7 +142,23 @@ export function toAsciiDomain(entry: string): string {
 }
 
 function applies(rule: Rule, mode: DnrSettings['mode']): boolean {
-  return rule.mode === 'clean' || mode === 'strict';
+  return mode !== 'experimental' && (rule.mode === 'clean' || mode === 'strict');
+}
+
+/**
+ * Experimental mode: strip the whole query of GET main-frame navigations whose
+ * query has a non-empty segment (same condition as the engine). `query: ''`
+ * clears the query and keeps everything else; the regex keeps no-op redirects
+ * (no query, `?`, `?&&`) from matching at all. POST form submissions are left
+ * alone: their target query is part of the form's function.
+ */
+function stripQueryRule(): DnrRule {
+  return {
+    id: ID_BASE.stripQuery,
+    priority: PRIORITY.globalRedirect,
+    action: { type: 'redirect', redirect: { transform: { query: '' } } },
+    condition: { resourceTypes: ['main_frame'], requestMethods: ['get'], regexFilter: '^[^?#]*\\?[^#]*[^&#]' },
+  };
 }
 
 function uniq(items: Iterable<string>): string[] {
@@ -154,6 +176,8 @@ function withCaseVariants(params: readonly string[]): string[] {
 
 export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaultRuleSet): DnrRule[] {
   const rules: DnrRule[] = [];
+  const experimental = settings.mode === 'experimental';
+  if (experimental) rules.push(stripQueryRule());
   const active = ruleSet.rules.filter((r) => applies(r, settings.mode));
   const globalParams = uniq(active.filter((r) => r.domains === undefined).flatMap((r) => r.params ?? []));
 
@@ -236,12 +260,13 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
     }
   }
   if (fid >= ID_BASE.fallbackGuard) throw new Error('too many fallback rules for the reserved id range');
-  rules.push({
-    id: ID_BASE.fallbackGuard,
-    priority: PRIORITY.fallbackGuard,
-    action: { type: 'allow' },
-    condition: { resourceTypes: ['main_frame'], regexFilter: `\\?(?:[^&]*&){${MAX_FALLBACK_SEGMENTS}}` },
-  });
+  if (!experimental)
+    rules.push({
+      id: ID_BASE.fallbackGuard,
+      priority: PRIORITY.fallbackGuard,
+      action: { type: 'allow' },
+      condition: { resourceTypes: ['main_frame'], regexFilter: `\\?(?:[^&]*&){${MAX_FALLBACK_SEGMENTS}}` },
+    });
 
   // 3. Protection allow rules.
   const p = ruleSet.protection;
@@ -273,7 +298,8 @@ export function compileDnrRules(settings: DnrSettings, ruleSet: RuleSet = defaul
   const encodedWordChar = '%(?:[46][1-9a-f]|[57][0-9a]|2[def]|3[0-9]|5f)';
   allow({ regexFilter: `^https?://[^/?#]*/[^?#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
   allow({ regexFilter: `[?&][^=&#]*${encodedWordChar}`, isUrlFilterCaseSensitive: false });
-  for (const group of chunkWords(p.params)) {
+  const protectedParams = experimental ? [...p.params, ...(p.experimentalParams ?? [])] : p.params;
+  for (const group of chunkWords(protectedParams)) {
     allow({
       regexFilter: `[?&](?:${group.map(escapeRe2).join('|')})(?:[=&#]|$)`,
       isUrlFilterCaseSensitive: false,

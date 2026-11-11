@@ -48,7 +48,9 @@ describe('compileDnrRules', () => {
       compileDnrRules({ mode, exceptions: [] })
         .filter((r) => r.id === ID_BASE.globalRedirect)
         .flatMap((r) =>
-          r.action.type === 'redirect' && 'transform' in r.action.redirect
+          r.action.type === 'redirect' &&
+          'transform' in r.action.redirect &&
+          'queryTransform' in r.action.redirect.transform
             ? r.action.redirect.transform.queryTransform.removeParams
             : [],
         );
@@ -83,7 +85,11 @@ describe('compileDnrRules', () => {
  * Documented divergences (docs/architecture/overview.md, "Navigation cleaning"):
  * DNR never sees URL fragments and matches the raw, still percent-encoded URL.
  */
-const KNOWN_DNR_DIVERGENCES = new Set(['OIDC implicit flow token in fragment is protected']);
+// Protection signals that exist only in the fragment are invisible to navigation rules.
+const KNOWN_DNR_DIVERGENCES = new Set([
+  'OIDC implicit flow token in fragment is protected',
+  'experimental: experimental protection name in the fragment counts',
+]);
 
 describe('DNR approximation vs engine (shared fixtures)', () => {
   const navigable = cases.filter(
@@ -98,7 +104,7 @@ describe('DNR approximation vs engine (shared fixtures)', () => {
   });
 
   it.each(navigable.map((c) => [c.name, c] as const))('%s', (_n, c) => {
-    const mode = (c.mode ?? 'clean') as 'clean' | 'strict';
+    const mode = (c.mode ?? 'clean') as 'clean' | 'strict' | 'experimental';
     const rules = compileDnrRules({ mode, exceptions: c.exceptions ?? [] });
     const trimmed = c.input.trim();
     const viaDnr = simulate(rules, new URL(trimmed).href);

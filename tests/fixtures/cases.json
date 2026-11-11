@@ -1095,6 +1095,256 @@
       "mode": "strict",
       "expected": "https://support.stripe.com/?email_id=em_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "status": "unchanged"
+    },
+    {
+      "name": "experimental: strips trackers and functional parameters alike",
+      "input": "https://example.com/article?utm_source=email&id=123&ref=newsletter",
+      "mode": "experimental",
+      "expected": "https://example.com/article",
+      "status": "cleaned",
+      "removed": ["utm_source", "id", "ref"]
+    },
+    {
+      "name": "experimental: Stripe support e-mail link",
+      "input": "https://support.stripe.com/?email_id=example123",
+      "mode": "experimental",
+      "expected": "https://support.stripe.com/",
+      "status": "cleaned",
+      "removed": ["email_id"]
+    },
+    {
+      "name": "experimental: unknown search parameters are stripped too",
+      "input": "https://shop.example/search?q=shoes&page=2",
+      "mode": "experimental",
+      "expected": "https://shop.example/search",
+      "status": "cleaned",
+      "removed": ["q", "page"]
+    },
+    {
+      "name": "experimental: anchor fragment is kept",
+      "input": "https://example.com/a?x=1#section",
+      "mode": "experimental",
+      "expected": "https://example.com/a#section",
+      "status": "cleaned",
+      "removed": ["x"]
+    },
+    {
+      "name": "experimental: param-shaped fragment is kept verbatim",
+      "input": "https://example.com/a?x=1#utm_source=y&b=2",
+      "mode": "experimental",
+      "expected": "https://example.com/a#utm_source=y&b=2",
+      "status": "cleaned",
+      "removed": ["x"]
+    },
+    {
+      "name": "experimental: fragment without query is left alone",
+      "input": "https://example.com/a#utm_source=y",
+      "mode": "experimental",
+      "expected": "https://example.com/a#utm_source=y",
+      "status": "unchanged"
+    },
+    {
+      "name": "experimental: question mark inside the fragment is not a query",
+      "input": "https://example.com/a#b?c=1",
+      "mode": "experimental",
+      "expected": "https://example.com/a#b?c=1",
+      "status": "unchanged"
+    },
+    {
+      "name": "experimental: no query is unchanged",
+      "input": "https://example.com/path/",
+      "mode": "experimental",
+      "expected": "https://example.com/path/",
+      "status": "unchanged"
+    },
+    {
+      "name": "experimental: empty query is unchanged",
+      "input": "https://example.com/?",
+      "mode": "experimental",
+      "expected": "https://example.com/?",
+      "status": "unchanged"
+    },
+    {
+      "name": "experimental: query of empty segments is unchanged",
+      "input": "https://example.com/?&&#top",
+      "mode": "experimental",
+      "expected": "https://example.com/?&&#top",
+      "status": "unchanged"
+    },
+    {
+      "name": "experimental: empty segments are dropped but not reported",
+      "input": "https://example.com/?&a=1&&b",
+      "mode": "experimental",
+      "expected": "https://example.com/",
+      "status": "cleaned",
+      "removed": ["a", "b"]
+    },
+    {
+      "name": "experimental: duplicate keys are all removed",
+      "input": "https://example.com/p?a=1&a=2&A=3",
+      "mode": "experimental",
+      "expected": "https://example.com/p",
+      "status": "cleaned",
+      "removed": ["a", "a", "A"]
+    },
+    {
+      "name": "experimental: valueless and nameless segments",
+      "input": "https://example.com/p?flag&=x",
+      "mode": "experimental",
+      "expected": "https://example.com/p",
+      "status": "cleaned",
+      "removed": ["flag", ""]
+    },
+    {
+      "name": "experimental: encoded and Unicode keys, IDN host and port preserved",
+      "input": "https://bücher.example:8443/pfad/%C3%A4?%C3%A4=1&k%20=2&ü=3",
+      "mode": "experimental",
+      "expected": "https://bücher.example:8443/pfad/%C3%A4",
+      "status": "cleaned",
+      "removed": ["%C3%A4", "k%20", "ü"]
+    },
+    {
+      "name": "experimental: mixed-case tracker name",
+      "input": "https://example.com/?UTM_Source=1",
+      "mode": "experimental",
+      "expected": "https://example.com/",
+      "status": "cleaned",
+      "removed": ["UTM_Source"]
+    },
+    {
+      "name": "experimental: trailing whitespace exposed by stripping is encoded",
+      "input": "https://example.com/a ?x=1",
+      "mode": "experimental",
+      "expected": "https://example.com/a%20",
+      "status": "cleaned",
+      "removed": ["x"]
+    },
+    {
+      "name": "experimental: OAuth code alone is protected (experimentalParams)",
+      "input": "https://app.example/welcome?code=abc123",
+      "mode": "experimental",
+      "expected": "https://app.example/welcome?code=abc123",
+      "status": "protected",
+      "reason": "param:code"
+    },
+    {
+      "name": "experimental: OAuth code is not protected in clean mode",
+      "input": "https://app.example/welcome?code=abc123&utm_source=x",
+      "expected": "https://app.example/welcome?code=abc123",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "experimental: OAuth callback path is protected",
+      "input": "https://app.example/oauth/callback?code=1&state=2&utm_source=x",
+      "mode": "experimental",
+      "expected": "https://app.example/oauth/callback?code=1&state=2&utm_source=x",
+      "status": "protected",
+      "reason": "path:oauth"
+    },
+    {
+      "name": "experimental: CSRF token parameter is protected",
+      "input": "https://app.example/action?csrf=abc&utm_source=x",
+      "mode": "experimental",
+      "expected": "https://app.example/action?csrf=abc&utm_source=x",
+      "status": "protected",
+      "reason": "param:csrf"
+    },
+    {
+      "name": "experimental: CSRF-style token suffix is protected",
+      "input": "https://app.example/action?authenticity_token=abc",
+      "mode": "experimental",
+      "expected": "https://app.example/action?authenticity_token=abc",
+      "status": "protected",
+      "reason": "param:authenticity_token"
+    },
+    {
+      "name": "experimental: Stripe payment return URL is protected",
+      "input": "https://shop.example/order/complete?payment_intent=pi_1&payment_intent_client_secret=pi_1_secret_2&redirect_status=succeeded",
+      "mode": "experimental",
+      "expected": "https://shop.example/order/complete?payment_intent=pi_1&payment_intent_client_secret=pi_1_secret_2&redirect_status=succeeded",
+      "status": "protected",
+      "reason": "param:payment_intent"
+    },
+    {
+      "name": "experimental: payment provider domain is protected",
+      "input": "https://checkout.stripe.com/c/pay/cs_test?utm_source=x",
+      "mode": "experimental",
+      "expected": "https://checkout.stripe.com/c/pay/cs_test?utm_source=x",
+      "status": "protected",
+      "reason": "domain:checkout.stripe.com"
+    },
+    {
+      "name": "experimental: password reset link is protected",
+      "input": "https://example.com/reset-password?token=abc&utm_source=x",
+      "mode": "experimental",
+      "expected": "https://example.com/reset-password?token=abc&utm_source=x",
+      "status": "protected",
+      "reason": "path:password"
+    },
+    {
+      "name": "experimental: e-mail verification link is protected",
+      "input": "https://example.com/account/verify?id=1&utm_source=x",
+      "mode": "experimental",
+      "expected": "https://example.com/account/verify?id=1&utm_source=x",
+      "status": "protected",
+      "reason": "path:verify"
+    },
+    {
+      "name": "experimental: magic link token is protected",
+      "input": "https://app.example/m?login_token=abc",
+      "mode": "experimental",
+      "expected": "https://app.example/m?login_token=abc",
+      "status": "protected",
+      "reason": "param:login_token"
+    },
+    {
+      "name": "experimental: signed S3 URL is protected",
+      "input": "https://bucket.s3.amazonaws.com/f.pdf?X-Amz-Signature=abc&X-Amz-Expires=60",
+      "mode": "experimental",
+      "expected": "https://bucket.s3.amazonaws.com/f.pdf?X-Amz-Signature=abc&X-Amz-Expires=60",
+      "status": "protected",
+      "reason": "param:x-amz-signature"
+    },
+    {
+      "name": "experimental: expiring link is protected",
+      "input": "https://cdn.example/f.zip?expires=1700000000&id=2",
+      "mode": "experimental",
+      "expected": "https://cdn.example/f.zip?expires=1700000000&id=2",
+      "status": "protected",
+      "reason": "param:expires"
+    },
+    {
+      "name": "experimental: login redirect target is protected",
+      "input": "https://shop.example/account?next=%2Forders",
+      "mode": "experimental",
+      "expected": "https://shop.example/account?next=%2Forders",
+      "status": "protected",
+      "reason": "param:next"
+    },
+    {
+      "name": "experimental: OIDC e-mail deep link is protected",
+      "input": "https://chat.example/images?entry_id=1&login_hint=a%40b.example&utm_source=x",
+      "mode": "experimental",
+      "expected": "https://chat.example/images?entry_id=1&login_hint=a%40b.example&utm_source=x",
+      "status": "protected",
+      "reason": "param:login_hint"
+    },
+    {
+      "name": "experimental: experimental protection name in the fragment counts",
+      "input": "https://example.com/p?x=1#state=abc",
+      "mode": "experimental",
+      "expected": "https://example.com/p?x=1#state=abc",
+      "status": "protected",
+      "reason": "param:state"
+    },
+    {
+      "name": "experimental: domain exception applies",
+      "input": "https://www.example.com/a?x=1",
+      "mode": "experimental",
+      "exceptions": ["example.com"],
+      "expected": "https://www.example.com/a?x=1",
+      "status": "excepted"
     }
   ]
 }

@@ -43,7 +43,12 @@ struct CompiledProtection {
     param_prefixes: Vec<String>,
     param_suffixes: Vec<String>,
     param_combinations: Vec<Vec<String>>,
+    experimental_params: HashSet<String>,
 }
+
+/// `rule_id` reported for parameters removed by experimental query stripping
+/// ([`Mode::Experimental`]) and by [`strip_query`].
+pub const EXPERIMENTAL_RULE_ID: &str = "experimental";
 
 /// A cleaning engine bound to one [`RuleSet`]. Cheap to share (`Send + Sync`);
 /// construct once and reuse.
@@ -58,6 +63,86 @@ struct Parts<'a> {
     prefix: &'a str,
     query: Option<&'a str>,
     fragment: Option<&'a str>,
+}
+
+/// Input validation, spec steps 1–3: trim, reject TAB/LF/CR, parse, require
+/// `http`/`https` and a sane host. Returns the trimmed input and the parsed URL.
+fn validate_input(input: &str) -> Result<(&str, url::Url), Status> {
+    // 1. Trim; reject embedded TAB/LF/CR.
+    let trimmed = trim_input(input);
+    if trimmed.contains(['\t', '\n', '\r']) {
+        return Err(Status::Invalid);
+    }
+
+    // 2. Parse.
+    let parsed = url::Url::parse(trimmed).map_err(|_| Status::Invalid)?;
+
+    // 3. Scheme.
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(Status::Unsupported);
+    }
+    if !is_sane_host(&parsed.host_str().unwrap_or("").to_ascii_lowercase()) {
+        return Err(Status::Invalid);
+    }
+    Ok((trimmed, parsed))
+}
+
+/// Explicit user action "Copy/Open link without query parameters": strips the
+/// whole query of an `http`/`https` URL. Unlike [`Engine::clean`] this ignores
+/// mode, exceptions and protection signals; input validation (spec steps 1–3)
+/// is the same. Every non-empty query segment is reported with rule id
+/// [`EXPERIMENTAL_RULE_ID`]; the fragment is kept verbatim. Never panics.
+pub fn strip_query(input: &str) -> CleanResult {
+    match validate_input(input) {
+        Ok((trimmed, _)) => strip_parts(input, &split_parts(trimmed)),
+        Err(status) => CleanResult {
+            url: input.to_owned(),
+            changed: false,
+            status,
+            removed: Vec::new(),
+            reason: None,
+        },
+    }
+}
+
+/// Removes every non-empty query segment and keeps the fragment verbatim (spec:
+/// "Experimental mode: query stripping"). `input` is the untrimmed original.
+fn strip_parts(input: &str, parts: &Parts<'_>) -> CleanResult {
+    let removed: Vec<RemovedParam> = parts
+        .query
+        .unwrap_or("")
+        .split('&')
+        .filter(|seg| !seg.is_empty())
+        .map(|seg| RemovedParam {
+            name: raw_key(seg).to_owned(),
+            location: Location::Query,
+            rule_id: EXPERIMENTAL_RULE_ID.to_owned(),
+        })
+        .collect();
+    if removed.is_empty() {
+        return CleanResult {
+            url: input.to_owned(),
+            changed: false,
+            status: Status::Unchanged,
+            removed,
+            reason: None,
+        };
+    }
+    let mut url = String::with_capacity(input.len());
+    url.push_str(parts.prefix);
+    if let Some(f) = parts.fragment {
+        url.push('#');
+        url.push_str(f);
+    }
+    let url = encode_trailing_controls(url);
+    let changed = url != input;
+    CleanResult {
+        url,
+        changed,
+        status: Status::Cleaned,
+        removed,
+        reason: None,
+    }
 }
 
 fn split_parts(trimmed: &str) -> Parts<'_> {
@@ -112,6 +197,7 @@ impl Engine {
                 param_prefixes: p.param_prefixes,
                 param_suffixes: p.param_suffixes,
                 param_combinations: p.param_combinations,
+                experimental_params: p.experimental_params.into_iter().collect(),
             },
         })
     }
@@ -132,25 +218,11 @@ impl Engine {
             reason,
         };
 
-        // 1. Trim; reject embedded TAB/LF/CR.
-        let trimmed = trim_input(input);
-        if trimmed.contains(['\t', '\n', '\r']) {
-            return untouched(Status::Invalid, None);
-        }
-
-        // 2. Parse.
-        let parsed = match url::Url::parse(trimmed) {
-            Ok(u) => u,
-            Err(_) => return untouched(Status::Invalid, None),
+        // 1.–3. Trim, parse, scheme.
+        let (trimmed, parsed) = match validate_input(input) {
+            Ok(v) => v,
+            Err(status) => return untouched(status, None),
         };
-
-        // 3. Scheme.
-        if !matches!(parsed.scheme(), "http" | "https") {
-            return untouched(Status::Unsupported, None);
-        }
-        if !is_sane_host(&parsed.host_str().unwrap_or("").to_ascii_lowercase()) {
-            return untouched(Status::Invalid, None);
-        }
 
         // 4. Bypass.
         if opts.mode == Mode::Bypass {
@@ -171,8 +243,14 @@ impl Engine {
         let parts = split_parts(trimmed);
 
         // 6. Protection.
-        if let Some(reason) = self.protection_reason(&host, parsed.path(), &parts) {
+        let experimental = opts.mode == Mode::Experimental;
+        if let Some(reason) = self.protection_reason(&host, parsed.path(), &parts, experimental) {
             return untouched(Status::Protected, Some(reason));
+        }
+
+        // 7'. Experimental: query stripping, every non-empty segment goes.
+        if experimental {
+            return strip_parts(input, &parts);
         }
 
         // 7. Cleaning.
@@ -231,7 +309,13 @@ impl Engine {
         }
     }
 
-    fn protection_reason(&self, host: &str, pathname: &str, parts: &Parts<'_>) -> Option<String> {
+    fn protection_reason(
+        &self,
+        host: &str,
+        pathname: &str,
+        parts: &Parts<'_>,
+        experimental: bool,
+    ) -> Option<String> {
         let p = &self.protection;
 
         // 1. Domain.
@@ -263,6 +347,7 @@ impl Engine {
         }
         let protected_key = keys.iter().find(|k| {
             p.params.contains(k.as_str())
+                || (experimental && p.experimental_params.contains(k.as_str()))
                 || p.param_prefixes.iter().any(|x| k.starts_with(x.as_str()))
                 || p.param_suffixes.iter().any(|x| k.ends_with(x.as_str()))
         });
@@ -384,6 +469,138 @@ mod tests {
         let r = run("https://e.com/?#", Mode::Strict);
         assert_eq!(r.status, Status::Unchanged);
         assert_eq!(r.url, "https://e.com/?#");
+    }
+
+    fn names(r: &CleanResult) -> Vec<(&str, Location, &str)> {
+        r.removed
+            .iter()
+            .map(|p| (p.name.as_str(), p.location, p.rule_id.as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn experimental_mode_strips_query_keeps_fragment() {
+        let r = run(
+            "https://example.com/a?utm_source=x&id=1&&ref=y#top",
+            Mode::Experimental,
+        );
+        assert_eq!(r.url, "https://example.com/a#top");
+        assert_eq!(r.status, Status::Cleaned);
+        assert!(r.changed);
+        assert_eq!(
+            names(&r),
+            vec![
+                ("utm_source", Location::Query, EXPERIMENTAL_RULE_ID),
+                ("id", Location::Query, EXPERIMENTAL_RULE_ID),
+                ("ref", Location::Query, EXPERIMENTAL_RULE_ID),
+            ]
+        );
+        // Param-shaped fragment is never touched; empty original '#' kept.
+        let r = run("https://e.com/?x=1#utm_source=y", Mode::Experimental);
+        assert_eq!(r.url, "https://e.com/#utm_source=y");
+        let r = run("https://e.com/?x=1#", Mode::Experimental);
+        assert_eq!(r.url, "https://e.com/#");
+        // Only empty segments / no query: verbatim, untrimmed.
+        for u in [
+            " https://e.com/?&& ",
+            "https://e.com/?",
+            "https://e.com/#a=1",
+        ] {
+            let r = run(u, Mode::Experimental);
+            assert_eq!(r.status, Status::Unchanged, "{u}");
+            assert_eq!(r.url, u);
+            assert!(r.removed.is_empty());
+        }
+        // Trailing whitespace guard applies.
+        assert_eq!(
+            run("https://e.com/a ?x=1", Mode::Experimental).url,
+            "https://e.com/a%20"
+        );
+    }
+
+    #[test]
+    fn experimental_params_protect_only_in_experimental_mode() {
+        let r = run("https://app.example/welcome?code=abc", Mode::Experimental);
+        assert_eq!(r.status, Status::Protected);
+        assert_eq!(r.reason.as_deref(), Some("param:code"));
+        // In clean/strict mode `code` is just an unknown (kept) parameter.
+        for mode in [Mode::Clean, Mode::Strict] {
+            let r = run("https://app.example/welcome?code=abc&utm_source=x", mode);
+            assert_eq!(r.status, Status::Cleaned);
+            assert_eq!(r.url, "https://app.example/welcome?code=abc");
+        }
+        // Same key-order position as `params`: the first protected key wins.
+        let engine = Engine::from_json(
+            r#"{"schemaVersion":1,"rules":[],"protection":{"domains":[],"pathKeywords":[],
+               "pathSubstrings":[],"params":["sig"],"paramPrefixes":[],"paramSuffixes":["_token"],
+               "paramCombinations":[],"experimentalParams":["state"]}}"#,
+        )
+        .expect("valid");
+        let reason = |u: &str| {
+            engine
+                .clean(u, &CleanOptions::new(Mode::Experimental))
+                .reason
+        };
+        assert_eq!(
+            reason("https://e.com/?state=1&sig=2").as_deref(),
+            Some("param:state")
+        );
+        assert_eq!(
+            reason("https://e.com/?a_token=1&state=2").as_deref(),
+            Some("param:a_token")
+        );
+        assert_eq!(
+            reason("https://e.com/?x=1#STATE=2").as_deref(),
+            Some("param:state")
+        );
+        assert_eq!(reason("https://e.com/?x=1#STATE"), None);
+    }
+
+    #[test]
+    fn strip_query_ignores_mode_exceptions_and_protection() {
+        let r = strip_query("https://app.example/login?code=abc&utm_source=x#top");
+        assert_eq!(r.url, "https://app.example/login#top");
+        assert_eq!(r.status, Status::Cleaned);
+        assert_eq!(r.reason, None);
+        assert_eq!(
+            names(&r),
+            vec![
+                ("code", Location::Query, EXPERIMENTAL_RULE_ID),
+                ("utm_source", Location::Query, EXPERIMENTAL_RULE_ID),
+            ]
+        );
+        let r = strip_query("https://checkout.stripe.com/x?a=1&&B");
+        assert_eq!(r.url, "https://checkout.stripe.com/x");
+        assert_eq!(names(&r).len(), 2);
+        // Leading/trailing whitespace trimmed; exposed trailing whitespace encoded.
+        let r = strip_query("  https://e.com/a ?x=1\u{1}");
+        assert_eq!(r.url, "https://e.com/a%20");
+        assert!(r.changed);
+    }
+
+    #[test]
+    fn strip_query_unchanged_and_validation() {
+        for u in [
+            "https://e.com/",
+            "https://e.com/?",
+            "https://e.com/?&#a=1",
+            " http://e.com/#x?y=1 ",
+        ] {
+            let r = strip_query(u);
+            assert_eq!(r.status, Status::Unchanged, "{u}");
+            assert_eq!(r.url, u);
+            assert!(!r.changed);
+        }
+        let status = |u: &str| strip_query(u).status;
+        assert_eq!(status("ftp://e.com/?x=1"), Status::Unsupported);
+        assert_eq!(status("mailto:a@b.example?subject=x"), Status::Unsupported);
+        assert_eq!(status("not a url"), Status::Invalid);
+        assert_eq!(status(""), Status::Invalid);
+        assert_eq!(status("https://e.com/?a=1\tb"), Status::Invalid);
+        assert_eq!(status("https://e.com/?a=\n1"), Status::Invalid);
+        let r = strip_query("ftp://e.com/?x=1");
+        assert_eq!(r.url, "ftp://e.com/?x=1");
+        assert!(r.removed.is_empty());
     }
 
     #[test]

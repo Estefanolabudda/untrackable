@@ -1,7 +1,7 @@
 //! Tiny CLI around the engine.
 //!
 //! ```text
-//! cargo run -p untrackable-core --example clean -- [--strict] [--json] [--rules FILE] [URL ...]
+//! cargo run -p untrackable-core --example clean -- [--strict|--experimental] [--json] [--rules FILE] [URL ...]
 //! echo 'https://example.com/?utm_source=x' | cargo run -p untrackable-core --example clean
 //! ```
 //!
@@ -9,7 +9,7 @@
 //! Prints one cleaned URL per line (or one JSON result per line with `--json`).
 //!
 //! `--jsonl` reads one JSON request per stdin line,
-//! `{"input": "...", "mode": "clean|strict|bypass", "exceptions": [...]}`,
+//! `{"input": "...", "mode": "clean|strict|experimental|bypass", "exceptions": [...]}`,
 //! and prints one JSON result per line. Used by `scripts/differential.mjs`
 //! to compare this engine with the TypeScript engine.
 //!
@@ -35,7 +35,7 @@ struct Request {
     exceptions: Vec<String>,
 }
 
-const USAGE: &str = "usage: clean [--strict] [--json] [--rules FILE] [URL ...]  (reads stdin lines if no URL)\n       clean [--rules FILE] --jsonl\n       clean [--rules FILE] --validate";
+const USAGE: &str = "usage: clean [--strict|--experimental] [--json] [--rules FILE] [URL ...]  (reads stdin lines if no URL)\n       clean [--rules FILE] --jsonl\n       clean [--rules FILE] --validate";
 
 fn run_jsonl(engine: &Engine) -> ExitCode {
     let stdout = io::stdout();
@@ -82,6 +82,7 @@ fn main() -> ExitCode {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--strict" => opts.mode = Mode::Strict,
+            "--experimental" => opts.mode = Mode::Experimental,
             "--json" => json = true,
             "--jsonl" => jsonl = true,
             "--validate" => validate = true,

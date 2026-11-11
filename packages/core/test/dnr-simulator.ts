@@ -12,6 +12,13 @@ export function applyRedirect(rule: DnrRule, url: string): string {
     // RE2 substitutes an unmatched group with the empty string, like JS does.
     return url.replace(re, redirect.regexSubstitution.replace(/\\(\d)/g, '$$$1'));
   }
+  if ('query' in redirect.transform) {
+    // transform.query '' clears the query ('?' included) and keeps the fragment.
+    const hash = url.indexOf('#');
+    const base = hash === -1 ? url : url.slice(0, hash);
+    const q = base.indexOf('?');
+    return q === -1 ? url : base.slice(0, q) + (hash === -1 ? '' : url.slice(hash));
+  }
   const remove = new Set(redirect.transform.queryTransform.removeParams);
   const hashIdx = url.indexOf('#');
   const fragment = hashIdx === -1 ? '' : url.slice(hashIdx);

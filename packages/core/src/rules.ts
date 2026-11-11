@@ -24,6 +24,11 @@ export interface ProtectionRules {
   readonly paramPrefixes: readonly string[];
   readonly paramSuffixes: readonly string[];
   readonly paramCombinations: readonly (readonly string[])[];
+  /**
+   * Parameter names that protect a URL in experimental mode only (optional,
+   * default empty). Functional names too common to protect in Clean/Strict.
+   */
+  readonly experimentalParams?: readonly string[];
 }
 
 export interface RuleSet {
@@ -99,6 +104,7 @@ export function validateRuleSet(value: unknown): RuleSet {
       'paramPrefixes',
       'paramSuffixes',
       'paramCombinations',
+      'experimentalParams',
     ],
     'protection',
   );
@@ -115,6 +121,9 @@ export function validateRuleSet(value: unknown): RuleSet {
   ] as const) {
     if (!isStringArray(p[key])) throw new Error(`protection.${key} must be a string array`);
   }
+  if (p.experimentalParams !== undefined && !isStringArray(p.experimentalParams)) {
+    throw new Error('protection.experimentalParams must be a string array');
+  }
   if (!Array.isArray(p.paramCombinations) || !p.paramCombinations.every(isStringArray)) {
     throw new Error('protection.paramCombinations must be an array of string arrays');
   }
@@ -123,6 +132,7 @@ export function validateRuleSet(value: unknown): RuleSet {
       (k) => p[k] as string[],
     ),
     ...(p.paramCombinations as string[][]),
+    (p.experimentalParams as string[] | undefined) ?? [],
   ];
   for (const list of lists) {
     if (list.some((s) => s === '' || /[A-Z]/.test(s))) {

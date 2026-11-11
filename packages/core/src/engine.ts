@@ -12,7 +12,7 @@
  */
 import { defaultRuleSet, type Rule, type RuleSet } from './rules.js';
 
-export type Mode = 'clean' | 'strict' | 'bypass';
+export type Mode = 'clean' | 'strict' | 'experimental' | 'bypass';
 
 export type Status = 'cleaned' | 'unchanged' | 'protected' | 'bypassed' | 'excepted' | 'unsupported' | 'invalid';
 
@@ -140,11 +140,72 @@ export function isParamShapedFragment(fragment: string): boolean {
   return fragment.includes('=') && !fragment.includes('/') && !fragment.includes('?') && !fragment.startsWith(':~:');
 }
 
+/**
+ * Remove every non-empty query segment; keep the fragment verbatim (spec:
+ * "Experimental mode: query stripping"). `input` is the untrimmed original.
+ */
+function stripParts(
+  input: string,
+  prefix: string,
+  query: string | undefined,
+  fragment: string | undefined,
+): CleanResult {
+  const segments = (query ?? '').split('&').filter((seg) => seg !== '');
+  if (segments.length === 0) return { url: input, changed: false, status: 'unchanged', removed: [] };
+  const removed: RemovedParam[] = segments.map((seg) => ({
+    name: rawKeyOf(seg),
+    location: 'query',
+    ruleId: EXPERIMENTAL_RULE_ID,
+  }));
+  const url = encodeTrailingWhitespace(prefix + (fragment === undefined ? '' : '#' + fragment));
+  return { url, changed: url !== input, status: 'cleaned', removed };
+}
+
+/** Split a trimmed URL into prefix / query / fragment (raw string surgery boundaries, see spec). */
+function splitRaw(trimmed: string): { prefix: string; query: string | undefined; fragment: string | undefined } {
+  const hashIdx = trimmed.indexOf('#');
+  const fragmentStart = hashIdx === -1 ? trimmed.length : hashIdx;
+  const qIdx = trimmed.indexOf('?');
+  const queryStart = qIdx !== -1 && qIdx < fragmentStart ? qIdx : -1;
+  return {
+    prefix: trimmed.slice(0, queryStart === -1 ? fragmentStart : queryStart),
+    query: queryStart === -1 ? undefined : trimmed.slice(queryStart + 1, fragmentStart),
+    fragment: hashIdx === -1 ? undefined : trimmed.slice(hashIdx + 1),
+  };
+}
+
+/**
+ * Explicit user action "Copy/Open link without query parameters": strip the
+ * whole query of an http(s) URL. Unlike `clean`, this ignores mode, exceptions
+ * and protection signals – the user asked for exactly this link without its
+ * query. Input validation (steps 1–3 of the spec) is the same. Never throws.
+ */
+export function stripQuery(input: string): CleanResult {
+  const unchanged = (status: Status): CleanResult => ({ url: input, changed: false, status, removed: [] });
+  if (typeof input !== 'string') return unchanged('invalid');
+  const trimmed = trimC0(input);
+  if (/[\t\n\r]/.test(trimmed)) return unchanged('invalid');
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return unchanged('invalid');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return unchanged('unsupported');
+  if (!isSaneHost(asciiLower(parsed.hostname))) return unchanged('invalid');
+  const { prefix, query, fragment } = splitRaw(trimmed);
+  return stripParts(input, prefix, query, fragment);
+}
+
+/** `ruleId` reported for parameters removed by experimental query stripping. */
+export const EXPERIMENTAL_RULE_ID = 'experimental';
+
 export class Cleaner {
   readonly ruleSet: RuleSet;
   private readonly compiled: readonly CompiledRule[];
   private readonly pathKeywordRes: readonly { kw: string; re: RegExp }[];
   private readonly protectedParams: ReadonlySet<string>;
+  private readonly experimentalParams: ReadonlySet<string>;
 
   constructor(ruleSet: RuleSet = defaultRuleSet) {
     this.ruleSet = ruleSet;
@@ -159,6 +220,7 @@ export class Cleaner {
       re: new RegExp(`(^|[/_.-])(${escapeRegExp(kw)})($|[/_.0-9-])`),
     }));
     this.protectedParams = new Set(ruleSet.protection.params);
+    this.experimentalParams = new Set(ruleSet.protection.experimentalParams ?? []);
   }
 
   clean(input: string, options: CleanOptions = {}): CleanResult {
@@ -190,16 +252,13 @@ export class Cleaner {
     }
 
     // Raw string surgery boundaries (see spec).
-    const hashIdx = trimmed.indexOf('#');
-    const fragmentStart = hashIdx === -1 ? trimmed.length : hashIdx;
-    const qIdx = trimmed.indexOf('?');
-    const queryStart = qIdx !== -1 && qIdx < fragmentStart ? qIdx : -1;
-    const prefix = trimmed.slice(0, queryStart === -1 ? fragmentStart : queryStart);
-    const query = queryStart === -1 ? undefined : trimmed.slice(queryStart + 1, fragmentStart);
-    const fragment = hashIdx === -1 ? undefined : trimmed.slice(hashIdx + 1);
+    const { prefix, query, fragment } = splitRaw(trimmed);
 
-    const reason = this.protectionReason(host, parsed.pathname, query, fragment);
+    const reason = this.protectionReason(host, parsed.pathname, query, fragment, mode === 'experimental');
     if (reason !== undefined) return unchanged('protected', reason);
+
+    // Query stripping: every non-empty segment goes, whatever its name.
+    if (mode === 'experimental') return stripParts(input, prefix, query, fragment);
 
     const applicable = this.compiled.filter(
       (c) =>
@@ -244,6 +303,7 @@ export class Cleaner {
     pathname: string,
     query: string | undefined,
     fragment: string | undefined,
+    experimental: boolean,
   ): string | undefined {
     const p = this.ruleSet.protection;
     const domain = p.domains.find((d) => domainMatches(host, d));
@@ -264,6 +324,7 @@ export class Cleaner {
       if (key === '') continue;
       if (
         this.protectedParams.has(key) ||
+        (experimental && this.experimentalParams.has(key)) ||
         p.paramPrefixes.some((x) => key.startsWith(x)) ||
         p.paramSuffixes.some((x) => key.endsWith(x))
       ) {

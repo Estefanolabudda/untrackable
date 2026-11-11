@@ -2,7 +2,9 @@
 
 use proptest::prelude::*;
 use serde_json::Value;
-use untrackable_core::{clean, CleanOptions, Mode, Status, EMBEDDED_RULES_JSON};
+use untrackable_core::{
+    clean, strip_query, CleanOptions, Mode, Status, EMBEDDED_RULES_JSON, EXPERIMENTAL_RULE_ID,
+};
 
 /// Params of the domain-independent `clean`-mode rules (removed in clean and strict mode
 /// on every host). Read from the embedded rule file so the test follows rule changes.
@@ -120,10 +122,34 @@ proptest! {
 
     /// (a) `clean` never panics, in any mode, on arbitrary strings.
     #[test]
-    fn never_panics_on_arbitrary_strings(s in any::<String>(), mode in 0u8..3) {
-        let mode = [Mode::Clean, Mode::Strict, Mode::Bypass][mode as usize];
+    fn never_panics_on_arbitrary_strings(s in any::<String>(), mode in 0u8..4) {
+        let mode = [Mode::Clean, Mode::Strict, Mode::Experimental, Mode::Bypass][mode as usize];
         let r = clean(&s, &CleanOptions::new(mode).with_exceptions([s.clone()]));
         prop_assert_eq!(r.changed, r.url != s);
+        let r = strip_query(&s);
+        prop_assert_eq!(r.changed, r.url != s);
+    }
+
+    /// (a'') Experimental mode / `strip_query` on URL-ish strings: the result
+    /// never contains a query and keeps the fragment verbatim.
+    #[test]
+    fn experimental_strips_whole_query(
+        s in "https?://[a-z.]{1,12}[/a-z0-9]{0,10}(\\?[&=%a-zA-Z0-9_+.~-]{0,30})?(#[?&=a-z0-9]{0,10})?",
+        use_strip in any::<bool>(),
+    ) {
+        let r = if use_strip {
+            strip_query(&s)
+        } else {
+            clean(&s, &CleanOptions::new(Mode::Experimental))
+        };
+        prop_assert_eq!(r.changed, r.url != s);
+        if r.status == Status::Cleaned {
+            prop_assert!(!r.url.split('#').next().unwrap_or("").contains('?'));
+            prop_assert_eq!(fragment_of(&r.url), fragment_of(&s));
+            prop_assert!(r.removed.iter().all(|p| p.rule_id == EXPERIMENTAL_RULE_ID));
+        } else {
+            prop_assert_eq!(&r.url, &s);
+        }
     }
 
     /// (a') ... including URL-ish strings that reach the cleaning stage.

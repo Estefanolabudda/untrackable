@@ -31,7 +31,7 @@ mod engine;
 mod rules;
 mod util;
 
-pub use engine::Engine;
+pub use engine::{strip_query, Engine, EXPERIMENTAL_RULE_ID};
 pub use rules::{Protection, Rule, RuleMode, RuleSet, RuleSetError, SUPPORTED_SCHEMA_VERSION};
 
 /// The bundled rule file (`rules/rules.json`), embedded at compile time.
@@ -46,6 +46,11 @@ pub enum Mode {
     Clean,
     /// Apply `clean` and `strict` rules and clean param-shaped fragments.
     Strict,
+    /// Query stripping: ignore the tracker rules and remove every non-empty
+    /// query segment (reported with rule id [`EXPERIMENTAL_RULE_ID`]); the
+    /// fragment is never modified. Protection additionally honours
+    /// `protection.experimentalParams`.
+    Experimental,
     /// Never modify anything.
     Bypass,
 }
@@ -76,7 +81,7 @@ pub enum Status {
 pub enum Location {
     /// The query string.
     Query,
-    /// A param-shaped fragment (strict mode only).
+    /// A param-shaped fragment (strict mode only; never in experimental mode).
     Fragment,
 }
 
@@ -88,7 +93,8 @@ pub struct RemovedParam {
     pub name: String,
     /// Where it was found.
     pub location: Location,
-    /// Id of the first applicable rule (file order) that matched.
+    /// Id of the first applicable rule (file order) that matched, or
+    /// [`EXPERIMENTAL_RULE_ID`] for experimental query stripping / [`strip_query`].
     pub rule_id: String,
 }
 
@@ -292,6 +298,16 @@ mod tests {
             "protection.pathSubstrings",
             "empty string",
         );
+        assert_invalid(
+            with_protection(r#"{"experimentalParams":["code","State"]}"#),
+            "protection.experimentalParams",
+            "not lower-case",
+        );
+        assert_invalid(
+            with_protection(r#"{"experimentalParams":[""]}"#),
+            "protection.experimentalParams",
+            "empty string",
+        );
         // Empty `domains` array (absent is fine).
         assert_invalid(
             with_rule(r#"{"id":"a","mode":"clean","domains":[],"params":["x"]}"#),
@@ -383,6 +399,20 @@ mod tests {
             ));
             assert_schema_error(&rule_set_with_protection(&format!(r#"{{"{key}":null}}"#)));
         }
+        // `experimentalParams` is optional (absent = empty) but `null` / non-arrays are rejected.
+        assert!(
+            Engine::from_json(&rule_set_with_protection(r#"{"experimentalParams":[]}"#)).is_ok()
+        );
+        assert!(Engine::from_json(&rule_set_with_protection(
+            r#"{"experimentalParams":["code"]}"#
+        ))
+        .is_ok());
+        assert_schema_error(&rule_set_with_protection(r#"{"experimentalParams":null}"#));
+        assert_schema_error(&rule_set_with_protection(
+            r#"{"experimentalParams":"code"}"#,
+        ));
+        assert_schema_error(&rule_set_with_protection(r#"{"experimentalParams":[1]}"#));
+        assert_schema_error(&rule_set_with_protection(r#"{"experimentalParam":["x"]}"#));
         assert_schema_error(&rule_set_with_protection(r#"{"pathKeyword":["x"]}"#));
         assert_schema_error(&rule_set_with_protection(r#"{"description":null}"#));
         assert_schema_error(&rule_set_with_protection(
@@ -468,6 +498,21 @@ mod tests {
         assert_eq!(v["status"], "protected");
         assert_eq!(v["reason"], "path:login");
         assert_eq!(v["changed"], false);
+        let e = clean(
+            "https://example.com/?a=1",
+            &CleanOptions::new(Mode::Experimental),
+        );
+        let v = serde_json::to_value(&e).expect("serialise");
+        assert_eq!(
+            v["removed"],
+            serde_json::json!([{"name": "a", "location": "query", "ruleId": "experimental"}])
+        );
+        let m: Mode = serde_json::from_str(r#""experimental""#).expect("mode");
+        assert_eq!(m, Mode::Experimental);
+        assert_eq!(
+            serde_json::to_string(&Mode::Experimental).expect("ser"),
+            r#""experimental""#
+        );
     }
 
     #[test]

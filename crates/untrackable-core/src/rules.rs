@@ -53,9 +53,9 @@ where
 /// Protection signals: URLs matching any of these are never modified.
 ///
 /// The whole `protection` object may be omitted from the rule file (meaning
-/// "no protection", see [`Protection::default`]). When it is present, all
-/// seven lists are required and `description` is optional; unknown keys are
-/// rejected.
+/// "no protection", see [`Protection::default`]). When it is present, the
+/// seven lists `domains` … `paramCombinations` are required, `description`
+/// and `experimentalParams` are optional; unknown keys are rejected.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Protection {
@@ -76,6 +76,11 @@ pub struct Protection {
     pub param_suffixes: Vec<String>,
     /// Key combinations that are protected when all keys are present.
     pub param_combinations: Vec<Vec<String>>,
+    /// Exact keys that protect a URL in [`Mode::Experimental`](crate::Mode::Experimental)
+    /// only (optional, default empty; `null` is rejected). Functional names too
+    /// common to protect in clean/strict mode, where unknown keys are kept anyway.
+    #[serde(default)]
+    pub experimental_params: Vec<String>,
 }
 
 /// The complete rule set. Top-level keys are exactly `schemaVersion`, `rules`
@@ -172,6 +177,10 @@ impl RuleSet {
             }
             check(format!("protection.paramCombinations[{i}]"), combo)?;
         }
+        check(
+            "protection.experimentalParams".into(),
+            &p.experimental_params,
+        )?;
         Ok(())
     }
 }
