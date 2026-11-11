@@ -8,7 +8,7 @@ All notable changes are documented here. The format follows
 
 Nothing yet.
 
-## [0.2.0] – unreleased (in development)
+## [0.2.0] – 2026-11-11
 
 ### Added
 

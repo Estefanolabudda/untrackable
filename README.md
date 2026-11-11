@@ -11,8 +11,8 @@ https://example.com/article?utm_source=newsletter&utm_medium=email&id=123
 https://example.com/article?id=123
 ```
 
-Status: **v0.2.0 in development** (adds the Experimental mode); v0.1.0 is the
-first release – available as a ZIP on the GitHub releases page for manual
+Status: **v0.2.0** – Chromium extension (Phase 1) with the opt-in
+Experimental mode; available as a ZIP on the GitHub releases page for manual
 installation. Not in the Chrome Web Store.
 
 ## Features

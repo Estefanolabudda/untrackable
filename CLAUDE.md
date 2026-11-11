@@ -47,10 +47,12 @@ to 1.63.0 to match it.
 
 ## Status
 
-v0.1.0: PR #5 merged to `main` (c0cf8d2, CI green); the release is published
-by `.github/workflows/release.yml` once the maintainer pushes the annotated
-tag `v0.1.0` on that commit (the session cannot push tags: 403).
-v0.2.0 (Experimental mode, PR #6): in review – needs the maintainer's macOS
-test and approval; no merge or release without it. See `docs/release/`.
+v0.1.0 released on GitHub (tag on c0cf8d2, published by `release.yml`).
+v0.2.0 (Experimental mode, PR #6) approved by the maintainer after their
+macOS test; released via an annotated `v0.2.0` tag on the merge commit – the
+session cannot push tags (403), so the maintainer pushes it. See `docs/release/`.
+Build release candidates from a fresh clone with its own `npm ci` (never via a
+`node_modules` symlink into another checkout – the workspace package would
+resolve there).
 Phase 2 (desktop) and Phase 3 not started – see `docs/roadmap/roadmap.md`.
 Not published to any store – Chrome Web Store submission and future releases need maintainer approval.

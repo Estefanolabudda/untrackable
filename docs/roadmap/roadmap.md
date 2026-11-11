@@ -13,7 +13,7 @@
 - [x] Unit, property-based and Chromium end-to-end tests; CI
 - [ ] Chrome Web Store listing (requires maintainer account and approval)
 
-## v0.2 – Experimental mode (in development)
+## v0.2 – Experimental mode (released)
 
 - Opt-in "Experimental – strip query parameters" mode with protection of
   recognised sign-in/payment/signed links and an explicit confirmation.
