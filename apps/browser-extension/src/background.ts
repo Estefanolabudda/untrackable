@@ -2,7 +2,8 @@
  * Untrackable service worker.
  *
  * - Compiles settings into declarativeNetRequest rules (automatic navigation cleaning).
- * - Context menu: "Copy clean link", "Open link without cleaning", "Copy clean page link".
+ * - Context menu: "Copy clean link", "Open link without cleaning", "Copy clean page link",
+ *   "Copy link without query parameters", "Open link without query parameters".
  * - Keyboard command: copy clean link of the current page.
  * - Per-tab pause and one-time bypass via DNR session rules.
  *
@@ -12,7 +13,7 @@
  * page that hit a redirect loop, for at most 10 minutes) and disappears with
  * the browser session.
  */
-import { cleanUrl, compileDnrRules, PRIORITY } from '@untrackable/core';
+import { cleanUrl, compileDnrRules, ID_BASE, PRIORITY, stripQuery } from '@untrackable/core';
 import { effectiveMode, loadSettings, saveSettings, type Message, type Settings, type TabState } from './settings.js';
 
 const RESUME_ALARM = 'untrackable-resume';
@@ -25,6 +26,8 @@ const MENU = {
   copyLink: 'copy-clean-link',
   openUnmodified: 'open-link-unmodified',
   copyPage: 'copy-clean-page-link',
+  copyStripped: 'copy-link-without-query',
+  openStripped: 'open-link-without-query',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -49,6 +52,7 @@ async function supportedRules(
 ): Promise<chrome.declarativeNetRequest.Rule[]> {
   const kept: chrome.declarativeNetRequest.Rule[] = [];
   let protectionBroken = false;
+  let stripBroken = false;
   for (const rule of rules) {
     const regex = rule.condition.regexFilter;
     if (regex !== undefined) {
@@ -60,12 +64,14 @@ async function supportedRules(
       });
       if (!isSupported) {
         if (rule.action.type === chrome.declarativeNetRequest.RuleActionType.ALLOW) protectionBroken = true;
+        // Without its single strip rule, Experimental would silently do nothing (badge 'E'): say so.
+        if (rule.id === ID_BASE.stripQuery) stripBroken = true;
         continue;
       }
     }
     kept.push(rule);
   }
-  rulesDegraded = protectionBroken;
+  rulesDegraded = protectionBroken || stripBroken;
   return protectionBroken
     ? kept.filter((r) => r.action.type !== chrome.declarativeNetRequest.RuleActionType.REDIRECT)
     : kept;
@@ -89,9 +95,15 @@ async function applyRulesNow(): Promise<void> {
     // An update is atomic: one bad rule would leave the previous rule set in
     // place. Retry without the optional regex fallback rules.
     const essential = compiled.filter((r) => r.action.redirect?.regexSubstitution === undefined);
-    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: essential }).catch(() => {
-      /* keep previous rules; nothing else is safe to do */
-    });
+    try {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: essential });
+    } catch {
+      // Still failing: the previous rules may belong to another mode (e.g.
+      // Experimental after switching to Clean). Remove them all and show '!'
+      // rather than keep cleaning with stale rules (found in review).
+      rulesDegraded = true;
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds }).catch(() => {});
+    }
   }
   await scheduleResume(settings);
   await updateBadge(settings);
@@ -110,19 +122,24 @@ async function updateBadge(settings: Settings): Promise<void> {
     await chrome.action.setBadgeText({ text: '!' });
     await chrome.action.setBadgeBackgroundColor({ color: '#8a3b12' });
     await chrome.action.setTitle({
-      title: 'Untrackable – navigation cleaning disabled: this browser could not install the protection rules',
+      title:
+        'Untrackable – navigation cleaning disabled: this browser could not install the cleaning or protection rules',
     });
     return;
   }
-  const text = mode === 'bypass' ? 'off' : mode === 'strict' ? 'S' : '';
+  const text = { bypass: 'off', strict: 'S', experimental: 'E', clean: '' }[mode];
   await chrome.action.setBadgeText({ text });
-  await chrome.action.setBadgeBackgroundColor({ color: mode === 'bypass' ? '#8a3b12' : '#1f5f3a' });
+  await chrome.action.setBadgeBackgroundColor({
+    color: mode === 'bypass' ? '#8a3b12' : mode === 'experimental' ? '#5b2a86' : '#1f5f3a',
+  });
   const title =
     mode === 'bypass'
       ? settings.enabled
         ? 'Untrackable – paused'
         : 'Untrackable – off'
-      : `Untrackable – ${mode === 'strict' ? 'Strict' : 'Clean'} mode`;
+      : mode === 'experimental'
+        ? 'Untrackable – Experimental mode: removes all query parameters (sites may break)'
+        : `Untrackable – ${mode === 'strict' ? 'Strict' : 'Clean'} mode`;
   await chrome.action.setTitle({ title });
 }
 
@@ -518,19 +535,49 @@ function copyToClipboard(text: string, stillWanted: () => boolean = () => true):
  * while automatic cleaning is paused – the user asked for a clean link.
  * Domain exceptions are still honoured.
  */
+/**
+ * Order of copies (keyboard copies seen by content scripts in all tabs and
+ * explicit copy actions); a pending keyboard copy may only write while it is
+ * the latest, so it never replaces a later explicit copy (found in review).
+ */
+let copySeq = 0;
+
 async function copyClean(url: string): Promise<void> {
+  const seq = ++copySeq;
   if (url.length > MAX_URL_LENGTH) return; // hostile pages can craft huge hrefs
   const settings = await loadSettings();
   const result = cleanUrl(url, { mode: settings.mode, exceptions: settings.exceptions });
-  await copyToClipboard(result.url);
+  await copyToClipboard(result.url, () => seq === copySeq);
+}
+
+/**
+ * Explicit user actions "Copy/Open link without query parameters". They strip
+ * the whole query even where automatic cleaning would protect the link (the
+ * user asked for exactly that) – but only on a click, never automatically, and
+ * never for anything but http(s). Opening is a single new-tab navigation: no
+ * bypass rule, no retry; the stripped URL is cleaned like any other.
+ */
+async function copyStripped(url: string): Promise<void> {
+  const seq = ++copySeq;
+  if (url.length > MAX_URL_LENGTH) return;
+  const result = stripQuery(url);
+  if (result.status !== 'cleaned' && result.status !== 'unchanged') return;
+  await copyToClipboard(result.url, () => seq === copySeq);
+}
+
+async function openStripped(url: string, openerTab?: chrome.tabs.Tab): Promise<void> {
+  if (url.length > MAX_URL_LENGTH) return;
+  const result = stripQuery(url);
+  if (result.status !== 'cleaned' && result.status !== 'unchanged') return;
+  const createProps: chrome.tabs.CreateProperties = { url: result.url, active: true };
+  if (openerTab?.id !== undefined) createProps.openerTabId = openerTab.id;
+  if (openerTab?.index !== undefined) createProps.index = openerTab.index + 1;
+  await chrome.tabs.create(createProps);
 }
 
 // ---------------------------------------------------------------------------
 // Event wiring
 // ---------------------------------------------------------------------------
-
-/** Order of keyboard copies seen by content scripts (all tabs); only the latest may write. */
-let copySeq = 0;
 
 /**
  * Copy cleaning, decided here so settings never reach web pages.
@@ -556,7 +603,13 @@ async function onCopiedLink(tabId: number, url: string | undefined): Promise<voi
   // Switched off means no clipboard writes at all. (A page can therefore tell
   // whether copy cleaning is switched on – but not mode, pauses or exceptions.)
   if (!settings.enabled || !settings.copyCleaning) return;
-  const mode = effectiveMode(settings);
+  const effective = effectiveMode(settings);
+  // Experimental strips whole queries on purpose while navigating, but a
+  // keyboard copy must not silently replace the user's clipboard with a link
+  // that may no longer work (search, video, wrapped links – found in review):
+  // copies are cleaned with the Strict rules. Explicit "Copy clean link" and
+  // "Copy link without query parameters" still strip.
+  const mode = effective === 'experimental' ? 'strict' : effective;
   const active = mode !== 'bypass' && (await tabRules(tabId)).length === 0;
   const result = active ? cleanUrl(url, { mode, exceptions: settings.exceptions }) : undefined;
   const text = result?.status === 'cleaned' ? result.url : url;
@@ -568,6 +621,16 @@ function createMenus(): void {
     chrome.contextMenus.create({ id: MENU.copyLink, title: 'Copy clean link', contexts: ['link'] });
     chrome.contextMenus.create({ id: MENU.openUnmodified, title: 'Open link without cleaning', contexts: ['link'] });
     chrome.contextMenus.create({ id: MENU.copyPage, title: 'Copy clean page link', contexts: ['page'] });
+    chrome.contextMenus.create({
+      id: MENU.copyStripped,
+      title: 'Copy link without query parameters',
+      contexts: ['link'],
+    });
+    chrome.contextMenus.create({
+      id: MENU.openStripped,
+      title: 'Open link without query parameters',
+      contexts: ['link'],
+    });
   });
 }
 
@@ -596,6 +659,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === MENU.copyLink && info.linkUrl) void copyClean(info.linkUrl);
   else if (info.menuItemId === MENU.openUnmodified && info.linkUrl) void openUnmodified(info.linkUrl, tab);
+  else if (info.menuItemId === MENU.copyStripped && info.linkUrl) void copyStripped(info.linkUrl);
+  else if (info.menuItemId === MENU.openStripped && info.linkUrl) void openStripped(info.linkUrl, tab);
   else if (info.menuItemId === MENU.copyPage) {
     const pageUrl = info.pageUrl ?? tab?.url;
     if (pageUrl !== undefined) void copyClean(pageUrl);
@@ -665,7 +730,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return true;
   }
   if (message.type === 'copyText') {
-    void copyToClipboard(message.text).then(sendResponse);
+    const seq = ++copySeq;
+    void copyToClipboard(message.text, () => seq === copySeq).then(sendResponse);
     return true;
   }
   if (message.type === 'openUnmodified') {

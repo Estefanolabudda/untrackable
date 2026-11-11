@@ -1,4 +1,5 @@
 import { cleanUrl, toAsciiDomain } from '@untrackable/core';
+import { setupModeControls } from './mode-controls.js';
 import { effectiveMode, loadSettings, MAX_EXCEPTIONS, saveSettings, type Settings } from './settings.js';
 
 function $(id: string): HTMLElement {
@@ -8,7 +9,7 @@ function $(id: string): HTMLElement {
 }
 
 const enabledBox = $('enabled') as HTMLInputElement;
-const modeRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mode"]')];
+const modeControls = setupModeControls();
 const copyBox = $('copy-cleaning') as HTMLInputElement;
 const loopBox = $('loop-recovery') as HTMLInputElement;
 const LOOP_PERMISSION: chrome.permissions.Permissions = { permissions: ['webNavigation'] };
@@ -27,7 +28,7 @@ let current: Settings | undefined;
 function render(s: Settings): void {
   current = s;
   enabledBox.checked = s.enabled;
-  for (const r of modeRadios) r.checked = r.value === s.mode;
+  modeControls.render(s);
   copyBox.checked = s.copyCleaning;
   pauseStatus.textContent =
     s.enabled && s.pausedUntil > Date.now() ? `Paused until ${new Date(s.pausedUntil).toLocaleTimeString()}.` : '';
@@ -65,7 +66,7 @@ function renderPreview(): void {
   const p = document.createElement('p');
   const messages: Record<string, string> = {
     cleaned: 'Cleaned link:',
-    unchanged: 'No tracking parameters found.',
+    unchanged: mode === 'experimental' ? 'No query parameters to remove.' : 'No tracking parameters found.',
     protected: 'Left unchanged: this looks like a sign-in, payment or signed link',
     bypassed: 'Cleaning is currently off or paused.',
     excepted: 'Left unchanged: this site is in your exceptions.',
@@ -88,11 +89,6 @@ function renderPreview(): void {
 }
 
 enabledBox.addEventListener('change', () => void saveSettings({ enabled: enabledBox.checked, pausedUntil: 0 }));
-for (const r of modeRadios) {
-  r.addEventListener('change', () => {
-    if (r.checked) void saveSettings({ mode: r.value === 'strict' ? 'strict' : 'clean' });
-  });
-}
 copyBox.addEventListener('change', () => void saveSettings({ copyCleaning: copyBox.checked }));
 
 // The permission itself is the setting: granted = recovery on.

@@ -186,11 +186,17 @@ there are no redirect loops (verified by e2e test).
   percent-encoded letter, digit, `-`, `.`, `/` or `_` are therefore left
   completely alone during navigation (e.g. `utm%5Fsource` is not removed, `/%6Cogin` is not
   cleaned). Encoded non-ASCII paths (`/stra%C3%9Fe`) are still cleaned.
-- Fragments are never sent to servers; navigation cleaning does not touch
-  them and **cannot see fragment-based protection signals**. Example:
-  `/a?utm_source=x#access_token=…` becomes `/a#access_token=…` (the engine
-  would leave it unchanged). The fragment itself is preserved by the browser,
-  so implicit-flow tokens still reach the page.
+- Fragments are never sent to servers and navigation cleaning does not touch
+  them. Chromium does match rules against the URL **including** the fragment
+  (verified), so since v0.2 the protection allow rules also look for
+  parameter signals after `#` (e.g. `/a?utm_source=x#access_token=…` is left
+  unchanged, like the engine does). The engine reads fragment keys only when
+  the fragment contains `=`; RE2 cannot express that condition exactly (an
+  attempt missed valueless keys such as `#token&a=1` – found in review), so a
+  plain anchor named like a signal (`#api-token`) also stops navigation
+  cleaning. Over-protection in the safe direction; copy cleaning is exact. A
+  fuzzer with ~100,000 URLs per run found no URL the engine protects that
+  navigation changes.
 - Only `main_frame` navigations are cleaned. Sub-frames, `fetch`/XHR and
   links rewritten by page scripts after load (e.g. `history.replaceState`)
   are not modified.
@@ -230,6 +236,67 @@ checks every regex with `isRegexSupported`, drops unsupported fallback rules,
 installs **no** redirects if any protection rule is unsupported (fail safe),
 and retries without the optional fallback rules if an update still fails. An
 e2e test asserts that every compiled rule is actually installed.
+
+### Experimental mode – strip query parameters (v0.2)
+
+An opt-in fourth mode for maximum URL minimisation. It is never the default
+and needs an explicit confirmation in the popup or settings.
+
+| Aspect               | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What is removed      | The whole query string (`?…`) – trackers, functional and unknown parameters alike; no allow- or blocklist. Empty queries (`?`, `?&&`) are left alone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| What is kept         | Scheme, host, port, path and fragment, byte for byte (raw string surgery, same as Clean/Strict).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Protected links      | Everything protected in Clean/Strict, plus the Experimental-only names in `protection.experimentalParams` (OAuth `code`/`error`, device codes, WS-Federation, German eID `tcTokenURL`, Firebase `oobCode`, Supabase `token_hash`, CSRF/WordPress nonces, Stripe/PayPal/3-D Secure/GoCardless/Amazon Pay/Worldpay/EU payment returns, short verification/invitation names, Akamai/Wowza/CDN tokens, Dropbox `rlkey`, Drive `resourcekey`, `expires`/`key`, login-redirect targets such as `return_to`) and the signal `value:url` – a parameter value that is itself an (encoded) http(s) URL, i.e. a wrapped link such as Outlook SafeLinks, Google `/url?q=` or Facebook `l.php?u=`. Such URLs keep **all** their parameters – trackers included (see limitations). |
+| Exceptions, bypasses | Unchanged: domain exceptions, global off, timed pause, tab pause, one-time bypass and the redirect-loop helper behave as in the other modes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Navigation (DNR)     | One `redirect` rule with `transform: { query: "" }`, `GET` main-frame requests only, guarded by `regexFilter` `^[^?#]*\?[^#]*[^&#]` so no no-op redirect can match. Same protection/exception `allow` rules above it; tracker rules are not installed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Copy cleaning        | Keyboard copies (Ctrl/Cmd+C) are cleaned with the **Strict** rules, not stripped: a silently replaced clipboard must not hold a link that may no longer work. The explicit actions "Copy clean link" (strips in Experimental) and "Copy link without query parameters" strip.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+Design decisions:
+
+- **Query only, fragment kept.** The request specification asked to keep the
+  fragment; navigation cannot see it anyway, and fragments often carry SPA
+  routes or text anchors.
+- **Protection still wins.** Stripping is far more likely to break sign-in,
+  payment and signed links than tracker removal, so the existing signals plus
+  `experimentalParams` apply. A protected URL is left completely unchanged –
+  Experimental therefore does **not** remove every query.
+- **`experimentalParams` is Experimental-only.** Names such as `code`,
+  `state` or `key` are common; protecting them in Clean/Strict would let
+  trackers ride along on many ordinary links, where unknown names are kept
+  anyway.
+- **GET only.** A form `POST` to `/submit?step=2` keeps its query: the target
+  query is part of the form's function, and a 307 redirect would resend the
+  body.
+- **No loop amplification.** The first request already goes out stripped (the
+  original URL is never sent, so one-time links are not consumed). A server
+  that insists on a query loops until Chromium's 20-redirect limit
+  (`ERR_TOO_MANY_REDIRECTS`), the same deterministic failure as in Clean; the
+  optional loop helper offers one host-scoped reload.
+- **Over-protection is accepted.** A URL protected only by an
+  `experimentalParams` name (e.g. a coupon `?code=…`) keeps all its
+  parameters, including trackers – Clean would remove those. Falling back to
+  Strict cleaning would be nicer, but navigation rules cannot express "skip
+  only the strip rule" (an `allow` stops all rules), so the engine stays
+  consistent with navigation instead. Broad names that bought little safety
+  (`next`, `continue`, `redirect`, `exp`, `expiry`, `md`, and `state` –
+  OAuth `code`+`state` is protected as a combination in every mode) were
+  dropped in review. A later version may fall back to Strict cleaning for such
+  URLs (a higher-priority regex `redirect` with Strict's parameters looks
+  expressible in DNR; not yet verified).
+- **Not protected (accepted risk):** opaque click trackers whose target is
+  not a URL value (SendGrid `/ls/click?upn=`, Mailchimp `/track/click?u=`) –
+  they become dead links; one-time or reset links with short, site-chosen
+  names (`?t=`, `?k=`, `?inv=`, `/reset?t=` – `reset` is not a path keyword
+  because article slugs use it), payment returns with generic names
+  (`?id=tr_…`, `tx`/`st`), generic return targets (`return`, `goto`, `url`)
+  and signed CDN URLs with one-letter keys. Such links break in Experimental;
+  this is the main reason it is experimental. A `POST` answered with a redirect
+  to a `GET` page with a query (some payment returns) is stripped as well.
+- **Manual actions** "Copy link without query parameters" and "Open link
+  without query parameters" (context menu on links, all modes) call
+  `stripQuery`, which ignores protection and exceptions – the click is the
+  user's explicit intent. "Open" is a plain new-tab navigation to the
+  stripped URL: no bypass rule, no retry, later hops are cleaned normally.
 
 ### Copy cleaning
 

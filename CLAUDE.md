@@ -41,14 +41,18 @@ to 1.63.0 to match it.
 - Copy cleaning never touches the copy event (no setData/preventDefault): the content script reports keyboard copies (`copied`), the service worker decides with the settings and, for a single link, ALWAYS rewrites the clipboard (clean or unchanged) – writing only when cleaning would leak settings via `clipboardchange`. Latest copy wins (`copySeq`). Settings must never reach the page process.
 - Redirect-loop helper: never navigate to a stored or page-supplied URL; only `tabs.reload` after an explicit click, host-scoped bypass, store host only.
 - "Open link without cleaning": no blind navigation retry (could consume one-time links); wait for the blank tab instead; the bypass ends when the destination commits.
+- Experimental mode strips every non-empty query segment (fragment kept) after the usual protection plus `protection.experimentalParams`; navigation uses one GET-only `transform.query: ''` rule. Protection regexes match after `?`, `&` and `#` (Chromium matches the URL incl. fragment). Manual "… without query parameters" actions use `stripQuery` (ignores protection – explicit user intent).
 - Rule files: both engines validate strictly (unknown fields rejected); `npm run test:conformance` also checks validation parity.
 - npm dependencies pinned exactly; Rust dependencies use semver ranges locked by `Cargo.lock` (CI uses `--locked`); GitHub Actions pinned by SHA.
 
-## Status (v0.1.0 release candidate, not yet published)
+## Status
 
-Phase 1 (Chromium extension) merged to `main` (PR #1, release workflow PR #4).
-No tag/release yet: the session cannot push tags (403); the maintainer pushes
-the annotated tag and `.github/workflows/release.yml` publishes the release.
-Release readiness, open items and manual test plan: `docs/release/`.
+v0.1.0 released on GitHub (tag on c0cf8d2, published by `release.yml`).
+v0.2.0 (Experimental mode, PR #6) approved by the maintainer after their
+macOS test; released via an annotated `v0.2.0` tag on the merge commit – the
+session cannot push tags (403), so the maintainer pushes it. See `docs/release/`.
+Build release candidates from a fresh clone with its own `npm ci` (never via a
+`node_modules` symlink into another checkout – the workspace package would
+resolve there).
 Phase 2 (desktop) and Phase 3 not started – see `docs/roadmap/roadmap.md`.
 Not published to any store – Chrome Web Store submission and future releases need maintainer approval.

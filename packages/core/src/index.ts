@@ -1,6 +1,8 @@
 export {
   Cleaner,
   cleanUrl,
+  stripQuery,
+  EXPERIMENTAL_RULE_ID,
   domainMatches,
   normaliseException,
   normaliseKey,

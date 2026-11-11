@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import {
   Cleaner,
   cleanUrl,
+  stripQuery,
   defaultRuleSet,
   domainMatches,
   isParamShapedFragment,
@@ -234,5 +235,34 @@ describe('properties', () => {
       }),
       { numRuns: 1000 },
     );
+  });
+});
+
+describe('stripQuery (explicit "without query parameters" actions)', () => {
+  it('strips the whole query and keeps the fragment, even for protected links', () => {
+    const r = stripQuery('https://example.com/login?token=abc&utm_source=x#top');
+    expect(r).toMatchObject({ url: 'https://example.com/login#top', status: 'cleaned', changed: true });
+    expect(r.removed.map((x) => [x.name, x.location, x.ruleId])).toEqual([
+      ['token', 'query', 'experimental'],
+      ['utm_source', 'query', 'experimental'],
+    ]);
+  });
+
+  it('leaves links without a (non-empty) query unchanged and returns the untrimmed input', () => {
+    for (const u of ['https://example.com/a', ' https://example.com/?&& ', 'https://example.com/#a?b=1']) {
+      expect(stripQuery(u)).toMatchObject({ url: u, status: 'unchanged', changed: false, removed: [] });
+    }
+  });
+
+  it('rejects anything but valid http(s) URLs without changing them', () => {
+    expect(stripQuery('javascript:alert(1)?x=1').status).toBe('unsupported');
+    expect(stripQuery('https://exa mple.com/?x=1').status).toBe('invalid');
+    expect(stripQuery('https://example.com/\n?x=1').status).toBe('invalid');
+    expect(stripQuery('not a url').status).toBe('invalid');
+  });
+
+  it('applies the trailing-whitespace guard and keeps IDN spelling and ports', () => {
+    expect(stripQuery('https://example.com/a ?x=1').url).toBe('https://example.com/a%20');
+    expect(stripQuery('https://bücher.example:8443/p?x=1').url).toBe('https://bücher.example:8443/p');
   });
 });

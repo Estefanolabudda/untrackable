@@ -63,8 +63,11 @@ fixtures in the same change.
 3. Run the full test suite including `npm run test:e2e`.
 4. `npm run package -w apps/browser-extension` → `artifacts/untrackable-chromium-<version>.zip`
    The archive is reproducible by default (fixed 2000-01-01 timestamps;
-   `SOURCE_DATE_EPOCH` overrides them). File modes are stored, so build from
-   a checkout made with a normal umask (e.g. 022).
+   `SOURCE_DATE_EPOCH` overrides them; file modes are normalised to 644/755,
+   so the umask does not matter). To verify a published zip, build from a
+   **fresh clone** of the tag with its own `npm ci` – never from a worktree
+   whose `node_modules` points into another checkout (the workspace package
+   `@untrackable/core` would then come from that checkout).
 5. Add `docs/release/vX.Y.Z-release-notes.md`, merge to `main` and wait for
    green CI on that commit.
 6. Create and push an annotated tag on that commit:

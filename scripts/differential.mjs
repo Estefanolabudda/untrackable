@@ -98,7 +98,12 @@ const prefixKeys = rules.rules.flatMap((r) =>
   (r.prefixes ?? []).map((x) => x + pick(['x', 'campaign', 'new_thing', ''])),
 );
 const trackingKeys = [...rules.rules.flatMap((r) => r.params ?? []), ...prefixKeys];
-const protectedKeys = [...p.params, ...p.paramPrefixes.map((x) => x + 'x'), ...p.paramSuffixes.map((x) => 'my' + x)];
+const protectedKeys = [
+  ...p.params,
+  ...p.paramPrefixes.map((x) => x + 'x'),
+  ...p.paramSuffixes.map((x) => 'my' + x),
+  ...(p.experimentalParams ?? []),
+];
 const pathWords = [...p.pathKeywords, ...p.pathSubstrings];
 
 function host() {
@@ -160,7 +165,7 @@ function url() {
 
 const requests = [];
 // 1. Exhaustive: every tracking key and protection signal on every rule domain.
-for (const mode of ['clean', 'strict']) {
+for (const mode of ['clean', 'strict', 'experimental']) {
   for (const r of rules.rules) {
     for (const d of r.domains ?? ['example.com']) {
       for (const k of [...(r.params ?? []), ...(r.prefixes ?? []).map((x) => x + 'x')]) {
@@ -185,7 +190,9 @@ for (let i = 0; i < RANDOM_CASES; i++) {
   const exceptions = chance(0.1)
     ? [pick([...ruleDomains, ...hostsBase, '*.example.com', 'https://shop.example/x', 'bad host'])]
     : [];
-  requests.push({ input: url(), mode: pick(['clean', 'clean', 'strict', 'bypass']), exceptions });
+  requests.push({ input: url(), mode: pick(['clean', 'clean', 'strict', 'experimental', 'bypass']), exceptions });
+  // Explicit "without query parameters" action on the same kind of input.
+  if (chance(0.25)) requests.push({ input: url(), strip: true });
 }
 
 // TypeScript engine (bundled in memory, same code as the extension).
@@ -227,7 +234,9 @@ const summarise = (r) =>
 const diffs = [];
 const statuses = {};
 requests.forEach((req, i) => {
-  const ts = core.cleanUrl(req.input, { mode: req.mode, exceptions: req.exceptions });
+  const ts = req.strip
+    ? core.stripQuery(req.input)
+    : core.cleanUrl(req.input, { mode: req.mode, exceptions: req.exceptions });
   statuses[ts.status] = (statuses[ts.status] ?? 0) + 1;
   if (summarise(ts) !== summarise(rustResults[i]))
     diffs.push({ req, ts: summarise(ts), rust: summarise(rustResults[i]) });
@@ -258,10 +267,15 @@ const mutations = [
       'paramPrefixes',
       'paramSuffixes',
       'paramCombinations',
+      'experimentalParams',
     ]);
     rs.protection = Object.fromEntries(Object.entries(rs.protection).filter(([k]) => k !== key));
   },
   (rs) => (rs.protection.description = 7),
+  (rs) => (rs.protection.experimentalParams = null),
+  (rs) => (rs.protection.experimentalParams = 'code'),
+  (rs) => (rs.protection.experimentalParams ??= []).push('UPPER'),
+  (rs) => (rs.protection.experimentalParams ??= []).push(''),
   (rs) => (rs.schemaVersion = 2),
   (rs) => (rs.rules = {}),
   () => {},

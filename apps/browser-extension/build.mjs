@@ -1,7 +1,7 @@
 // Build the extension into dist/ (and optionally a zip in artifacts/).
 // Usage: node build.mjs [--zip]
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,10 +37,14 @@ if (process.argv.includes('--zip')) {
   mkdirSync(out, { recursive: true });
   const zip = join(out, `untrackable-chromium-${pkg.version}.zip`);
   rmSync(zip, { force: true });
-  // Fixed timestamps make the archive byte-for-byte reproducible.
+  // Fixed timestamps and permissions make the archive byte-for-byte
+  // reproducible: zip stores Unix modes, which otherwise depend on the umask
+  // of the checkout and the build (e.g. 664 instead of 644 changes the hash).
   const epoch = new Date(Number(process.env.SOURCE_DATE_EPOCH ?? 946684800) * 1000);
   for (const entry of readdirSync(dist, { recursive: true, withFileTypes: true })) {
-    utimesSync(join(entry.parentPath, entry.name), epoch, epoch);
+    const path = join(entry.parentPath, entry.name);
+    chmodSync(path, entry.isDirectory() ? 0o755 : 0o644);
+    utimesSync(path, epoch, epoch);
   }
   // -X: omit extra file attributes; files sorted for reproducibility.
   const files = readdirSync(dist, { recursive: true, withFileTypes: true })

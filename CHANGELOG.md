@@ -8,6 +8,49 @@ All notable changes are documented here. The format follows
 
 Nothing yet.
 
+## [0.2.0] – 2026-11-11
+
+### Added
+
+- **Experimental mode – strip query parameters** (opt-in, never default):
+  removes the whole query string of links, known tracker or not, while
+  keeping scheme, host, path and fragment. Sign-in, payment, signed and
+  expiring links that Untrackable recognises keep all their parameters; an
+  Experimental-only protection list (`experimentalParams`: OAuth
+  `code`/`state`, CSRF, payment return, expiry, login-redirect targets) adds
+  names that are too common to protect in Clean/Strict. Only `GET`
+  navigations are rewritten. Badge `E`.
+- Activating Experimental shows a warning and needs an explicit confirmation;
+  a "Back to Clean" button is shown while it is active (popup and settings).
+- Experimental leaves wrapped links alone (a parameter value that is an
+  http(s) URL: Outlook SafeLinks, Google/Facebook redirects) and cleans
+  keyboard copies with the Strict rules instead of stripping them.
+- Context menu on links: **Copy link without query parameters** and **Open
+  link without query parameters** – explicit one-off actions in every mode.
+- Rule schema: optional `protection.experimentalParams`; both engines and the
+  differential test support the new mode.
+
+### Changed
+
+- The popup labels the master switch as Bypass when off and describes the
+  three cleaning modes.
+- Navigation protection rules also match parameter signals in the fragment
+  (Chromium matches rules against the URL including `#…`), as the engine
+  always did: e.g. `?utm_source=x#access_token=…` is now left unchanged
+  while navigating, too.
+- Signed Discord/Meta CDN URLs (`ex`+`hm`, `oh`+`oe`), nginx secure links
+  (`st`+`e`), Computop returns (`Len`+`Data`), Akamai `hdnea` and the CSRF
+  parameters `sesskey`/`logouthash` are protected in every mode.
+- A plain anchor named like a protection signal (e.g. `#api-token`) now also
+  stops navigation cleaning – the safe side of matching fragment keys.
+- `npm audit`: dev-only `minimatch` advisory fixed with an exact override.
+- The extension zip is reproducible regardless of umask (file modes
+  normalised; CI checks it).
+- Settings are saved key by key, so concurrent changes cannot undo each
+  other.
+- If the cleaning rules cannot be installed, the badge shows `!` and stale
+  rules of another mode are removed.
+
 ## [0.1.0] – 2026-11-11
 
 First release. Chromium extension (Phase 1) and reusable cleaning engines.

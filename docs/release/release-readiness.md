@@ -1,11 +1,11 @@
 # Release readiness – Untrackable 0.1.0
 
-Status: **approved for release by the maintainer (2026-11-11).** Includes the
-fix for e-mail sign-in deep links found in the maintainer's test on
-2026-11-11 (PR #5), re-tested by the maintainer on Chrome for macOS: the
-ChatGPT e-mail link opens and UTM cleaning still works. The release is
-published by the tag-triggered workflow once the annotated tag `v0.1.0` is
-pushed. Not published in the Chrome Web Store.
+Status: **released on GitHub (2026-11-11)** from `c0cf8d2` (tag `v0.1.0`,
+pushed by the maintainer); asset SHA-256
+`ee29d0c4f5db146d41609a135ae8a0baef2d2969e249092c061da1cd8d7baaea`,
+reproduced from a fresh clone. Includes the fix for e-mail sign-in deep links
+(PR #5), re-tested by the maintainer on Chrome for macOS. Not published in the
+Chrome Web Store. Next release: see `v0.2.0-readiness.md`.
 
 ## Verification summary
 

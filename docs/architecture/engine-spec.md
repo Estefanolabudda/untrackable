@@ -15,7 +15,7 @@ to either implementation that makes a shared fixture fail is a bug.
 ## Inputs
 
 - `input` – a string (untrusted).
-- `mode` – `clean` | `strict` | `bypass`.
+- `mode` – `clean` | `strict` | `experimental` | `bypass`.
 - `exceptions` – list of domain names supplied by the user (may be empty).
 
 ## Output
@@ -56,7 +56,8 @@ Evaluation order (first match wins):
 5. **Host** = parsed host (ASCII / punycode, lower-case), all trailing `.` removed.
    If host _domain-matches_ any user exception → `excepted`.
 6. **Protection** (see below). Any signal → `protected`.
-7. **Cleaning** of the query and (strict only) the fragment.
+7. **Cleaning** of the query and (strict only) the fragment; in
+   `experimental` mode **query stripping** instead (see below).
 8. If nothing was removed → `unchanged` and `url` is the original _untrimmed_
    input. Otherwise → `cleaned`.
 
@@ -135,6 +136,24 @@ one of the applicable rules' `params` or starts with one of their `prefixes`.
 All occurrences of a key are removed (duplicates included). The `ruleId` in the
 result is the first applicable rule (in file order) that matches.
 
+### Experimental mode: query stripping
+
+`experimental` does not use the tracker rules at all. After steps 1–6
+(including the additional protection signal `experimentalParams`, see below):
+
+- If there is no query, or every `&`-separated segment of the query is empty
+  (`?`, `?&&`), nothing is removed → `unchanged`.
+- Otherwise **every non-empty segment** is removed, whatever its name, in order
+  of appearance; each is reported with its raw key, `location: "query"` and
+  `ruleId: "experimental"`. The query became empty through removal, so the `?`
+  is dropped (general delimiter rule). Empty segments are not reported.
+- The fragment is **never** modified in `experimental` mode (it is kept
+  verbatim, even when param-shaped).
+- The trailing whitespace guard applies as usual.
+
+Example: `https://example.com/a?utm_source=x&id=1&&ref=y#top` →
+`https://example.com/a#top`, removed `utm_source`, `id`, `ref`.
+
 ### Fragments (strict mode only)
 
 A fragment is _param-shaped_ if it contains `=`, does not contain `/` or
@@ -160,8 +179,20 @@ string is the first signal found, in this order:
    equals a `protection.params` entry, starts with a `paramPrefixes` entry or
    ends with a `paramSuffixes` entry. Keys are checked in order of appearance,
    query first.
+   In `experimental` mode only, a key that equals a
+   `protection.experimentalParams` entry is also a signal (same position in
+   the order: each key is checked against all of these lists before the next
+   key). These names are functional in practice (OAuth `code`/`state`, CSRF
+   tokens, payment return parameters, expiry of signed links) but too common
+   to protect in Clean and Strict, where unknown parameters are kept anyway.
 4. `combination:<a>+<b>` – all keys of a `paramCombinations` entry are present
    among the query and fragment keys.
+5. `value:url` – **`experimental` mode only**: the raw value (text after the
+   first `=`) of some segment of the query, or of the fragment when it
+   contains `=`, starts – ASCII case-insensitively – with `http://`,
+   `https://`, `http%3a%2f%2f` or `https%3a%2f%2f`. Such URLs wrap another
+   link (Outlook SafeLinks `?url=`, Google `/url?q=`, Facebook `l.php?u=`,
+   login `?returnUrl=`); stripping them leaves a dead wrapper.
 
 Protection is a heuristic. It intentionally errs on the side of not cleaning.
 
@@ -180,6 +211,12 @@ compiles `rules.json` + settings into declarativeNetRequest rules
   URL whose path or a parameter key contains a percent-encoded letter, `-`,
   `_` or `.` is additionally allowed (left alone) during navigation.
 - Fragments are never sent in HTTP requests and are not touched by navigation
-  cleaning.
+  cleaning. Chromium matches rules against the URL including the fragment, so
+  parameter protection signals are matched after `?`, `&` or `#`.
+- `experimental` compiles to a single `redirect` with
+  `transform: { query: "" }` for `GET` main-frame requests whose query has a
+  non-empty segment (`regexFilter` `^[^?#]*\?[^#]*[^&#]`), below the same
+  protection, `experimentalParams`, `value:url` and exception `allow` rules. The tracker
+  rules are not installed in this mode.
 
 See `docs/architecture/overview.md` for details.
