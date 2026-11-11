@@ -14,7 +14,15 @@
  * the browser session.
  */
 import { cleanUrl, compileDnrRules, ID_BASE, PRIORITY, stripQuery } from '@untrackable/core';
-import { effectiveMode, loadSettings, saveSettings, type Message, type Settings, type TabState } from './settings.js';
+import {
+  effectiveMode,
+  loadSettings,
+  migrateStoredSettings,
+  saveSettings,
+  type Message,
+  type Settings,
+  type TabState,
+} from './settings.js';
 
 const RESUME_ALARM = 'untrackable-resume';
 /** Longest URL the extension cleans on explicit actions (Chromium's own limit is 2 MB). */
@@ -634,14 +642,32 @@ function createMenus(): void {
   });
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  createMenus();
-  void applyRules();
-});
+/**
+ * Context menus and the stored settings format must match this version.
+ * onInstalled (install, and an update via "reload" in chrome://extensions –
+ * covered by the upgrade e2e tests from 0.1.0 and 0.2.0) refreshes both
+ * unconditionally. As a safety net every service-worker start also checks a
+ * per-browser-session marker, in case a future update path skips onInstalled.
+ * (Replacing the folder and only restarting the browser is not an update:
+ * Chromium keeps running the previously registered service worker until the
+ * extension is reloaded – the README tells users to reload.)
+ */
+const LIFECYCLE_KEY = 'lifecycleVersion';
 
-chrome.runtime.onStartup.addListener(() => {
-  void applyRules();
-});
+async function refreshForThisVersion(): Promise<void> {
+  createMenus();
+  await migrateStoredSettings().catch(() => {});
+  await chrome.storage.session.set({ [LIFECYCLE_KEY]: chrome.runtime.getManifest().version });
+  await applyRules();
+}
+
+async function refreshIfNeeded(): Promise<void> {
+  const done = (await chrome.storage.session.get(LIFECYCLE_KEY))[LIFECYCLE_KEY];
+  if (done !== chrome.runtime.getManifest().version) await refreshForThisVersion();
+}
+
+chrome.runtime.onInstalled.addListener(() => void refreshForThisVersion());
+chrome.runtime.onStartup.addListener(() => void refreshIfNeeded());
 
 chrome.storage.onChanged.addListener((_changes, area) => {
   if (area === 'local') void applyRules();
@@ -747,3 +773,4 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 
 // Service workers can be restarted at any time; make sure rules match settings.
 void applyRules();
+void refreshIfNeeded();

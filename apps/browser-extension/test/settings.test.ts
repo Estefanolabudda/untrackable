@@ -9,8 +9,9 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 (globalThis as unknown as { chrome: unknown }).chrome = {
   storage: {
     local: {
-      async get(keys: string[]) {
+      async get(keys: string[] | null) {
         await tick();
+        if (keys === null) return { ...store };
         return Object.fromEntries(keys.filter((k) => k in store).map((k) => [k, store[k]]));
       },
       async set(items: Record<string, unknown>) {
@@ -47,5 +48,37 @@ describe('settings', () => {
     expect(sanitizeSettings({ mode: 'strict' }).mode).toBe('strict');
     expect(sanitizeSettings({ mode: 'EXPERIMENTAL' }).mode).toBe('clean');
     expect(sanitizeSettings({}).mode).toBe('clean');
+  });
+});
+
+describe('settings migration', () => {
+  it('0.1/0.2 data (no version) is sanitised and versioned, nothing invented', async () => {
+    const { migrateSettings, SETTINGS_VERSION } = await import('../src/settings.js');
+    expect(migrateSettings({ mode: 'strict', exceptions: ['Keep.Example', 'bad host'] })).toEqual({
+      settingsVersion: SETTINGS_VERSION,
+      mode: 'strict',
+      exceptions: ['keep.example'],
+    });
+    expect(migrateSettings({})).toEqual({ settingsVersion: SETTINGS_VERSION });
+    expect(migrateSettings({ mode: 'bogus', enabled: 'yes', unknownFutureKey: 1 })).toEqual({
+      settingsVersion: SETTINGS_VERSION,
+      mode: 'clean',
+      enabled: true,
+    });
+  });
+
+  it('current or newer formats are left alone (no rewrite on every start, no downgrade damage)', async () => {
+    const { migrateSettings, SETTINGS_VERSION } = await import('../src/settings.js');
+    expect(migrateSettings({ settingsVersion: SETTINGS_VERSION, mode: 'experimental' })).toEqual({});
+    expect(migrateSettings({ settingsVersion: SETTINGS_VERSION + 5, mode: 'future-mode' })).toEqual({});
+  });
+
+  it('migrateStoredSettings writes only the migrated keys', async () => {
+    const { migrateStoredSettings } = await import('../src/settings.js');
+    store = { mode: 'experimental', pausedUntil: -5 };
+    await migrateStoredSettings();
+    expect(store).toEqual({ mode: 'experimental', pausedUntil: 0, settingsVersion: 1 });
+    await migrateStoredSettings();
+    expect(store).toEqual({ mode: 'experimental', pausedUntil: 0, settingsVersion: 1 });
   });
 });

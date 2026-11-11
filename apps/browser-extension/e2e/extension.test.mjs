@@ -6,13 +6,14 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { build } from 'esbuild';
-import { readFileSync } from 'node:fs';
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 assert.ok(existsSync(join(dist, 'manifest.json')), 'run `npm run build` first');
@@ -715,6 +716,157 @@ describe('robustness of mode handling (v0.2)', () => {
       rmSync(profile, { recursive: true, force: true });
     }
   });
+});
+
+describe('upgrades from published releases', () => {
+  // Release ZIPs as published on GitHub (checked against the published SHA-256).
+  const releases = [
+    {
+      version: '0.1.0',
+      sha256: 'ee29d0c4f5db146d41609a135ae8a0baef2d2969e249092c061da1cd8d7baaea',
+      settings: { mode: 'strict', exceptions: ['keep.test'], copyCleaning: false },
+      check: { path: '/u?id=1&ref=a&utm_source=x', expected: '/u?id=1' },
+    },
+    {
+      version: '0.2.0',
+      sha256: 'd3b4dca2fc9fc7948401e123c4b756653081dd616c256c74695eef04d5f62a65',
+      settings: { mode: 'experimental', exceptions: ['keep.test'] },
+      check: { path: '/u?id=1&ref=a', expected: '/u' },
+    },
+  ];
+  const menuIds = [
+    'copy-clean-link',
+    'open-link-unmodified',
+    'copy-clean-page-link',
+    'copy-link-without-query',
+    'open-link-without-query',
+  ];
+
+  /**
+   * The documented update path is "replace the folder, then reload the
+   * extension in chrome://extensions". A browser launched with
+   * --enable-unsafe-extension-debugging can do exactly that over CDP
+   * (Extensions.loadUnpacked on the same folder = reload). (Merely restarting a
+   * browser launched with --load-extension keeps running the previously
+   * registered service worker, so it does not model an update.)
+   */
+  async function launchForUpdates(profile) {
+    const exe = process.env.CHROMIUM_PATH ?? chromium.executablePath();
+    const proc = spawn(
+      exe,
+      [
+        '--headless=new',
+        '--no-sandbox',
+        '--no-first-run',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profile}`,
+        '--enable-unsafe-extension-debugging',
+        '--host-resolver-rules=MAP * 127.0.0.1',
+        '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable',
+        'about:blank',
+      ],
+      { stdio: 'ignore' },
+    );
+    const portFile = join(profile, 'DevToolsActivePort');
+    await waitFor(() => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 'DevTools port', 15_000);
+    const devtoolsPort = readFileSync(portFile, 'utf8').split('\n')[0];
+    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${devtoolsPort}`);
+    const cdp = await browser.newBrowserCDPSession();
+    return { browser, cdp, context: browser.contexts()[0], proc };
+  }
+
+  async function extensionState(context, id) {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${id}/options.html`);
+    const state = await page.evaluate(async (ids) => {
+      const menus = {};
+      for (const mid of ids) {
+        menus[mid] = await new Promise((res) =>
+          chrome.contextMenus.update(mid, {}, () => res(chrome.runtime.lastError ? 'missing' : 'ok')),
+        );
+      }
+      return {
+        version: chrome.runtime.getManifest().version,
+        local: await chrome.storage.local.get(null),
+        rules: (await chrome.declarativeNetRequest.getDynamicRules()).map((r) => r.id),
+        stripsRef: (await chrome.declarativeNetRequest.getDynamicRules()).some((r) =>
+          r.action.redirect?.transform?.queryTransform?.removeParams?.includes('ref'),
+        ),
+        menus,
+      };
+    }, menuIds);
+    await page.close();
+    return state;
+  }
+
+  for (const release of releases) {
+    test(`${release.version} → current: settings, menus and rules survive an update`, async () => {
+      const zip = fileURLToPath(new URL(`./releases/untrackable-chromium-${release.version}.zip`, import.meta.url));
+      const digest = createHash('sha256').update(readFileSync(zip)).digest('hex');
+      assert.equal(digest, release.sha256, 'fixture is the published release asset');
+      const extDir = mkdtempSync(join(tmpdir(), `untrackable-upgrade-ext-${release.version}-`));
+      const profile = mkdtempSync(join(tmpdir(), `untrackable-upgrade-profile-${release.version}-`));
+      let b;
+      try {
+        execFileSync('unzip', ['-q', zip, '-d', extDir]);
+        b = await launchForUpdates(profile);
+        const { id } = await b.cdp.send('Extensions.loadUnpacked', { path: extDir });
+        await waitFor(async () => (await extensionState(b.context, id)).version === release.version, 'old version');
+        const setter = await b.context.newPage();
+        await setter.goto(`chrome-extension://${id}/options.html`);
+        await setter.evaluate((s) => chrome.storage.local.set(s), release.settings);
+        await setter.close();
+
+        // Update as documented: replace the folder contents, reload the extension.
+        for (const f of readdirSync(extDir)) rmSync(join(extDir, f), { recursive: true, force: true });
+        cpSync(dist, extDir, { recursive: true });
+        const reloaded = await b.cdp.send('Extensions.loadUnpacked', { path: extDir });
+        assert.equal(reloaded.id, id, 'same extension id (settings are tied to it)');
+        const current = JSON.parse(readFileSync(join(dist, 'manifest.json'), 'utf8')).version;
+        let state;
+        await waitFor(
+          async () => {
+            state = await extensionState(b.context, id);
+            const modeRules = release.settings.mode === 'experimental' ? state.rules.includes(50) : state.stripsRef;
+            return state.version === current && state.local.settingsVersion === 1 && modeRules;
+          },
+          'updated, migrated, rules for the stored mode installed',
+          10_000,
+        ).catch((e) => {
+          throw new Error(`${e.message}: ${JSON.stringify({ ...state, rules: state?.rules.length })}`);
+        });
+        for (const [k, v] of Object.entries(release.settings)) assert.deepEqual(state.local[k], v, `setting ${k} kept`);
+        assert.deepEqual(
+          state.menus,
+          Object.fromEntries(menuIds.map((m) => [m, 'ok'])),
+          'all context-menu items exist',
+        );
+        assert.ok(state.rules.length > 0, 'rules installed');
+        if (release.settings.mode === 'experimental') assert.ok(state.rules.includes(50), 'strip rule installed');
+        const page = await b.context.newPage();
+        await page.goto(`http://news.test:${port}${release.check.path}`);
+        assert.equal(page.url(), `http://news.test:${port}${release.check.expected}`);
+        await page.goto(`http://keep.test:${port}${release.check.path}`);
+        assert.equal(page.url(), `http://keep.test:${port}${release.check.path}`, 'exception kept');
+      } finally {
+        await b?.browser.close().catch(() => {});
+        if (b && b.proc.exitCode === null) {
+          await new Promise((r) => {
+            b.proc.once('exit', r);
+            b.proc.kill();
+          });
+        }
+        // Chromium's helper processes may still write briefly; temp dirs only.
+        for (const d of [extDir, profile]) {
+          try {
+            rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+          } catch {
+            /* left in the temp directory */
+          }
+        }
+      }
+    });
+  }
 });
 
 describe('per-tab controls', () => {
@@ -1680,7 +1832,16 @@ describe('privacy', () => {
     await setSettings({ mode: 'strict', exceptions: ['a.test'] });
     await visit('/article?utm_source=x');
     const after = await sw.evaluate(() => chrome.storage.local.get(null));
-    assert.deepEqual(Object.keys(after).sort(), ['exceptions', 'mode']);
+    assert.deepEqual(
+      Object.keys(after)
+        .filter((k) => k !== 'settingsVersion')
+        .sort(),
+      ['exceptions', 'mode'],
+    );
+    assert.ok(
+      Object.values(after).every((v) => !JSON.stringify(v).includes('http')),
+      'no URLs stored',
+    );
     const session = await sw.evaluate(() => chrome.storage.session.get(null));
     assert.ok(!JSON.stringify(session).includes('http'));
   });
