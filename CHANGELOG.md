@@ -31,6 +31,15 @@ Nothing yet.
 
 - The popup labels the master switch as Bypass when off and describes the
   three cleaning modes.
+- Navigation protection rules also match parameter signals in the fragment
+  (Chromium matches rules against the URL including `#…`), as the engine
+  always did: e.g. `?utm_source=x#access_token=…` is now left unchanged
+  while navigating, too.
+- Signed Discord/Meta CDN URLs (`ex`+`hm`, `oh`+`oe`) are protected.
+- Settings are saved key by key, so concurrent changes cannot undo each
+  other.
+- If the cleaning rules cannot be installed, the badge shows `!` and stale
+  rules of another mode are removed.
 
 ## [0.1.0] – 2026-11-11
 
