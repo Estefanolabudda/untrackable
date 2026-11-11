@@ -238,7 +238,41 @@ async function launchWith(extensionDir, profileDir) {
   const ctx = await chromium.launchPersistentContext(profileDir, launch);
   let [worker] = ctx.serviceWorkers();
   worker ??= await ctx.waitForEvent('serviceworker');
-  return { context: ctx, sw: worker };
+  return { context: ctx, sw: liveWorker(ctx, worker) };
+}
+
+/**
+ * MV3 service workers stop when idle (older Chromium, e.g. 116, does so even
+ * while tests run). This handle wakes the extension's worker again when the
+ * previous one has already closed – it never retries a call that failed,
+ * so a call that itself stops the worker (runtime.reload) is not repeated.
+ */
+function liveWorker(ctx, first) {
+  const id = new URL(first.url()).host;
+  let current = first;
+  let closed = false;
+  const track = (w) => w.once('close', () => (closed = w === current ? true : closed));
+  track(first);
+  async function ensure() {
+    if (!closed) return current;
+    const fresh = () => ctx.serviceWorkers().find((w) => w !== current && w.url().includes(id));
+    let next = fresh();
+    if (!next) {
+      const waiter = ctx.waitForEvent('serviceworker', { predicate: (w) => w.url().includes(id), timeout: 15_000 });
+      const page = await ctx.newPage();
+      await page.goto(`chrome-extension://${id}/options.html`).catch(() => {});
+      next = fresh() ?? (await waiter);
+      await page.close();
+    }
+    current = next;
+    closed = false;
+    track(next);
+    return current;
+  }
+  return {
+    url: () => current.url(),
+    evaluate: async (fn, arg) => (await ensure()).evaluate(fn, arg),
+  };
 }
 
 after(async () => {
