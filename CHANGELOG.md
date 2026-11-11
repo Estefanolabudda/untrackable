@@ -41,8 +41,8 @@ Nothing yet.
 - Signed Discord/Meta CDN URLs (`ex`+`hm`, `oh`+`oe`), nginx secure links
   (`st`+`e`), Computop returns (`Len`+`Data`), Akamai `hdnea` and the CSRF
   parameters `sesskey`/`logouthash` are protected in every mode.
-- Navigation protection of fragment keys requires `key=` in the fragment, so a
-  plain anchor such as `#api-token` never stops cleaning.
+- A plain anchor named like a protection signal (e.g. `#api-token`) now also
+  stops navigation cleaning – the safe side of matching fragment keys.
 - `npm audit`: dev-only `minimatch` advisory fixed with an exact override.
 - The extension zip is reproducible regardless of umask (file modes
   normalised; CI checks it).

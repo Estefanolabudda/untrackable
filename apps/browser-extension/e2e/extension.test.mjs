@@ -422,10 +422,13 @@ describe('Experimental mode (strip query parameters)', () => {
     );
   });
 
-  test('plain anchors never stop cleaning (Clean and Experimental)', async () => {
-    assert.equal(await visit('/guide?id=1&utm_source=x#api-token'), '/guide?id=1#api-token');
+  test('protection signals in the fragment are honoured, also valueless ones (safe side for plain anchors)', async () => {
+    assert.equal(await visit('/guide?id=1&utm_source=x#token&a=1'), '/guide?id=1&utm_source=x#token&a=1');
+    assert.equal(await visit('/guide?id=1&utm_source=x#api-token'), '/guide?id=1&utm_source=x#api-token');
+    assert.equal(await visit('/guide?id=1&utm_source=x#intro'), '/guide?id=1#intro');
     await setSettings({ mode: 'experimental' });
-    assert.equal(await visit('/guide?id=1&utm_source=x#session'), '/guide#session');
+    assert.equal(await visit('/guide?id=1#token&a=1'), '/guide?id=1#token&a=1');
+    assert.equal(await visit('/guide?id=1#intro'), '/guide#intro');
   });
 
   test('keeps the fragment and leaves URLs without a query alone', async () => {

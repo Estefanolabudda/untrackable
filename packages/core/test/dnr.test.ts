@@ -244,29 +244,26 @@ describe('fragment protection in navigation rules (v0.2 review regression)', () 
   const nav = (mode: 'clean' | 'strict' | 'experimental', url: string) =>
     simulate(compileDnrRules({ mode, exceptions: [] }), url);
 
-  it('plain anchors that look like protected names do not stop cleaning (as in v0.1 and the engine)', () => {
-    for (const anchor of [
-      'api-token',
-      'access-token',
-      'session',
-      'signature',
-      'hash',
-      'nonce',
-      'auth',
-      'saml-setup',
-      'token&x',
-    ]) {
+  it('plain anchors with protected names stop navigation cleaning (documented, safe direction)', () => {
+    for (const anchor of ['api-token', 'session', 'signature', 'token&x']) {
       const url = `https://docs.example.com/guide?id=1&utm_source=newsletter#${anchor}`;
       expect(cleanUrl(url).status, anchor).toBe('cleaned');
-      expect(nav('clean', url), anchor).toBe(`https://docs.example.com/guide?id=1#${anchor}`);
-      expect(nav('experimental', url), anchor).toBe(`https://docs.example.com/guide#${anchor}`);
+      expect(nav('clean', url), anchor).toBe(url);
     }
   });
 
-  it('a combination does not span from the query into a plain anchor', () => {
-    const url = 'https://app.example/p?code=1&utm_source=x#state';
-    expect(cleanUrl(url).status).toBe('cleaned');
-    expect(nav('clean', url)).toBe('https://app.example/p?code=1#state');
+  it('engine-protected URLs with valueless fragment keys are never changed (review safety findings)', () => {
+    for (const [mode, url] of [
+      ['clean', 'https://a.example/p?utm_source=x#token&a=1'],
+      ['clean', 'https://a.example/p?mc_cid=abc#%6Ftp_code&gclid=1'],
+      ['clean', 'https://a.example/p?mc_cid=1#code=1&state&lang'],
+      ['clean', 'https://a.example/p?code&utm_source=x#state=1'],
+      ['clean', 'https://a.example/p?code=1&utm_source=x#x=1&state'],
+      ['experimental', 'https://a.example/p?x=1#token&a=1'],
+    ] as const) {
+      expect(cleanUrl(url, { mode }).status, url).toBe('protected');
+      expect(nav(mode, url), url).toBe(new URL(url).href);
+    }
   });
 
   it('protected keys with a value in the fragment are honoured', () => {
@@ -287,4 +284,45 @@ describe('fragment protection in navigation rules (v0.2 review regression)', () 
     expect(cleanUrl(url, { mode: 'experimental' }).status).toBe('protected');
     expect(nav('experimental', url)).toBe(url);
   });
+});
+
+describe('safety property: navigation never changes what the engine protects', () => {
+  const p = defaultRuleSet.protection;
+  const names = [
+    ...p.params,
+    ...(p.experimentalParams ?? []),
+    ...p.paramPrefixes.map((x) => `${x}x`),
+    ...p.paramSuffixes.map((x) => `my_${x}`),
+    ...p.paramCombinations.flat(),
+  ];
+  const others = ['utm_source', 'fbclid', 'gclid', 'UTM_Medium', 'mc_cid', 'id', 'q', 'lang', 'a'];
+  const values = ['', '=1', '=abc', '=https%3A%2F%2Fe.x', '=http://e.x/'];
+  const key = fc.oneof(
+    fc.constantFrom(...names),
+    fc.constantFrom(...others),
+    fc.constantFrom(...names).map((k) => k.replace(/[a-z_]/, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)),
+    fc.constantFrom(...names).map((k) => k.toUpperCase()),
+  );
+  const segment = fc.tuple(key, fc.constantFrom(...values)).map(([k, v]) => k + v);
+  const part = fc.array(segment, { minLength: 1, maxLength: 5 }).map((s) => s.join('&'));
+  const url = fc
+    .tuple(fc.constantFrom('/p', '/a/b'), part, fc.option(part, { nil: undefined }))
+    .map(([path, q, f]) => new URL(`https://site.example${path}?${q}${f === undefined ? '' : `#${f}`}`).href);
+  const compiled = {
+    clean: compileDnrRules({ mode: 'clean', exceptions: [] }),
+    strict: compileDnrRules({ mode: 'strict', exceptions: [] }),
+    experimental: compileDnrRules({ mode: 'experimental', exceptions: [] }),
+  };
+
+  for (const mode of ['clean', 'strict', 'experimental'] as const) {
+    it(mode, () => {
+      fc.assert(
+        fc.property(url, (u) => {
+          if (cleanUrl(u, { mode }).status !== 'protected') return true;
+          return simulate(compiled[mode], u) === u;
+        }),
+        { numRuns: 4000 },
+      );
+    });
+  }
 });

@@ -190,7 +190,13 @@ there are no redirect loops (verified by e2e test).
   them. Chromium does match rules against the URL **including** the fragment
   (verified), so since v0.2 the protection allow rules also look for
   parameter signals after `#` (e.g. `/a?utm_source=x#access_token=…` is left
-  unchanged, like the engine does).
+  unchanged, like the engine does). The engine reads fragment keys only when
+  the fragment contains `=`; RE2 cannot express that condition exactly (an
+  attempt missed valueless keys such as `#token&a=1` – found in review), so a
+  plain anchor named like a signal (`#api-token`) also stops navigation
+  cleaning. Over-protection in the safe direction; copy cleaning is exact. A
+  fuzzer with ~100,000 URLs per run found no URL the engine protects that
+  navigation changes.
 - Only `main_frame` navigations are cleaned. Sub-frames, `fetch`/XHR and
   links rewritten by page scripts after load (e.g. `history.replaceState`)
   are not modified.

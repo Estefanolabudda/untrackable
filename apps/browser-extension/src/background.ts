@@ -543,11 +543,11 @@ function copyToClipboard(text: string, stillWanted: () => boolean = () => true):
 let copySeq = 0;
 
 async function copyClean(url: string): Promise<void> {
-  copySeq++;
+  const seq = ++copySeq;
   if (url.length > MAX_URL_LENGTH) return; // hostile pages can craft huge hrefs
   const settings = await loadSettings();
   const result = cleanUrl(url, { mode: settings.mode, exceptions: settings.exceptions });
-  await copyToClipboard(result.url);
+  await copyToClipboard(result.url, () => seq === copySeq);
 }
 
 /**
@@ -558,11 +558,11 @@ async function copyClean(url: string): Promise<void> {
  * bypass rule, no retry; the stripped URL is cleaned like any other.
  */
 async function copyStripped(url: string): Promise<void> {
-  copySeq++;
+  const seq = ++copySeq;
   if (url.length > MAX_URL_LENGTH) return;
   const result = stripQuery(url);
   if (result.status !== 'cleaned' && result.status !== 'unchanged') return;
-  await copyToClipboard(result.url);
+  await copyToClipboard(result.url, () => seq === copySeq);
 }
 
 async function openStripped(url: string, openerTab?: chrome.tabs.Tab): Promise<void> {
@@ -730,8 +730,8 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
     return true;
   }
   if (message.type === 'copyText') {
-    copySeq++;
-    void copyToClipboard(message.text).then(sendResponse);
+    const seq = ++copySeq;
+    void copyToClipboard(message.text, () => seq === copySeq).then(sendResponse);
     return true;
   }
   if (message.type === 'openUnmodified') {
