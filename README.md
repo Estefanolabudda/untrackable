@@ -118,7 +118,10 @@ The full list lives in [`rules/rules.json`](rules/rules.json).
   within a few milliseconds may still give the original.
 - Redirect-based click tracking (`tracker.example/click?u=…`) is not handled yet.
 - **Experimental** breaks sites that need query parameters (search results,
-  filters, pagination, some sign-in or payment steps it does not recognise).
+  filters, pagination, GET forms, opaque newsletter click trackers, some
+  sign-in or payment steps it does not recognise). Links wrapping another URL
+  (Outlook SafeLinks, Google/Facebook redirects) are left alone. Keyboard
+  copies are cleaned with the Strict rules instead of being stripped.
   Use _Back to Clean_, a site exception or _Open link without cleaning_. A
   server that insists on its query ends in "too many redirects". Form
   submissions (POST) and links protected as sign-in/payment/signed keep their

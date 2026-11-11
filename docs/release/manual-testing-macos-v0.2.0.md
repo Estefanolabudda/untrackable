@@ -46,7 +46,9 @@ v0.1.0 checklist (`manual-testing-macos.md`) still applies to Clean/Strict.
       (also in Clean mode).
 - [ ] Right-click → **Open link without query parameters** → new tab without
       `?…`.
-- [ ] Cmd+C on a selected link → stripped link pasted.
+- [ ] Cmd+C on a selected link (Experimental on) → link with trackers removed
+      (Strict rules), functional parameters kept.
+- [ ] An Outlook/Google redirect link (`…?url=https%3A…`) opens normally.
 
 ## 5. Sign-off
 

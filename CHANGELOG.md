@@ -22,6 +22,9 @@ Nothing yet.
   navigations are rewritten. Badge `E`.
 - Activating Experimental shows a warning and needs an explicit confirmation;
   a "Back to Clean" button is shown while it is active (popup and settings).
+- Experimental leaves wrapped links alone (a parameter value that is an
+  http(s) URL: Outlook SafeLinks, Google/Facebook redirects) and cleans
+  keyboard copies with the Strict rules instead of stripping them.
 - Context menu on links: **Copy link without query parameters** and **Open
   link without query parameters** – explicit one-off actions in every mode.
 - Rule schema: optional `protection.experimentalParams`; both engines and the
@@ -35,7 +38,14 @@ Nothing yet.
   (Chromium matches rules against the URL including `#…`), as the engine
   always did: e.g. `?utm_source=x#access_token=…` is now left unchanged
   while navigating, too.
-- Signed Discord/Meta CDN URLs (`ex`+`hm`, `oh`+`oe`) are protected.
+- Signed Discord/Meta CDN URLs (`ex`+`hm`, `oh`+`oe`), nginx secure links
+  (`st`+`e`), Computop returns (`Len`+`Data`), Akamai `hdnea` and the CSRF
+  parameters `sesskey`/`logouthash` are protected in every mode.
+- Navigation protection of fragment keys requires `key=` in the fragment, so a
+  plain anchor such as `#api-token` never stops cleaning.
+- `npm audit`: dev-only `minimatch` advisory fixed with an exact override.
+- The extension zip is reproducible regardless of umask (file modes
+  normalised; CI checks it).
 - Settings are saved key by key, so concurrent changes cannot undo each
   other.
 - If the cleaning rules cannot be installed, the badge shows `!` and stale
