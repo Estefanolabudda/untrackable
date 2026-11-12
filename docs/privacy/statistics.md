@@ -182,13 +182,13 @@ runs when a redirect or rewrite is observed.
 
 ## 9. Do the labels match the measurement?
 
-| Label (popup / settings)            | Measured exactly as                                                                          |
-| ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| Label (popup / settings)                                                                          | Measured exactly as                                                                                                           |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Tracking parameters removed (popup) / Count removed tracking parameters on this device (settings) | verified removals of tracking parameters from page loads and copies, in this browser profile; not a count of blocked trackers |
-| Today                               | counts filed under today's local date                                                        |
-| Last 7 days                         | today and the six previous local dates                                                       |
-| Total                               | since statistics were turned on or last reset                                                |
-| + N non-tracking parameters (Experimental, total) | non-tracking parameters removed in Experimental mode, total                                  |
+| Today                                                                                             | counts filed under today's local date                                                                                         |
+| Last 7 days                                                                                       | today and the six previous local dates                                                                                        |
+| Total                                                                                             | since statistics were turned on or last reset                                                                                 |
+| + N non-tracking parameters (Experimental, total)                                                 | non-tracking parameters removed in Experimental mode, total                                                                   |
 
 The settings page explains the limits ("What is counted and stored").
 

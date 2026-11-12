@@ -188,15 +188,15 @@ Experimental is active. For a single site or page, use a site exception,
 
 Once installed, links are cleaned as you browse. The toolbar popup offers:
 
-| Control                        | Effect                                                        |
-| ------------------------------ | ------------------------------------------------------------- |
-| Clean links automatically      | The main switch at the top (off = nothing is cleaned)         |
-| Clean / Strict / Experimental  | Choose the cleaning mode (Experimental asks for confirmation) |
-| Back to Clean                  | Leave Experimental with one click                             |
-| Pause all · 15 min             | Temporary pause everywhere that resumes automatically         |
-| Never clean links to this site | Adds a site exception (subdomains included)                   |
-| Pause in this tab              | Bypass for one tab until you turn it back on or close the tab |
-| Copy clean link                | Copies the current page's clean link                          |
+| Control                                | Effect                                                        |
+| -------------------------------------- | ------------------------------------------------------------- |
+| Clean links automatically              | The main switch at the top (off = nothing is cleaned)         |
+| Clean / Strict / Experimental          | Choose the cleaning mode (Experimental asks for confirmation) |
+| Back to Clean                          | Leave Experimental with one click                             |
+| Pause all · 15 min                     | Temporary pause everywhere that resumes automatically         |
+| Never clean links to this site         | Adds a site exception (subdomains included)                   |
+| Pause in this tab                      | Bypass for one tab until you turn it back on or close the tab |
+| Copy clean link                        | Copies the current page's clean link                          |
 | Tracking parameters removed (optional) | Today, last 7 days and total – see **Statistics** below       |
 
 **Right-click a link** for:
