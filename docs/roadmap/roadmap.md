@@ -19,7 +19,7 @@
   recognised sign-in/payment/signed links and an explicit confirmation.
 - Context-menu actions "Copy/Open link without query parameters".
 
-## v0.3 – Redesign and local statistics (in preparation)
+## v0.3 – Redesign and local statistics (public beta)
 
 - Redesigned popup and settings page (light and dark, accessibility).
 - Optional, local-only statistics of removed tracking parameters (off by
@@ -27,6 +27,8 @@
   `docs/privacy/statistics.md`).
 - Regression corpus of sensitive URLs, upgrade tests, Chrome 116/stable
   compatibility CI.
+- v0.3.0 is published as a GitHub pre-release (public beta); v0.2.0 remains
+  the last regular release.
 
 ## Phase 2 – macOS and Linux
 
