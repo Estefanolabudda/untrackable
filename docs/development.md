@@ -39,6 +39,14 @@ behaviour at startup (an empty `?` left after removal) and skips checks that a
 browser version cannot support (no `clipboardchange` event, no CDP
 `Extensions` domain for the upgrade tests) with a reason.
 
+All seven CI jobs are required status checks in the `main` ruleset. Their names
+must stay stable: the compatibility jobs are named by major version only
+(`Browser compatibility (Chrome 116)`, `… (Chrome 157)`). Updating the pinned
+build of the same major version needs no ruleset change; moving to a new major
+version (or renaming any job) needs the ruleset's required checks updated in
+the same step, or every pull request stays blocked on a check that never
+reports.
+
 Regression safety nets:
 
 - `tests/corpus/sensitive-urls.json` – 259 real-world sign-in, payment,
