@@ -6,12 +6,17 @@ Only the latest release receives security fixes.
 
 ## Reporting a vulnerability
 
-Please **do not** open a public issue for security problems. Use GitHub's
-private vulnerability reporting ("Security" tab → "Report a vulnerability")
-on this repository.
+Please **do not** open a public issue for security problems.
+
+1. **Preferred:** GitHub's private vulnerability reporting ("Security" tab →
+   "Report a vulnerability") on this repository.
+2. **Alternative:** e-mail **security-untrackable@estefano.me**. E-mail is not
+   end-to-end encrypted – if your report contains sensitive details, send a
+   short first message and we agree on how to share the rest.
 
 Include affected version, reproduction steps and impact. We aim to
-acknowledge reports within 7 days.
+acknowledge reports within 7 days, keep you informed until the issue is
+resolved, and credit you in the release notes if you wish.
 
 Of particular interest:
 

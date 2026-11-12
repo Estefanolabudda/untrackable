@@ -118,8 +118,10 @@ fixtures in the same change.
    `@untrackable/core` would then come from that checkout).
 5. Add `docs/release/vX.Y.Z-release-notes.md`, merge to `main` and wait for
    green CI on that commit.
-6. Create and push an annotated tag on that commit:
-   `git tag -a vX.Y.Z -m "Untrackable X.Y.Z" <sha> && git push origin vX.Y.Z`.
+6. Create and push an annotated tag on that commit, with the project identity
+   as tagger (never a personal address – tag objects are public):
+   `git -c user.name="Untrackable" -c user.email="untrackable@estefano.me" tag -a vX.Y.Z -m "Untrackable X.Y.Z" <sha>`,
+   check it with `git cat-file -p vX.Y.Z`, then `git push origin vX.Y.Z`.
    `.github/workflows/release.yml` then verifies the tag (annotated, on
    `main`, matches the package version, release notes present), runs the unit
    tests, builds the reproducible zip from exactly that commit and publishes

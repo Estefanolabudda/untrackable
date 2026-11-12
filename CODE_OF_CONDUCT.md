@@ -14,8 +14,8 @@ placeholders such as `https://example.com/…`.
 
 ## Reporting
 
-Report unacceptable behaviour privately to the maintainer (see the
-maintainer's GitHub profile for contact options). Security problems are
+Report unacceptable behaviour privately to the project contact,
+**untrackable@estefano.me**. Security problems are
 reported as described in [SECURITY.md](SECURITY.md), not in public issues.
 
 The maintainer reviews every report, keeps the reporter's identity

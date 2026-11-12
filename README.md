@@ -42,7 +42,7 @@ keeps everything else, so the page still works.
 - [Known limitations](#known-limitations)
 - [Documentation](#documentation)
 - [Development](#development)
-- [Roadmap](#roadmap) · [Security](#security) · [License](#license)
+- [Roadmap](#roadmap) · [Security](#security) · [Contact](#contact) · [License](#license)
 
 ## Screenshots
 
@@ -386,6 +386,12 @@ See [docs/roadmap](docs/roadmap/roadmap.md).
 
 Please report vulnerabilities privately as described in
 [SECURITY.md](SECURITY.md).
+
+## Contact
+
+Project contact: **untrackable@estefano.me** (questions, privacy, press).
+Security reports: see [SECURITY.md](SECURITY.md). Bugs and suggestions: please
+use the issue tracker.
 
 ## License
 
