@@ -6,6 +6,12 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- `SECURITY.md` now states which versions receive security fixes: the 0.3.x
+  public beta gets fixes in new versions, 0.2.0 gets no separate backports,
+  older versions get none; no long-term support or guaranteed fix times.
+
 ## [0.3.0] – 2026-11-12
 
 First public beta, published as a GitHub pre-release. The repository is now
