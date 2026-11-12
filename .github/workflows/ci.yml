@@ -103,16 +103,21 @@ jobs:
     # declared in manifest.json (116) and a recent stable release. Branded
     # Google Chrome no longer loads extensions from the command line, Chrome
     # for Testing does. Archives are pinned by version and SHA-256.
-    name: Browser compatibility (Chrome ${{ matrix.chrome.version }})
+    # The job name carries only the major version: it is a required status
+    # check in the main-branch ruleset, so a patch update of the pinned build
+    # must not rename it. (A new major version needs the ruleset updated too.)
+    name: Browser compatibility (Chrome ${{ matrix.chrome.major }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         chrome:
-          - version: 116.0.5845.96
+          - major: 116
+            version: 116.0.5845.96
             sha256: 5d8ab1f999071b213d85e46ea4505d99df818b6fd0f8449e79710cb5403ba858
-          - version: 157.0.8103.50
+          - major: 157
+            version: 157.0.8103.50
             sha256: d17167bc092eb495a3b768c7467f27e35f625aa03834233a1663af67dcb668c9
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
