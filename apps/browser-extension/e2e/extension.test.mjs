@@ -2193,6 +2193,21 @@ describe('incognito (real incognito window, extension allowed there)', () => {
         'extension enabled again after the incognito switch',
       );
       await ext.close();
+      // The switch reloads the extension; its new worker gets its APIs a moment
+      // after it starts (seen on Chrome 116 in CI) – wait, read-only.
+      await waitFor(
+        () =>
+          second.sw
+            .evaluate(
+              () =>
+                typeof chrome.extension?.isAllowedIncognitoAccess === 'function' &&
+                typeof chrome.storage?.local?.get === 'function' &&
+                typeof chrome.declarativeNetRequest?.getDynamicRules === 'function',
+            )
+            .catch(() => false),
+        'extension worker ready after the reload',
+        15_000,
+      );
       assert.equal(await second.sw.evaluate(() => chrome.extension.isAllowedIncognitoAccess()), true);
       await waitFor(
         async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).length > 0,
