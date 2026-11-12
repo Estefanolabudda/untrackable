@@ -16,26 +16,25 @@ Marketing links often carry identifiers such as `utm_*`, `fbclid` or `gclid`
 that tell a site where you came from. Untrackable strips the ones it knows and
 keeps everything else, so the page still works.
 
-- **Automatic** – links are cleaned while you browse; there is nothing to set up.
-- **Conservative by default** – the default _Clean_ mode only removes known
-  trackers. Unknown parameters are always kept.
-- **Careful with what matters** – links that look like sign-ins, password
-  resets, payments or signed downloads are recognised and left unchanged.
-- **Local and private** – no telemetry, no network requests, no browsing
-  history. Only your settings are stored.
-- **Transparent and under your control** – see what would be removed from any
-  link, switch modes, pause, or exclude sites.
+## Which version should I use?
 
-> **Current release: [v0.2.0](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.2.0)**
-> – available as a ZIP on GitHub Releases for manual installation. Untrackable
-> is **not** available in the Chrome Web Store.
->
-> The `main` branch already contains the upcoming **v0.3** (redesigned popup and
-> settings, optional local statistics). The screenshots show v0.3; it is not
-> released yet.
+| Version                                                                          | Status                               | Choose it if …                                                                                                                         |
+| -------------------------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **[v0.3.0](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.3.0)** | **Public beta** (GitHub pre-release) | you want the redesigned interface and the optional statistics, and are happy to [report problems](#reporting-bugs-and-vulnerabilities) |
+| **[v0.2.0](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.2.0)** | Last regular release                 | you prefer the previous, non-beta version                                                                                              |
+
+Both are installed manually from GitHub Releases and **do not update
+automatically**. Untrackable is **not** available in the Chrome Web Store.
+
+**[Download the v0.3.0 beta](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.3.0)**
+· [installation steps](#installation)
 
 ## Contents
 
+- [Which version should I use?](#which-version-should-i-use)
+- [Why Untrackable?](#why-untrackable)
+- [What it can and cannot do](#what-it-can-and-cannot-do)
+- [What's new in v0.3.0 (beta)](#whats-new-in-v030-beta)
 - [Screenshots](#screenshots)
 - [Installation](#installation)
 - [Cleaning modes](#cleaning-modes)
@@ -44,16 +43,73 @@ keeps everything else, so the page still works.
 - [How links are protected](#how-links-are-protected)
 - [Privacy](#privacy)
 - [Known limitations](#known-limitations)
+- [Reporting bugs and vulnerabilities](#reporting-bugs-and-vulnerabilities)
 - [Documentation](#documentation)
 - [Development](#development)
 - [Roadmap](#roadmap) · [Security](#security) · [Contact](#contact) · [License](#license)
 
+## Why Untrackable?
+
+- **Automatic** – links are cleaned while you browse; there is nothing to set up.
+- **Conservative by default** – the default _Clean_ mode only removes known
+  trackers. Unknown parameters are always kept.
+- **Careful with what matters** – links that look like sign-ins, password
+  resets, payments or signed downloads are recognised and left unchanged.
+- **Local and private** – no telemetry and no network requests of its own; no
+  links or browsing history are stored.
+- **Transparent and under your control** – see what would be removed from any
+  link, switch modes, pause, or exclude sites.
+
+## What it can and cannot do
+
+| Untrackable can …                                                                               | Untrackable cannot …                                                                       |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| remove known tracking parameters from the pages you open and the links you copy                 | block tracking scripts, cookies, ads or third-party requests – it is not a content blocker |
+| keep links working by leaving unknown parameters and recognised sign-in/payment links unchanged | guarantee that every sign-in, payment or download is recognised (detection is heuristic)   |
+| show what it would remove from a link, and why                                                  | hide your IP address or prevent browser fingerprinting – it does not make you anonymous    |
+| optionally count, on your device, how many tracking parameters it removed                       | count or block "trackers" in general – the statistics count removed URL parameters only    |
+| work in Chromium-based browsers (version 116 or newer)                                          | run in Firefox or Safari, or update itself (no store listing yet)                          |
+
+## What's new in v0.3.0 (beta)
+
+- **Redesigned popup and settings** – a status header with the main switch that
+  always says what is happening (_On_, _Paused until …_, _Paused in this tab_,
+  _Not cleaned on this site_, _Off_), real switches for "Never clean links to
+  this site" and "Pause in this tab", and a clear mode choice.
+- **Clean, Strict and Experimental** – each mode with a one-line explanation.
+  Clean stays the default; Experimental is shown in amber and still needs an
+  explicit confirmation.
+- **Better protection of sign-in and payment links in Experimental** – the
+  query of sign-in and payment hosts (for example `login.`, `accounts.`,
+  `pay.`, `checkout.`, `banking.`), of OAuth requests and of Microsoft device
+  login is now kept. Clean and Strict are unchanged.
+- **Light and dark design** that follows your system setting, and a new icon.
+- **Accessibility** – larger and sharper text, visible keyboard focus,
+  screen-reader friendly names and support for high-contrast (forced colours)
+  mode.
+- **Optional local statistics, off by default** – how many _tracking
+  parameters_ Untrackable removed today, in the last 7 days and in total. It
+  counts removed URL parameters; it is not a measure of all tracking that
+  happened or was blocked. See [Statistics](#statistics).
+
+Existing settings are kept when you update from 0.1.0 or 0.2.0. Full details:
+[v0.3.0 release notes](docs/release/v0.3.0-release-notes.md) and the
+[CHANGELOG](CHANGELOG.md).
+
 ## Screenshots
 
-| Popup                                                         | Switching to Experimental                                                     | Settings with link check                                  |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
-| ![Toolbar popup](docs/images/popup.png)                       | ![Experimental confirmation in the popup](docs/images/popup-experimental.png) | ![Settings page](docs/images/options.png)                 |
-| Status, mode, per-site controls and optional local statistics | Experimental is only switched on after an explicit confirmation               | Settings (dark theme) with a preview of what gets removed |
+Captured from the published v0.3.0 beta in Chromium. The statistics show real
+counts from opening a few links with tracking parameters on a local test page.
+
+| Popup, Clean mode                                                                                                                                                                                                | Popup, dark design                                           | Switching to Experimental                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Untrackable popup in light design: switched on in Clean mode, mode choice, controls for the current site, Copy clean link, and statistics showing 10 tracking parameters removed today](docs/images/popup.png) | ![The same popup in dark design](docs/images/popup-dark.png) | ![Popup with Experimental selected but not active yet: an amber warning explains that every query parameter is removed, with the buttons Use Experimental and Cancel](docs/images/popup-experimental.png) |
+| Status, mode, per-site controls and the optional statistics                                                                                                                                                      | Follows the system's light or dark setting                   | Experimental is only switched on after an explicit confirmation                                                                                                                                           |
+
+**Settings** – cleaning mode, statistics, copy options, site exceptions and
+**Check a link**, which shows what would be removed and why:
+
+<img src="docs/images/options.png" width="640" alt="Settings page: cleaning mode, statistics switched on with today, last 7 days and total, copy options, site exceptions, and Check a link showing that utm_source, utm_medium and fbclid would be removed">
 
 ## Installation
 
@@ -65,12 +121,20 @@ automatically.
 
 ### From the GitHub release (recommended)
 
-1. Open the [latest release](https://github.com/Estefanolabudda/untrackable/releases/latest)
-   and download **`untrackable-chromium-0.2.0.zip`**.
+1. Download the ZIP of the version you want (see
+   [Which version should I use?](#which-version-should-i-use)):
+   - beta: **`untrackable-chromium-0.3.0.zip`** from the
+     [v0.3.0 pre-release](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.3.0),
+   - last regular release: **`untrackable-chromium-0.2.0.zip`** from
+     [v0.2.0](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.2.0).
+
+   The "latest release" link on GitHub skips pre-releases and therefore points
+   to v0.2.0.
+
 2. Unzip it into a folder you will keep, for example `Untrackable`. The files
    (`manifest.json`, `background.js`, …) sit directly in the ZIP, so unzipping
    on the command line needs a target folder:
-   `unzip untrackable-chromium-0.2.0.zip -d Untrackable`.
+   `unzip untrackable-chromium-0.3.0.zip -d Untrackable`.
 3. Open `chrome://extensions` (in Edge: `edge://extensions`).
 4. Turn on **Developer mode**.
 5. Click **Load unpacked** and select the folder that contains `manifest.json`.
@@ -78,23 +142,26 @@ automatically.
 
 Keep the folder where it is – the browser loads the extension from it.
 
-**Updating:** download the new ZIP, replace the contents of the same folder and
-click the reload icon on Untrackable's card in `chrome://extensions`. Loading
-from the same folder normally keeps your settings.
+**Updating:** there are **no automatic updates**. Watch the
+[releases page](https://github.com/Estefanolabudda/untrackable/releases), then
+download the new ZIP, replace the contents of the same folder and click the
+reload icon on Untrackable's card in `chrome://extensions`. Loading from the
+same folder normally keeps your settings.
 
 #### Verify the download (optional)
 
 Each release lists the SHA-256 checksum of the ZIP in its notes and in the
-attached `SHA256SUMS` file. For v0.2.0 it is:
+attached `SHA256SUMS` file:
 
 ```
+a12fdf93a1e16f18b637189bb5d19f44ef5a7296c031de99bb3a470479ac1621  untrackable-chromium-0.3.0.zip
 d3b4dca2fc9fc7948401e123c4b756653081dd616c256c74695eef04d5f62a65  untrackable-chromium-0.2.0.zip
 ```
 
 ```sh
-shasum -a 256 untrackable-chromium-0.2.0.zip      # macOS
+shasum -a 256 untrackable-chromium-0.3.0.zip      # macOS
 sha256sum -c SHA256SUMS                          # Linux (SHA256SUMS next to the ZIP)
-Get-FileHash untrackable-chromium-0.2.0.zip      # Windows PowerShell
+Get-FileHash untrackable-chromium-0.3.0.zip      # Windows PowerShell
 ```
 
 The ZIP is built reproducibly by the release workflow from the tagged commit,
@@ -112,7 +179,8 @@ npm run build
 
 Then load `apps/browser-extension/dist` as an unpacked extension (steps 3–5
 above). `npm run package -w apps/browser-extension` writes the same ZIP as the
-release to `artifacts/`.
+release to `artifacts/`. The `main` branch may contain changes that are not
+released yet.
 
 ### Permissions
 
@@ -125,8 +193,8 @@ At installation Chrome shows two warnings:
 
 Two optional permissions are only requested when you switch the feature on,
 and neither adds an install warning: `webNavigation` for the redirect-loop
-helper and, from v0.3, `webRequest` (read-only) for the local statistics. Both
-are off by default. Details:
+helper and, from v0.3.0, `webRequest` (read-only) for the local statistics.
+Both are off by default. Details:
 [threat model – permissions](docs/security/threat-model.md#permissions-and-justification).
 
 ## Cleaning modes
@@ -203,7 +271,7 @@ Once installed, links are cleaned as you browse. The toolbar popup offers:
 | Never clean links to this site         | Adds a site exception (subdomains included)                   |
 | Pause in this tab                      | Bypass for one tab until you turn it back on or close the tab |
 | Copy clean link                        | Copies the current page's clean link                          |
-| Tracking parameters removed (optional) | Today, last 7 days and total – see **Statistics** below       |
+| Tracking parameters removed (optional) | Today, last 7 days and total – see [Statistics](#statistics)  |
 
 **Right-click a link** for:
 
@@ -222,13 +290,28 @@ Right-click a page for **Copy clean page link**, or press
 <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>C</kbd> (or <kbd>Ctrl</kbd>+<kbd>Insert</kbd>):
 the clipboard receives the clean link. You can switch this off in the settings.
 
-**Statistics (from v0.3, optional, off by default).** Turn them on in the popup or the
+### Statistics
+
+Optional and **off by default** (since v0.3.0). Turn them on in the popup or the
 settings to see how many tracking parameters Untrackable removed on this
-device – today, in the last 7 days and in total. Only removals Untrackable can
-confirm are counted (page loads and links you copy with it), and only numbers
-are stored, never links or sites. Incognito tabs are not counted. This uses the
-optional, read-only `webRequest` permission while switched on; turning
-statistics off removes the permission and deletes the numbers.
+device – today, in the last 7 days and in total.
+
+- Only removals Untrackable can confirm are counted: page loads where the
+  observed address change is exactly what its rules remove, and links you copy
+  with it. At most 20 per page load or copy. Incognito tabs are never counted.
+- Only numbers are stored, on this device – never links, sites, parameter
+  names or times of day. Nothing is sent anywhere.
+- Turning statistics on requests the optional, read-only `webRequest`
+  permission (no extra warning in Chrome). Turning them off removes the
+  permission and deletes the numbers; **Reset numbers** deletes them and keeps
+  statistics on.
+- The numbers count removed URL parameters. They are not a count of trackers
+  blocked and can miss removals the browser does not report. In Experimental
+  mode, removed parameters that are not trackers are shown separately.
+
+Details: [Statistics: privacy and accuracy](docs/privacy/statistics.md).
+
+### Settings page and toolbar badge
 
 **Settings page.** Add or remove site exceptions, enable the redirect-loop
 helper, and use **Check a link** to see exactly which parameters would be
@@ -278,8 +361,8 @@ normative [engine specification](docs/architecture/engine-spec.md).
 - **No telemetry, no analytics, no network requests** of its own.
 - **No browsing data is stored.** Untrackable stores only your settings
   (on/off, mode, pause end time, copy cleaning switch, site exceptions) and –
-  only if you turn statistics on – daily counts for the last 7 days and a
-  total, no links or sites.
+  only if you turn statistics on – aggregate numbers: daily counts for the last
+  7 days and a total. No links, sites, parameter names or times of day.
   The optional redirect-loop helper keeps the host name of a failed page in
   session storage for at most 10 minutes – never a full URL.
 - **Settings stay in the extension.** Web pages are never given your mode,
@@ -346,23 +429,47 @@ See the [privacy statement](docs/privacy/privacy.md) and the
   redirects".
 - Sites can tell that their own links arrive without query parameters.
 
-More: [release readiness](docs/release/v0.2.0-readiness.md#known-limitations-accepted-for-020)
+**v0.3.0 beta**
+
+- Manual installation from GitHub Releases only; no automatic updates and no
+  Chrome Web Store listing.
+- Statistics can miss removals the browser does not report, and may count
+  removals of another extension that removes the very same parameters first.
+
+More: [v0.3.0 release notes](docs/release/v0.3.0-release-notes.md#known-limitations-beta),
+[statistics accuracy](docs/privacy/statistics.md#4-double-counting-and-miscounts)
 and the [architecture overview](docs/architecture/overview.md).
+
+## Reporting bugs and vulnerabilities
+
+- **Bugs and broken sites:** open an issue with the
+  [bug report template](https://github.com/Estefanolabudda/untrackable/issues/new/choose).
+  Include the Untrackable version, browser and mode.
+- **Missing tracking parameters:** use the _Tracking parameter request_
+  template.
+- **Never paste real sign-in, payment, e-mail or personal links** – replace
+  tokens and personal parts with placeholders such as `https://example.com/…`.
+- **Security vulnerabilities:** do **not** open a public issue. Use GitHub's
+  [private vulnerability reporting](https://github.com/Estefanolabudda/untrackable/security/advisories/new)
+  or e-mail **security-untrackable@estefano.me**, as described in
+  [SECURITY.md](SECURITY.md).
 
 ## Documentation
 
-| Document                                                                | Content                                                                  |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [Release notes v0.2.0](docs/release/v0.2.0-release-notes.md)            | What is new in this release                                              |
-| [CHANGELOG](CHANGELOG.md)                                               | All changes by version                                                   |
-| [Privacy statement](docs/privacy/privacy.md)                            | What is processed and stored                                             |
-| [Statistics: privacy and accuracy](docs/privacy/statistics.md)          | Permissions, verification, storage and limits of the optional statistics |
-| [Threat model](docs/security/threat-model.md)                           | Threats, mitigations, permissions                                        |
-| [Architecture overview](docs/architecture/overview.md)                  | How cleaning and protection work, design decisions                       |
-| [Engine specification](docs/architecture/engine-spec.md)                | Normative cleaning algorithm                                             |
-| [Manual test plan (macOS)](docs/release/manual-testing-macos-v0.2.0.md) | Checklist used before a release                                          |
-| [Development guide](docs/development.md)                                | Building, testing, releasing                                             |
-| [Roadmap](docs/roadmap/roadmap.md)                                      | Planned phases                                                           |
+| Document                                                                        | Content                                                                  |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Release notes v0.3.0 (beta)](docs/release/v0.3.0-release-notes.md)             | What is new in the current beta                                          |
+| [Release notes v0.2.0](docs/release/v0.2.0-release-notes.md)                    | What was new in the last regular release                                 |
+| [CHANGELOG](CHANGELOG.md)                                                       | All changes by version                                                   |
+| [Privacy statement](docs/privacy/privacy.md)                                    | What is processed and stored                                             |
+| [Statistics: privacy and accuracy](docs/privacy/statistics.md)                  | Permissions, verification, storage and limits of the optional statistics |
+| [Threat model](docs/security/threat-model.md)                                   | Threats, mitigations, permissions                                        |
+| [Architecture overview](docs/architecture/overview.md)                          | How cleaning and protection work, design decisions                       |
+| [Engine specification](docs/architecture/engine-spec.md)                        | Normative cleaning algorithm                                             |
+| [Beta checklist v0.3.0](docs/release/v0.3.0-beta-checklist.md)                  | Manual checks before the v0.3.0 beta                                     |
+| [Manual test plan (macOS, v0.2.0)](docs/release/manual-testing-macos-v0.2.0.md) | Checklist used before the v0.2.0 release                                 |
+| [Development guide](docs/development.md)                                        | Building, testing, releasing                                             |
+| [Roadmap](docs/roadmap/roadmap.md)                                              | Planned phases                                                           |
 
 ## Development
 
@@ -394,9 +501,9 @@ post real sign-in, payment or personal links.
 
 ## Roadmap
 
-1. **Chromium extension** – current phase (v0.1, v0.2 with Experimental mode;
-   v0.3 with a redesigned interface and optional local statistics in
-   preparation).
+1. **Chromium extension** – current phase (v0.1; v0.2 with Experimental mode;
+   v0.3.0 public beta with a redesigned interface and optional local
+   statistics).
 2. **macOS and Linux** – desktop URL handler built on the Rust engine.
 3. **Advanced privacy** – redirect tracking, custom rules, Firefox.
 
@@ -405,7 +512,8 @@ See [docs/roadmap](docs/roadmap/roadmap.md).
 ## Security
 
 Please report vulnerabilities privately as described in
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](SECURITY.md) – see
+[Reporting bugs and vulnerabilities](#reporting-bugs-and-vulnerabilities).
 
 ## Contact
 
