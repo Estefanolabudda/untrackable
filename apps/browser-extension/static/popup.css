@@ -118,6 +118,15 @@ button.small {
 .modes:has(#exp-confirm:not([hidden])) .pending-tag {
   display: inline-block;
 }
+/* The choice waiting for confirmation is shown in the warning colour too. */
+.modes:has(#exp-confirm:not([hidden])) .mode:has(input:checked) {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+/* While confirming, the warning below says it all: no repeated one-line description. */
+.modes:has(#exp-confirm:not([hidden])) #exp-hint {
+  display: none;
+}
 fieldset.card .mode {
   padding: 0.4rem 0.5rem;
 }

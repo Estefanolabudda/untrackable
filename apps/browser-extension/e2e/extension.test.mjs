@@ -2114,7 +2114,7 @@ describe('local statistics (opt-in)', () => {
     assert.equal(await trackers(), 1);
     const popup = await extensionPage('popup.html');
     await waitFor(async () => (await popup.textContent('#stats-total')) === '1', 'popup total');
-    assert.match(await popup.textContent('#stats-other'), /2 other parameters/);
+    assert.match(await popup.textContent('#stats-other'), /2 non-tracking parameters \(Experimental, total\)/);
     await popup.close();
     await setSettings({});
   });

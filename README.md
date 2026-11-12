@@ -197,7 +197,7 @@ Once installed, links are cleaned as you browse. The toolbar popup offers:
 | Never clean links to this site | Adds a site exception (subdomains included)                   |
 | Pause in this tab              | Bypass for one tab until you turn it back on or close the tab |
 | Copy clean link                | Copies the current page's clean link                          |
-| Trackers removed (optional)    | Today, last 7 days and total – see **Statistics** below       |
+| Tracking parameters removed (optional) | Today, last 7 days and total – see **Statistics** below       |
 
 **Right-click a link** for:
 

@@ -93,7 +93,7 @@ on explicit request, not as tracker removal).
 **Trackers vs other parameters.** In Clean and Strict every verified removal
 is a tracking parameter. In Experimental, a removed parameter counts as a
 tracker only if the Strict rules would remove it too; the rest is shown
-separately as "other parameters (Experimental)".
+separately as "non-tracking parameters (Experimental, total)".
 
 **Upper bound.** One page load or copy adds at most 20 – a page cannot inflate
 the numbers with a crafted URL carrying thousands of trackers.
@@ -184,11 +184,11 @@ runs when a redirect or rewrite is observed.
 
 | Label (popup / settings)            | Measured exactly as                                                                          |
 | ----------------------------------- | -------------------------------------------------------------------------------------------- |
-| Trackers removed on this device     | verified removals of tracking parameters from page loads and copies, on this browser profile |
+| Tracking parameters removed (popup) / Count removed tracking parameters on this device (settings) | verified removals of tracking parameters from page loads and copies, in this browser profile; not a count of blocked trackers |
 | Today                               | counts filed under today's local date                                                        |
 | Last 7 days                         | today and the six previous local dates                                                       |
 | Total                               | since statistics were turned on or last reset                                                |
-| + N other parameters (Experimental) | non-tracking parameters removed in Experimental mode, total                                  |
+| + N non-tracking parameters (Experimental, total) | non-tracking parameters removed in Experimental mode, total                                  |
 
 The settings page explains the limits ("What is counted and stored").
 

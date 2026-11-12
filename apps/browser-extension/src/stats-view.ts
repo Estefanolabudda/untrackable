@@ -31,7 +31,7 @@ export async function renderStats(): Promise<boolean> {
   other.textContent =
     s.total.other === 0
       ? ''
-      : `+ ${format.format(s.total.other)} other parameter${s.total.other === 1 ? '' : 's'} (Experimental)`;
+      : `+ ${format.format(s.total.other)} non-tracking parameter${s.total.other === 1 ? '' : 's'} (Experimental, total)`;
   return true;
 }
 
