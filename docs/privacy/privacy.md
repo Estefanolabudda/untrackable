@@ -27,6 +27,14 @@ on http(s) pages. It uses that access only for:
   (`chrome.storage.session`) so the popup can offer "Reload once without
   cleaning", and forgets it when used, on the tab's next successful page load,
   when the tab closes, when you remove the permission, or after 10 minutes.
+- only if you turn on **statistics**: observing top-level page loads
+  (optional `webRequest` permission, read-only – Untrackable never blocks or
+  changes a request through it). For each page load the service worker
+  compares the requested and the actually sent address in memory and counts
+  the query parameters that were removed, if the difference is exactly what
+  Untrackable's own rules remove for that address. The addresses are dropped
+  as soon as the page load ends; only the numbers are kept. Incognito tabs and
+  prerendered pages are never counted, and one page load or copy adds at most 20. Details: [statistics.md](statistics.md).
 
 ## What is processed
 
@@ -46,14 +54,19 @@ All processing happens locally, synchronously, in memory.
 | `chrome.storage.local`                                             | Your settings only: on/off, mode, pause end time, copy-cleaning switch, the list of exception domains you entered                              |
 | `chrome.storage.session` (memory, cleared when the browser closes) | Only with the retry offer: tab id → time of the last retry; tab id → host name of a page that failed with a redirect loop (see above). No URLs |
 | DNR session rules and alarms (memory)                              | Tab ids you paused or opened without cleaning (until the page has loaded, at most 1 minute); for a loop reload, the host name                  |
+| `chrome.storage.local`, key `stats` (only with statistics on)      | Numbers only: removed tracking parameters and other (Experimental-only) parameters, per local date for the last 7 days and in total            |
 
-No URLs, page titles, history, counters or statistics are stored – only
-the settings and the short-lived host names / tab ids above. End-to-end tests
-inspect storage after normal browsing and while a loop offer exists.
+No URLs, host names, parameter names or values, page titles, history or times
+of day are stored – only the settings, the optional statistics numbers and
+the short-lived host names / tab ids above. Turning statistics off (or
+removing the permission in the browser) deletes the numbers; "Reset numbers"
+deletes them too. End-to-end tests inspect storage after normal browsing,
+with statistics on and while a loop offer exists.
 
 ## What is never collected
 
-- No telemetry, analytics or crash reporting.
+- No telemetry, analytics or crash reporting. The optional statistics never
+  leave the device.
 - The extension makes no network requests of its own. (The only
   navigations it ever triggers are ones you ask for: "Reload once without
   cleaning" after a redirect loop, or "Open link without cleaning".)

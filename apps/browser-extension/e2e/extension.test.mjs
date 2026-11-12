@@ -397,7 +397,21 @@ describe('installation', () => {
       'storage',
     ]);
     assert.deepEqual(manifest.host_permissions, ['http://*/*', 'https://*/*']);
-    assert.deepEqual(manifest.optional_permissions, ['webNavigation']);
+    assert.deepEqual(manifest.optional_permissions, ['webNavigation', 'webRequest']);
+  });
+
+  test('the optional permissions add no install or grant warning', async () => {
+    const warnings = await sw.evaluate(async () => {
+      const base = chrome.runtime.getManifest();
+      const w = (extra) =>
+        chrome.management.getPermissionWarningsByManifest(
+          JSON.stringify({ ...base, permissions: [...base.permissions, ...extra] }),
+        );
+      return { base: await w([]), webRequest: await w(['webRequest']), webNavigation: await w(['webNavigation']) };
+    });
+    assert.ok(warnings.base.length > 0, 'the host permission warning is reported');
+    assert.deepEqual(warnings.webRequest, warnings.base, 'statistics (webRequest) add no warning');
+    assert.deepEqual(warnings.webNavigation, warnings.base, 'loop helper (webNavigation) adds no warning');
   });
 
   test('installs every compiled rule in every mode (none silently dropped)', async () => {
@@ -1638,7 +1652,8 @@ describe('user interface', () => {
   test('popup reflects and changes settings', async () => {
     const popup = await extensionPage('popup.html');
     assert.equal(await popup.isChecked('#enabled'), true);
-    assert.equal(await popup.textContent('#status'), 'Active');
+    assert.equal(await popup.textContent('#status'), 'On');
+    assert.match(await popup.textContent('#status-detail'), /^Clean/);
     await popup.check('input[name="mode"][value="strict"]');
     await waitFor(
       async () => (await sw.evaluate(() => chrome.storage.local.get('mode'))).mode === 'strict',
@@ -1646,8 +1661,14 @@ describe('user interface', () => {
     );
     await popup.click('#pause');
     await waitFor(async () => (await popup.textContent('#status')).startsWith('Paused'), 'paused status');
+    assert.equal(await popup.textContent('#pause-label'), 'Resume');
     await popup.click('#pause');
-    await waitFor(async () => (await popup.textContent('#status')) === 'Strict', 'resumed status');
+    await waitFor(
+      async () =>
+        (await popup.textContent('#status')) === 'On' && /^Strict/.test(await popup.textContent('#status-detail')),
+      'resumed status',
+    );
+    assert.equal(await popup.textContent('#pause-label'), 'Pause all · 15 min');
     await popup.uncheck('#enabled');
     await waitFor(async () => (await popup.textContent('#status')) === 'Off', 'off status');
     await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === 'off', 'badge off');
@@ -1683,7 +1704,7 @@ describe('user interface', () => {
     );
     await waitFor(async () => (await mode()) === 'experimental', 'experimental saved');
     await waitFor(async () => (await sw.evaluate(() => chrome.action.getBadgeText({}))) === 'E', 'badge E');
-    await waitFor(async () => (await popup.textContent('#status')) === 'Experimental', 'status');
+    await waitFor(async () => /^Experimental/.test(await popup.textContent('#status-detail')), 'status');
     assert.equal(await popup.isVisible('#exp-active'), true);
     await popup.close();
     // The options page shows the same notice; "Back to Clean" switches back at once.
@@ -2020,6 +2041,228 @@ describe('engine inside Chromium', () => {
   test('camelCase protected paths are left alone during navigation', async () => {
     assert.equal(await visit('/account/resetPassword?utm_source=a'), '/account/resetPassword?utm_source=a');
     assert.equal(await visit('/UnsubscribePage.html?mkt_tok=a'), '/UnsubscribePage.html?mkt_tok=a');
+  });
+});
+
+describe('local statistics (opt-in)', () => {
+  const STATS = { permissions: ['webRequest'] };
+  const stored = () => sw.evaluate(async () => (await chrome.storage.local.get('stats')).stats);
+  const granted = () => sw.evaluate((p) => chrome.permissions.contains(p), STATS);
+  const trackers = async () => (await stored())?.total?.trackers ?? 0;
+  const resetCounts = () => sw.evaluate(() => chrome.storage.local.remove('stats'));
+  /** No count may arrive: give the (debounced) writer time, then check. */
+  const settle = () => new Promise((r) => setTimeout(r, 1000));
+
+  before(async () => {
+    await setSettings({});
+    assert.equal(await granted(), false, 'off by default');
+    const options = await extensionPage('options.html');
+    assert.equal(await options.isVisible('#stats-on'), false);
+    assert.equal(await options.isChecked('#stats-enabled'), false);
+    // The real opt-in flow: a click asks for the permission. It adds no
+    // install warning, so Chromium grants it without a prompt.
+    await options.click('#stats-enabled');
+    await waitFor(granted, 'statistics permission granted');
+    // Chrome 116 makes chrome.webRequest available shortly after the grant;
+    // the service worker registers its listeners as soon as it appears.
+    const t0 = Date.now();
+    await waitFor(
+      () => sw.evaluate(() => chrome.webRequest?.onBeforeRequest.hasListeners() === true),
+      'statistics listeners registered',
+    );
+    console.log(`# statistics listeners registered after ${Date.now() - t0} ms`);
+    await waitFor(() => options.isVisible('#stats-on'), 'numbers shown');
+    assert.equal(await options.isChecked('#stats-enabled'), true);
+    await options.close();
+  });
+
+  after(async () => {
+    await sw.evaluate((p) => chrome.permissions.remove(p), STATS);
+    await waitFor(async () => (await stored()) === undefined, 'numbers deleted with the permission');
+  });
+
+  test('counts parameters removed from navigations, also after a server redirect', async () => {
+    await resetCounts();
+    assert.equal(await visit('/stats-a?id=1&utm_source=x&utm_medium=y'), '/stats-a?id=1');
+    await waitFor(async () => (await trackers()) === 2, 'two removals counted');
+    // The server redirects to a URL with a tracker; Chromium rewrites that
+    // target in place (no redirect event) – still counted once.
+    assert.equal(await visit('/hop'), '/landing?id=1');
+    await waitFor(async () => (await trackers()) === 3, 'redirect target counted');
+    await settle();
+    const s = await stored();
+    assert.equal(s.total.trackers, 3);
+    assert.equal(s.total.other, 0);
+    assert.deepEqual(Object.values(s.days), [{ trackers: 3, other: 0 }]);
+  });
+
+  test('counts nothing for links it leaves alone', async () => {
+    await resetCounts();
+    await visit('/article?id=1'); // nothing to remove
+    await visit('/login?utm_source=x&id=1'); // protected
+    await visit('/a?id=1&ref=x'); // Strict-only parameter in Clean
+    await settle();
+    assert.equal(await trackers(), 0);
+    // setSettings resets the stored data, numbers included.
+    await setSettings({ exceptions: ['news.test'] });
+    assert.equal(await visit('/x?utm_source=x'), '/x?utm_source=x');
+    await setSettings({ pausedUntil: Date.now() + 60_000 });
+    assert.equal(await visit('/y?utm_source=x'), '/y?utm_source=x');
+    await settle();
+    assert.equal(await stored(), undefined);
+    await setSettings({});
+  });
+
+  test('Experimental counts other parameters separately', async () => {
+    await setSettings({ mode: 'experimental' });
+    assert.equal(await visit('/e?utm_source=x&q=cats&page=2'), '/e');
+    await waitFor(async () => (await stored())?.total?.other === 2, 'other parameters counted');
+    assert.equal(await trackers(), 1);
+    const popup = await extensionPage('popup.html');
+    await waitFor(async () => (await popup.textContent('#stats-total')) === '1', 'popup total');
+    assert.match(await popup.textContent('#stats-other'), /2 non-tracking parameters \(Experimental, total\)/);
+    await popup.close();
+    await setSettings({});
+  });
+
+  test('a paused tab is not counted; an explicit copy is', async () => {
+    await resetCounts();
+    const page = await context.newPage();
+    await page.goto(`${origin('news.test')}/start`);
+    const tabId = await sw.evaluate(
+      async () => (await chrome.tabs.query({})).find((t) => t.url?.includes('/start'))?.id,
+    );
+    const ext = await extensionPage('options.html');
+    await ext.evaluate((id) => chrome.runtime.sendMessage({ type: 'setTabPaused', tabId: id, paused: true }), tabId);
+    await page.goto(`${origin('news.test')}/paused?utm_source=x&fbclid=y`);
+    assert.match(page.url(), /utm_source=x&fbclid=y$/);
+    await settle();
+    assert.equal(await trackers(), 0, 'paused navigation not counted');
+    const result = await ext.evaluate((id) => chrome.runtime.sendMessage({ type: 'copyCleanTab', tabId: id }), tabId);
+    assert.deepEqual(result, { ok: true, removed: 2 });
+    assert.equal(await ext.evaluate(() => navigator.clipboard.readText()), `${origin('news.test')}/paused`);
+    await waitFor(async () => (await trackers()) === 2, 'copy counted');
+    await ext.evaluate((id) => chrome.runtime.sendMessage({ type: 'setTabPaused', tabId: id, paused: false }), tabId);
+    await ext.close();
+    await page.close();
+  });
+
+  test('stores numbers only; turning it off deletes them', async () => {
+    await resetCounts();
+    await visit('/private-path?utm_source=secret-campaign&id=1');
+    await waitFor(async () => (await trackers()) === 1, 'counted');
+    const json = JSON.stringify(await sw.evaluate(() => chrome.storage.local.get(null)));
+    for (const leak of ['http', 'news', 'private', 'secret', 'utm']) assert.ok(!json.includes(leak), `no ${leak}`);
+    const all = JSON.parse(json);
+    assert.deepEqual(Object.keys(all), ['stats']);
+    const [day] = Object.keys(all.stats.days);
+    assert.match(day, /^\d{4}-\d{2}-\d{2}$/);
+    assert.deepEqual(all.stats, { total: { trackers: 1, other: 0 }, days: { [day]: { trackers: 1, other: 0 } } });
+    const options = await extensionPage('options.html');
+    await waitFor(async () => (await options.textContent('#stats-total')) === '1', 'options total');
+    await options.click('#stats-reset');
+    await waitFor(async () => (await stored()) === undefined, 'reset');
+    await waitFor(async () => (await options.textContent('#stats-total')) === '0', 'options shows 0');
+    await options.uncheck('#stats-enabled');
+    await waitFor(async () => !(await granted()), 'permission removed');
+    await waitFor(() => options.isHidden('#stats-on'), 'numbers hidden');
+    await visit('/after-off?utm_source=x');
+    await settle();
+    assert.equal(await stored(), undefined, 'nothing counted while off');
+    await options.close();
+    // Back on for the after() hook's checks.
+    const again = await extensionPage('options.html');
+    await again.click('#stats-enabled');
+    await waitFor(granted, 'granted again');
+    await again.close();
+  });
+});
+
+describe('incognito (real incognito window, extension allowed there)', () => {
+  test('cleans in incognito, but never counts incognito page loads or copies', async () => {
+    const profile = mkdtempSync(join(tmpdir(), 'untrackable-e2e-incognito-'));
+    const second = await launchWith(dist, profile);
+    const id = new URL(second.sw.url()).host;
+    try {
+      // What a user does in chrome://extensions: developer mode (needed for an
+      // unpacked extension to survive the reload) and "Allow in Incognito".
+      const ext = await second.context.newPage();
+      await ext.goto('chrome://extensions');
+      await ext.evaluate(async (extId) => {
+        await chrome.developerPrivate.updateProfileConfiguration({ inDeveloperMode: true });
+        await chrome.developerPrivate.updateExtensionConfiguration({ extensionId: extId, incognitoAccess: true });
+      }, id);
+      await waitFor(
+        async () =>
+          (await ext.evaluate((extId) => chrome.developerPrivate.getExtensionInfo(extId).then((i) => i.state), id)) ===
+          'ENABLED',
+        'extension enabled again after the incognito switch',
+      );
+      await ext.close();
+      // The switch reloads the extension; its new worker gets its APIs a moment
+      // after it starts (seen on Chrome 116 in CI) – wait, read-only.
+      await waitFor(
+        () =>
+          second.sw
+            .evaluate(
+              () =>
+                typeof chrome.extension?.isAllowedIncognitoAccess === 'function' &&
+                typeof chrome.storage?.local?.get === 'function' &&
+                typeof chrome.declarativeNetRequest?.getDynamicRules === 'function',
+            )
+            .catch(() => false),
+        'extension worker ready after the reload',
+        15_000,
+      );
+      assert.equal(await second.sw.evaluate(() => chrome.extension.isAllowedIncognitoAccess()), true);
+      await waitFor(
+        async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).length > 0,
+        'rules',
+      );
+      // Statistics on, through the real opt-in click.
+      const options = await second.context.newPage();
+      await options.goto(`chrome-extension://${id}/options.html`);
+      await options.click('#stats-enabled');
+      await waitFor(
+        () => second.sw.evaluate(() => chrome.webRequest?.onBeforeRequest.hasListeners() === true),
+        'statistics listeners',
+      );
+      const stored = () => second.sw.evaluate(async () => (await chrome.storage.local.get('stats')).stats);
+
+      // An incognito window: the link is cleaned, nothing is counted.
+      const target = `${origin('news.test')}/incognito?id=1&utm_source=x&fbclid=y`;
+      const win = await second.sw.evaluate((u) => chrome.windows.create({ incognito: true, url: u }), target);
+      assert.equal(win.incognito, true);
+      const tab = await waitFor(
+        () =>
+          second.sw.evaluate(async (w) => {
+            const [t] = await chrome.tabs.query({ windowId: w });
+            return t?.status === 'complete' && t.url?.includes('/incognito') ? t : undefined;
+          }, win.id),
+        'incognito page loaded',
+      );
+      assert.equal(tab.incognito, true);
+      assert.equal(tab.url.replace(/\?$/, ''), `${origin('news.test')}/incognito?id=1`, 'cleaned in incognito');
+      // An explicit copy in the incognito tab works, but is not counted either.
+      const copy = await options.evaluate(
+        (t) => chrome.runtime.sendMessage({ type: 'copyCleanTab', tabId: t }),
+        tab.id,
+      );
+      assert.equal(copy.ok, true);
+      await second.sw.evaluate((w) => chrome.windows.remove(w), win.id);
+      await new Promise((r) => setTimeout(r, 1000));
+      assert.equal(await stored(), undefined, 'incognito never counted');
+
+      // The same in a normal tab is counted – statistics were really on.
+      const page = await second.context.newPage();
+      await page.goto(`${origin('news.test')}/normal?id=1&utm_source=x&fbclid=y`);
+      await page.close();
+      await waitFor(async () => (await stored())?.total?.trackers === 2, 'normal tab counted');
+      await options.close();
+    } finally {
+      await Promise.race([second.context.close(), new Promise((r) => setTimeout(r, 15_000))]);
+      rmSync(profile, { recursive: true, force: true });
+    }
   });
 });
 

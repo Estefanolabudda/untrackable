@@ -1,0 +1,225 @@
+html {
+  /* A vertical scrollbar must never cause a horizontal one in the 360 px popup. */
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+body {
+  width: 360px;
+  max-width: 100%;
+}
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem 0.5rem 1rem;
+}
+.top h1 {
+  font-size: 15px;
+  font-weight: 650;
+}
+.icon-only {
+  min-height: 32px;
+  width: 32px;
+  padding: 0;
+  color: var(--muted);
+}
+.icon-only svg {
+  width: 18px;
+  height: 18px;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0.75rem;
+}
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+.hero.is-off {
+  background: var(--surface);
+}
+.hero.is-warn {
+  background: var(--warn-bg);
+}
+.status-title {
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.hero.is-off .status-title,
+.hero.is-warn .status-title {
+  color: var(--warn-fg);
+}
+#status-detail {
+  font-size: 13px;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  margin: 0;
+}
+fieldset.card {
+  padding: 0.35rem 0.4rem;
+}
+.card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 0.25rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.card-title > span {
+  flex: none;
+}
+/* Long hosts: keep the end (the registrable domain) visible, cut the start. */
+.card-title code {
+  color: var(--fg);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  min-width: 0;
+}
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+button.small {
+  min-height: 24px;
+  padding: 0 0.35rem;
+  font-size: 12px;
+  font-weight: 500;
+  flex: none;
+}
+/* The popup shows the description of the selected mode only (all are on the settings page). */
+.mode:not(:has(input:checked)) small {
+  display: none;
+}
+.pending-tag {
+  display: none;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.modes:has(#exp-confirm:not([hidden])) .pending-tag {
+  display: inline-block;
+}
+/* The choice waiting for confirmation is shown in the warning colour too. */
+.modes:has(#exp-confirm:not([hidden])) .mode:has(input:checked) {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+/* While confirming, the warning below says it all: no repeated one-line description. */
+.modes:has(#exp-confirm:not([hidden])) #exp-hint {
+  display: none;
+}
+fieldset.card .mode {
+  padding: 0.4rem 0.5rem;
+}
+#exp-confirm {
+  margin-top: 0.5rem;
+}
+#site-section .setting {
+  padding: 0.4rem 0;
+}
+.note:empty {
+  display: none;
+}
+.note {
+  font-size: 12px;
+  padding-bottom: 0.4rem;
+}
+.actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+.actions button {
+  min-height: 40px;
+}
+.result {
+  font-size: 12px;
+  min-height: 1em;
+  margin-top: -0.3rem;
+}
+.result:empty {
+  display: none;
+}
+.fine {
+  font-size: 12px;
+}
+#stats-other {
+  margin-top: 0.4rem;
+}
+.stats-off button {
+  white-space: nowrap;
+}
+.stats-off {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+/* Not cleaning here (off, paused, exception): the selected mode is not "live". */
+.hero.is-off ~ .modes .mode:has(input:checked) {
+  background: transparent;
+  border-color: var(--border);
+}
+/* Experimental keeps the warning colour in the mode list too. */
+.hero.is-warn ~ .modes .mode:has(input[value='experimental']:checked) {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+/* A notice needs the room: the numbers can wait. */
+main:has(#loop-section:not([hidden])) #stats,
+main:has(#exp-confirm:not([hidden])) #stats {
+  display: none;
+}
+.hero-action:has(button[hidden]) {
+  display: none;
+}
+.hero-action button {
+  min-height: 28px;
+  margin: 0.15rem 0 0 -0.45rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 13px;
+}
+.note button {
+  display: inline;
+  vertical-align: baseline;
+  margin-left: 0.15rem;
+}
+.hero-warn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  font-size: 13px;
+  color: var(--warn-fg);
+}
+.hero-warn button {
+  min-height: 28px;
+  padding: 0.1rem 0.45rem;
+  margin-left: 0.15rem;
+  font-size: 13px;
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.hero-warn button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warn-fg) 12%, transparent);
+}

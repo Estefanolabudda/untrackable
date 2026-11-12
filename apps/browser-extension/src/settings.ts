@@ -113,6 +113,8 @@ export type Message =
   | { type: 'getTabState'; tabId?: number }
   | { type: 'setTabPaused'; tabId: number; paused: boolean }
   | { type: 'copyText'; text: string }
+  | { type: 'copyCleanTab'; tabId: number }
+  | { type: 'resetStats' }
   | { type: 'openUnmodified'; url: string }
   | { type: 'retryLoop'; tabId: number }
   | { type: 'copied'; url?: string };

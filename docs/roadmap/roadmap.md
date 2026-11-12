@@ -1,6 +1,6 @@
 # Roadmap
 
-## Phase 1 – Chromium extension (v0.1, this release)
+## Phase 1 – Chromium extension (v0.1)
 
 - [x] Shared rule set and normative engine specification
 - [x] TypeScript engine (extension) and Rust engine (desktop), shared conformance fixtures
@@ -19,6 +19,15 @@
   recognised sign-in/payment/signed links and an explicit confirmation.
 - Context-menu actions "Copy/Open link without query parameters".
 
+## v0.3 – Redesign and local statistics (in preparation)
+
+- Redesigned popup and settings page (light and dark, accessibility).
+- Optional, local-only statistics of removed tracking parameters (off by
+  default, read-only `webRequest` permission, numbers only – see
+  `docs/privacy/statistics.md`).
+- Regression corpus of sensitive URLs, upgrade tests, Chrome 116/stable
+  compatibility CI.
+
 ## Phase 2 – macOS and Linux
 
 Not started. Will only begin once the extension is stable.
@@ -36,5 +45,4 @@ Not started. Will only begin once the extension is stable.
 - Custom user rules (validated with `validateRuleSet`)
 - Signed rule-list updates
 - Firefox (MV3 `declarativeNetRequest` support) and other browsers
-- Optional, local-only statistics
 - WASM build of the Rust engine if it simplifies maintenance

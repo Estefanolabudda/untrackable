@@ -34,7 +34,7 @@ to 1.63.0 to match it.
 
 - Behaviour changes: spec first, then both engines, then fixtures – in one change.
 - Prefer leaving URLs unchanged over risking breakage. Unknown params are always kept.
-- Never log URLs; never add network requests or telemetry; settings are the only stored data.
+- Never log URLs; never add network requests or telemetry; stored data = settings plus the optional aggregate `stats` numbers (no URLs, hosts, names or times). Statistics count only removals verified against the engine (`verifiedRemovals`) and only while the optional `webRequest` permission is granted.
 - Extension pages render user data with `textContent` only. No eval / dynamic code.
 - Privileged runtime messages are authorised by `sender.url` (extension origin), not `sender.tab`.
 - DNR `removeParams` is exact + case-sensitive; case-insensitive regexSubstitution fallback rules (chunks of 4 names – larger case-insensitive regexes exceed Chromium's 2 KB limit) handle mixed case. Every compiled rule must install (e2e asserts it; if a protection rule cannot install, the fail-safe disables all redirects and shows `!`). Protection regexes are chunked by a character budget (`REGEX_CHUNK_CHARS`) – long case-insensitive alternations exceed the 2 KB limit. Chromium only falls through from a no-op redirect to the _other_ matcher kind (URL-pattern vs regex) – keep exact rules regex-free. `packages/core/test/dnr-simulator.ts` models this and is checked against Chromium in e2e.

@@ -29,6 +29,10 @@ keeps everything else, so the page still works.
 > **Current release: [v0.2.0](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.2.0)**
 > – available as a ZIP on GitHub Releases for manual installation. Untrackable
 > is **not** available in the Chrome Web Store.
+>
+> The `main` branch already contains the upcoming **v0.3** (redesigned popup and
+> settings, optional local statistics). The screenshots show v0.3; it is not
+> released yet.
 
 ## Contents
 
@@ -46,10 +50,10 @@ keeps everything else, so the page still works.
 
 ## Screenshots
 
-| Popup                                         | Switching to Experimental                                                     | Settings with link check                      |
-| --------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------- |
-| ![Toolbar popup](docs/images/popup.png)       | ![Experimental confirmation in the popup](docs/images/popup-experimental.png) | ![Settings page](docs/images/options.png)     |
-| Mode, pause and per-site controls at a glance | Experimental is only switched on after an explicit confirmation               | Exceptions and a preview of what gets removed |
+| Popup                                                         | Switching to Experimental                                                     | Settings with link check                                  |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| ![Toolbar popup](docs/images/popup.png)                       | ![Experimental confirmation in the popup](docs/images/popup-experimental.png) | ![Settings page](docs/images/options.png)                 |
+| Status, mode, per-site controls and optional local statistics | Experimental is only switched on after an explicit confirmation               | Settings (dark theme) with a preview of what gets removed |
 
 ## Installation
 
@@ -119,8 +123,10 @@ At installation Chrome shows two warnings:
 | _Read and change all your data on all websites_ | Rewriting navigation URLs requires host access, and copy cleaning runs on every page. When you copy with the keyboard, Untrackable only checks whether the copied text is a single link; it does not read other page content. |
 | _Modify data you copy and paste_                | Writing the clean link to the clipboard when you copy a link or use "Copy clean link".                                                                                                                                        |
 
-The redirect-loop helper uses the optional `webNavigation` permission. It is
-off by default and only requested when you enable it in the settings. Details:
+Two optional permissions are only requested when you switch the feature on,
+and neither adds an install warning: `webNavigation` for the redirect-loop
+helper and, from v0.3, `webRequest` (read-only) for the local statistics. Both
+are off by default. Details:
 [threat model – permissions](docs/security/threat-model.md#permissions-and-justification).
 
 ## Cleaning modes
@@ -188,15 +194,16 @@ Experimental is active. For a single site or page, use a site exception,
 
 Once installed, links are cleaned as you browse. The toolbar popup offers:
 
-| Control                        | Effect                                                        |
-| ------------------------------ | ------------------------------------------------------------- |
-| Clean links automatically      | Global on/off (off = Bypass)                                  |
-| Clean / Strict / Experimental  | Choose the cleaning mode (Experimental asks for confirmation) |
-| Back to Clean                  | Leave Experimental with one click                             |
-| Pause for 15 minutes           | Temporary bypass that resumes automatically                   |
-| Never clean links to this site | Adds a site exception (subdomains included)                   |
-| Pause in this tab              | Bypass for one tab until you turn it back on or close the tab |
-| Copy clean link                | Copies the current page's clean link                          |
+| Control                                | Effect                                                        |
+| -------------------------------------- | ------------------------------------------------------------- |
+| Clean links automatically              | The main switch at the top (off = nothing is cleaned)         |
+| Clean / Strict / Experimental          | Choose the cleaning mode (Experimental asks for confirmation) |
+| Back to Clean                          | Leave Experimental with one click                             |
+| Pause all · 15 min                     | Temporary pause everywhere that resumes automatically         |
+| Never clean links to this site         | Adds a site exception (subdomains included)                   |
+| Pause in this tab                      | Bypass for one tab until you turn it back on or close the tab |
+| Copy clean link                        | Copies the current page's clean link                          |
+| Tracking parameters removed (optional) | Today, last 7 days and total – see **Statistics** below       |
 
 **Right-click a link** for:
 
@@ -214,6 +221,14 @@ Right-click a page for **Copy clean page link**, or press
 **Copy cleaning.** Select a single link on a page and press
 <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>C</kbd> (or <kbd>Ctrl</kbd>+<kbd>Insert</kbd>):
 the clipboard receives the clean link. You can switch this off in the settings.
+
+**Statistics (from v0.3, optional, off by default).** Turn them on in the popup or the
+settings to see how many tracking parameters Untrackable removed on this
+device – today, in the last 7 days and in total. Only removals Untrackable can
+confirm are counted (page loads and links you copy with it), and only numbers
+are stored, never links or sites. Incognito tabs are not counted. This uses the
+optional, read-only `webRequest` permission while switched on; turning
+statistics off removes the permission and deletes the numbers.
 
 **Settings page.** Add or remove site exceptions, enable the redirect-loop
 helper, and use **Check a link** to see exactly which parameters would be
@@ -262,7 +277,9 @@ normative [engine specification](docs/architecture/engine-spec.md).
   built-in rule engine and by the extension itself.
 - **No telemetry, no analytics, no network requests** of its own.
 - **No browsing data is stored.** Untrackable stores only your settings
-  (on/off, mode, pause end time, copy cleaning switch, site exceptions).
+  (on/off, mode, pause end time, copy cleaning switch, site exceptions) and –
+  only if you turn statistics on – daily counts for the last 7 days and a
+  total, no links or sites.
   The optional redirect-loop helper keeps the host name of a failed page in
   session storage for at most 10 minutes – never a full URL.
 - **Settings stay in the extension.** Web pages are never given your mode,
@@ -334,17 +351,18 @@ and the [architecture overview](docs/architecture/overview.md).
 
 ## Documentation
 
-| Document                                                                | Content                                            |
-| ----------------------------------------------------------------------- | -------------------------------------------------- |
-| [Release notes v0.2.0](docs/release/v0.2.0-release-notes.md)            | What is new in this release                        |
-| [CHANGELOG](CHANGELOG.md)                                               | All changes by version                             |
-| [Privacy statement](docs/privacy/privacy.md)                            | What is processed and stored                       |
-| [Threat model](docs/security/threat-model.md)                           | Threats, mitigations, permissions                  |
-| [Architecture overview](docs/architecture/overview.md)                  | How cleaning and protection work, design decisions |
-| [Engine specification](docs/architecture/engine-spec.md)                | Normative cleaning algorithm                       |
-| [Manual test plan (macOS)](docs/release/manual-testing-macos-v0.2.0.md) | Checklist used before a release                    |
-| [Development guide](docs/development.md)                                | Building, testing, releasing                       |
-| [Roadmap](docs/roadmap/roadmap.md)                                      | Planned phases                                     |
+| Document                                                                | Content                                                                  |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Release notes v0.2.0](docs/release/v0.2.0-release-notes.md)            | What is new in this release                                              |
+| [CHANGELOG](CHANGELOG.md)                                               | All changes by version                                                   |
+| [Privacy statement](docs/privacy/privacy.md)                            | What is processed and stored                                             |
+| [Statistics: privacy and accuracy](docs/privacy/statistics.md)          | Permissions, verification, storage and limits of the optional statistics |
+| [Threat model](docs/security/threat-model.md)                           | Threats, mitigations, permissions                                        |
+| [Architecture overview](docs/architecture/overview.md)                  | How cleaning and protection work, design decisions                       |
+| [Engine specification](docs/architecture/engine-spec.md)                | Normative cleaning algorithm                                             |
+| [Manual test plan (macOS)](docs/release/manual-testing-macos-v0.2.0.md) | Checklist used before a release                                          |
+| [Development guide](docs/development.md)                                | Building, testing, releasing                                             |
+| [Roadmap](docs/roadmap/roadmap.md)                                      | Planned phases                                                           |
 
 ## Development
 
@@ -376,7 +394,9 @@ post real sign-in, payment or personal links.
 
 ## Roadmap
 
-1. **Chromium extension** – current phase (v0.1, v0.2 with Experimental mode).
+1. **Chromium extension** – current phase (v0.1, v0.2 with Experimental mode;
+   v0.3 with a redesigned interface and optional local statistics in
+   preparation).
 2. **macOS and Linux** – desktop URL handler built on the Rust engine.
 3. **Advanced privacy** – redirect tracking, custom rules, Firefox.
 
