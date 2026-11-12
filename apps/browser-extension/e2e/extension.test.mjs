@@ -386,6 +386,20 @@ describe('installation', () => {
     assert.deepEqual(manifest.optional_permissions, ['webNavigation', 'webRequest']);
   });
 
+  test('the optional permissions add no install or grant warning', async () => {
+    const warnings = await sw.evaluate(async () => {
+      const base = chrome.runtime.getManifest();
+      const w = (extra) =>
+        chrome.management.getPermissionWarningsByManifest(
+          JSON.stringify({ ...base, permissions: [...base.permissions, ...extra] }),
+        );
+      return { base: await w([]), webRequest: await w(['webRequest']), webNavigation: await w(['webNavigation']) };
+    });
+    assert.ok(warnings.base.length > 0, 'the host permission warning is reported');
+    assert.deepEqual(warnings.webRequest, warnings.base, 'statistics (webRequest) add no warning');
+    assert.deepEqual(warnings.webNavigation, warnings.base, 'loop helper (webNavigation) adds no warning');
+  });
+
   test('installs every compiled rule in every mode (none silently dropped)', async () => {
     const bundle = await build({
       entryPoints: [fileURLToPath(new URL('../../../packages/core/src/index.ts', import.meta.url))],

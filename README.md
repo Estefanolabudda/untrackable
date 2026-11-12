@@ -345,17 +345,18 @@ and the [architecture overview](docs/architecture/overview.md).
 
 ## Documentation
 
-| Document                                                                | Content                                            |
-| ----------------------------------------------------------------------- | -------------------------------------------------- |
-| [Release notes v0.2.0](docs/release/v0.2.0-release-notes.md)            | What is new in this release                        |
-| [CHANGELOG](CHANGELOG.md)                                               | All changes by version                             |
-| [Privacy statement](docs/privacy/privacy.md)                            | What is processed and stored                       |
-| [Threat model](docs/security/threat-model.md)                           | Threats, mitigations, permissions                  |
-| [Architecture overview](docs/architecture/overview.md)                  | How cleaning and protection work, design decisions |
-| [Engine specification](docs/architecture/engine-spec.md)                | Normative cleaning algorithm                       |
-| [Manual test plan (macOS)](docs/release/manual-testing-macos-v0.2.0.md) | Checklist used before a release                    |
-| [Development guide](docs/development.md)                                | Building, testing, releasing                       |
-| [Roadmap](docs/roadmap/roadmap.md)                                      | Planned phases                                     |
+| Document                                                                | Content                                                                  |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Release notes v0.2.0](docs/release/v0.2.0-release-notes.md)            | What is new in this release                                              |
+| [CHANGELOG](CHANGELOG.md)                                               | All changes by version                                                   |
+| [Privacy statement](docs/privacy/privacy.md)                            | What is processed and stored                                             |
+| [Statistics: privacy and accuracy](docs/privacy/statistics.md)          | Permissions, verification, storage and limits of the optional statistics |
+| [Threat model](docs/security/threat-model.md)                           | Threats, mitigations, permissions                                        |
+| [Architecture overview](docs/architecture/overview.md)                  | How cleaning and protection work, design decisions                       |
+| [Engine specification](docs/architecture/engine-spec.md)                | Normative cleaning algorithm                                             |
+| [Manual test plan (macOS)](docs/release/manual-testing-macos-v0.2.0.md) | Checklist used before a release                                          |
+| [Development guide](docs/development.md)                                | Building, testing, releasing                                             |
+| [Roadmap](docs/roadmap/roadmap.md)                                      | Planned phases                                                           |
 
 ## Development
 
