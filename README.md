@@ -370,6 +370,10 @@ See [docs/development.md](docs/development.md) and
 | `tests/fixtures/cases.json` | Shared conformance cases for both engines                |
 | `docs/`                     | Architecture, engine spec, security, privacy, roadmap    |
 
+Contributions are welcome – see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Please use the issue templates and never
+post real sign-in, payment or personal links.
+
 ## Roadmap
 
 1. **Chromium extension** – current phase (v0.1, v0.2 with Experimental mode).
