@@ -6,7 +6,31 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Security and reliability
+
+- Regression corpus of 259 sensitive real-world URL shapes (sign-in, reset,
+  payment, signed downloads, banking/government, CSRF), checked per mode in
+  both engines and against the navigation rules.
+- Experimental mode keeps the query of sign-in and payment hosts (first host
+  label `login`, `signin`, `auth`, `oauth`, `sso`, `idp`, `id`, `accounts`,
+  `account`, `secure`, `pay`, `payment(s)`, `checkout`, `banking`) and of
+  OAuth requests (`client_id`, `code_challenge`) and Microsoft device login
+  (`otc`). Clean and Strict are unchanged.
+- Settings carry a format version and are migrated conservatively on install,
+  update and browser start; context menus are refreshed on every update.
+- Upgrade tests install the published 0.1.0 and 0.2.0 releases (checksums
+  verified), update them in place as documented (replace the folder, reload)
+  and check settings, menus,
+  rules and navigation.
+- The full end-to-end suite also runs on Chrome for Testing 116 (minimum
+  supported version) and 157 (stable); no functional differences found, only
+  a harmless empty `?` that older versions leave after removal.
+
+### Maintenance
+
+- Dependabot: `@types/node` majors (must match Node 22) and `playwright`
+  (pinned to the development container's Chromium) are updated deliberately;
+  `bit-vec` (dev-only) patch update.
 
 ## [0.2.0] – 2026-11-11
 

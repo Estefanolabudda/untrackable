@@ -54,8 +54,10 @@ keeps everything else, so the page still works.
 ## Installation
 
 Requires a Chromium-based browser, version 116 or newer: Chrome, Edge, Brave,
-Vivaldi or Opera. Automated tests run on Chromium; the maintainer tests releases
-on Chrome for macOS.
+Vivaldi or Opera. The full automated test suite runs on Chromium and on Chrome
+for Testing 116 (the minimum) and a recent stable release; the maintainer tests
+releases on Chrome for macOS. Edge, Brave, Vivaldi and Opera are not tested
+automatically.
 
 ### From the GitHub release (recommended)
 
@@ -293,7 +295,9 @@ See the [privacy statement](docs/privacy/privacy.md) and the
 - Links with percent-encoded letters, digits or `-._/` in the path or in a
   parameter name are left alone while navigating (copy cleaning handles them).
 - When Chromium removes a parameter it may write a valueless parameter as
-  `edit=` instead of `edit`.
+  `edit=` instead of `edit`. Older versions (e.g. Chrome 116) may also leave an
+  empty `?` after removing the last parameter (`/article?`); the page is the
+  same.
 - A plain anchor named like a protected parameter (e.g. `#api-token`) keeps the
   link unchanged while navigating; copying still cleans it.
 - If a site redirects back to a tracking link, Chromium reports "too many

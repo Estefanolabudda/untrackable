@@ -61,6 +61,36 @@ export function effectiveMode(s: Settings, now: number = Date.now()): Mode {
 
 export const SETTINGS_KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[];
 
+/**
+ * Version of the stored settings format, kept under SETTINGS_VERSION_KEY.
+ * 0.1.0 and 0.2.0 stored no version (format 0); 1 = sanitised settings as of
+ * 0.3.0. Bump it together with a migration step in `migrateSettings`.
+ */
+export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION_KEY = 'settingsVersion';
+
+/**
+ * Pure migration of the raw stored object: returns the keys to write (empty
+ * when nothing needs to change). Only settings that are present are rewritten
+ * (sanitised), so nothing is invented; unknown keys are left alone. A newer
+ * format (after a downgrade) is not touched – reads are sanitised anyway.
+ */
+export function migrateSettings(raw: Record<string, unknown>): Record<string, unknown> {
+  const stored = raw[SETTINGS_VERSION_KEY];
+  const version = typeof stored === 'number' && Number.isInteger(stored) && stored >= 0 ? stored : 0;
+  if (version >= SETTINGS_VERSION) return {};
+  const clean = sanitizeSettings(raw);
+  const write: Record<string, unknown> = { [SETTINGS_VERSION_KEY]: SETTINGS_VERSION };
+  for (const key of SETTINGS_KEYS) if (key in raw) write[key] = clean[key];
+  return write;
+}
+
+/** Bring stored settings to the current format (install, update, browser start). */
+export async function migrateStoredSettings(): Promise<void> {
+  const write = migrateSettings(await chrome.storage.local.get(null));
+  if (Object.keys(write).length > 0) await chrome.storage.local.set(write);
+}
+
 export async function loadSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get(SETTINGS_KEYS);
   return sanitizeSettings({ ...DEFAULT_SETTINGS, ...stored });

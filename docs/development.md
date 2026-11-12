@@ -30,7 +30,55 @@ npm ci
 | Regenerate icons                                        | `node scripts/gen-icons.mjs`                                                        |
 
 Set `CHROMIUM_PATH=/path/to/chromium` to run the e2e suite with a specific
-browser binary.
+browser binary. CI runs the suite against Playwright's Chromium and against
+[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/)
+116 (minimum supported version) and a recent stable release (job `compat`,
+archives pinned by SHA-256). Branded Google Chrome cannot be used: it no
+longer loads extensions from the command line. The suite detects older
+behaviour at startup (an empty `?` left after removal) and skips checks that a
+browser version cannot support (no `clipboardchange` event, no CDP
+`Extensions` domain for the upgrade tests) with a reason.
+
+Regression safety nets:
+
+- `tests/corpus/sensitive-urls.json` – 259 real-world sign-in, payment,
+  signed-download and similar URL shapes with per-mode expectations, checked
+  in both engines and against the navigation rules. Changing an expectation is
+  a reviewed decision.
+- `apps/browser-extension/e2e/releases/` – the published release ZIPs
+  (SHA-256 checked) used by the upgrade tests.
+
+### What the upgrade tests prove – and what they do not
+
+The "upgrades from published releases" e2e tests cover exactly this path:
+
+1. The contents of the **published** 0.1.0 and 0.2.0 ZIPs (SHA-256 checked
+   against the GitHub release assets) are installed as an unpacked extension
+   into a fresh profile (CDP `Extensions.loadUnpacked`).
+2. Settings are written to `chrome.storage.local` from the old version's own
+   extension page, in the format that version stores (not by clicking through
+   its UI).
+3. The folder contents are replaced by the current build and the extension is
+   reloaded by loading the same folder again (`Extensions.loadUnpacked` on the
+   same path – the extension keeps its id and storage, and Chromium reports an
+   update to `onInstalled`, like the reload button in `chrome://extensions`).
+4. Checked afterwards: new version, settings unchanged, `settingsVersion`
+   written, all five context menus, mode-specific navigation rules, real
+   navigation cleaning and exceptions.
+
+Not covered (known limits):
+
+- the reload **button** in `chrome://extensions` itself (the CDP call is used
+  as its equivalent; the manual macOS release test uses the button);
+- updates through the Chrome Web Store or a packed `.crx` (Untrackable is not
+  distributed that way yet);
+- replacing the folder and only **restarting** the browser – not an update in
+  Chromium: the previously registered service worker keeps running until the
+  extension is reloaded (verified; the README tells users to reload);
+- Chrome 116 (it has no CDP `Extensions` domain; the tests are skipped there
+  and run on current Chromium and Chrome for Testing 157);
+- downgrades (only unit-tested: a newer settings format is left untouched);
+- other Chromium browsers (Edge, Brave, Vivaldi, Opera).
 
 ## Loading the extension manually
 

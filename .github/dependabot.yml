@@ -5,6 +5,14 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Types must match the Node.js major used in CI and releases (22);
+      # newer majors would type-check APIs that do not exist at runtime.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # Pinned to the Chromium build preinstalled in the development
+      # container (see CLAUDE.md); updated deliberately together with it.
+      - dependency-name: 'playwright'
   - package-ecosystem: cargo
     directory: /
     schedule:

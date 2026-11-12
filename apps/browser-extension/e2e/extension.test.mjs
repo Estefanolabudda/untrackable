@@ -6,13 +6,15 @@
 import { after, before, beforeEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import https from 'node:https';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { build } from 'esbuild';
-import { readFileSync } from 'node:fs';
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 assert.ok(existsSync(join(dist, 'manifest.json')), 'run `npm run build` first');
@@ -26,6 +28,22 @@ let sw;
 let extensionId;
 let userDataDir;
 let selfLoopHits = 0;
+let httpsServer;
+let httpsPort;
+const HSTS_PRELOADED = /(^|\.)(youtube\.com|amazon\.de)$/;
+
+/** Scheme, host and port the test server answers on for `host`. */
+function origin(host) {
+  return HSTS_PRELOADED.test(host) ? `https://${host}:${httpsPort}` : `http://${host}:${port}`;
+}
+/**
+ * Behaviour of older Chromium versions (the minimum supported version 116 is
+ * tested in CI): removing the last parameter can leave an empty '?' (`/a?`),
+ * which is harmless; `visit` then normalises it. Detected at startup.
+ */
+const browserInfo = { major: 0, emptyQuery: false };
+/** Chrome 116 leaves an empty '?'; current versions (verified: 153, 157) do not. */
+const LEGACY_EMPTY_QUERY_BEFORE = 120;
 let launderHits = 0;
 
 const PAGE = `<!doctype html><html><body>
@@ -70,20 +88,30 @@ async function setSettings(patch) {
 
 async function visit(path, host = 'news.test') {
   const page = await context.newPage();
-  await page.goto(`http://${host}:${port}${path}`);
+  await page.goto(`${origin(host)}${path}`);
   const url = page.url();
   await page.close();
-  return url.replace(`http://${host}:${port}`, '');
+  const result = url.replace(origin(host), '');
+  return browserInfo.emptyQuery ? result.replace(/\?$/, '') : result;
 }
 
 async function extensionPage(file) {
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/${file}`);
+  // The clipboard API needs a focused document; older headless Chromium does
+  // not focus background pages on its own.
+  await (await context.newCDPSession(page)).send('Emulation.setFocusEmulationEnabled', { enabled: true });
+  await page.mouse.click(1, 1);
   return page;
 }
 
+/** page.url(), without the harmless empty '?' that older Chromium leaves after removal. */
+function urlOf(page) {
+  return browserInfo.emptyQuery ? page.url().replace(/\?$/, '') : page.url();
+}
+
 before(async () => {
-  server = http.createServer((req, res) => {
+  const handler = (req, res) => {
     if (req.url !== '/favicon.ico') seen.push(req.url);
     // A server that insists on its tracking parameter (redirect loop when cleaned).
     if (req.url.startsWith('/loop') && !/utm_source=/i.test(req.url)) {
@@ -179,26 +207,83 @@ before(async () => {
     }
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(PAGE);
-  });
+  };
+  server = http.createServer(handler);
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   port = server.address().port;
+  // Real domains on the HSTS preload list (youtube.com, amazon.de) are forced
+  // to https by Chrome; serve them over TLS with a throwaway self-signed
+  // certificate (test browsers run with --ignore-certificate-errors).
+  const certDir = mkdtempSync(join(tmpdir(), 'untrackable-e2e-tls-'));
+  execFileSync(
+    'openssl',
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-days',
+      '1',
+      '-subj',
+      '/CN=untrackable-e2e',
+      '-keyout',
+      join(certDir, 'key.pem'),
+      '-out',
+      join(certDir, 'cert.pem'),
+    ],
+    { stdio: 'ignore' },
+  );
+  httpsServer = https.createServer(
+    { key: readFileSync(join(certDir, 'key.pem')), cert: readFileSync(join(certDir, 'cert.pem')) },
+    handler,
+  );
+  await new Promise((r) => httpsServer.listen(0, '127.0.0.1', r));
+  httpsPort = httpsServer.address().port;
+  rmSync(certDir, { recursive: true, force: true });
 
   userDataDir = mkdtempSync(join(tmpdir(), 'untrackable-e2e-'));
   ({ context, sw } = await launchWith(dist, userDataDir));
   extensionId = new URL(sw.url()).host;
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  browserInfo.major = Number((await sw.evaluate(() => navigator.userAgent)).match(/Chrome\/(\d+)/)?.[1] ?? 0);
+  await waitFor(
+    async () => (await sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).length > 0,
+    'rules installed',
+    10_000,
+  );
+  const probe = await context.newPage();
+  await probe.goto(`http://news.test:${port}/__probe?utm_source=x`);
+  browserInfo.emptyQuery = probe.url().endsWith('?');
+  await probe.close();
+  console.log(`# browser: Chrome ${browserInfo.major}, empty '?' after removal: ${browserInfo.emptyQuery}`);
+  // Tolerating the empty '?' (and skipping the simulator check) is only for
+  // old browsers known to behave so. On a current browser it is a regression
+  // that must fail the run, not silently relax it (found in review).
+  assert.ok(
+    !browserInfo.emptyQuery || browserInfo.major < LEGACY_EMPTY_QUERY_BEFORE,
+    `Chrome ${browserInfo.major} unexpectedly leaves an empty '?' after removing the last parameter`,
+  );
 });
 
 async function launchWith(extensionDir, profileDir) {
   const launch = {
-    headless: true,
+    // Explicit new headless mode: before Chrome ~132 plain --headless meant the
+    // old headless mode, which cannot load extensions (minimum version 116 is
+    // tested in CI).
+    headless: false,
     args: [
+      '--headless=new',
       `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,
       // Route every test host name to the local server.
       '--host-resolver-rules=MAP * 127.0.0.1',
       // Keep http:// test URLs from being upgraded to https.
       '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable',
+      // Self-signed certificate of the local https test server (HSTS hosts).
+      '--ignore-certificate-errors',
+      // All test traffic is local; never use a proxy from the environment.
+      '--no-proxy-server',
     ],
   };
   if (process.env.CHROMIUM_PATH) launch.executablePath = process.env.CHROMIUM_PATH;
@@ -206,12 +291,91 @@ async function launchWith(extensionDir, profileDir) {
   const ctx = await chromium.launchPersistentContext(profileDir, launch);
   let [worker] = ctx.serviceWorkers();
   worker ??= await ctx.waitForEvent('serviceworker');
-  return { context: ctx, sw: worker };
+  const sw = liveWorker(ctx, worker);
+  // A freshly installed worker can be restarted by the browser while it starts,
+  // and its extension APIs can appear a moment after the worker (both seen on
+  // a slow CI runner with Chrome 116). Wait until the APIs the tests use are
+  // there before any test runs; only this read-only probe is retried.
+  const ready = () =>
+    typeof chrome.storage?.local?.get === 'function' &&
+    typeof chrome.declarativeNetRequest?.getDynamicRules === 'function';
+  try {
+    for (let attempt = 1; ; attempt++) {
+      let ok = false;
+      try {
+        ok = await sw.evaluate(ready);
+      } catch (e) {
+        if (!/restarted|closed|Target/i.test(String(e))) throw e;
+        await sw.reacquire();
+      }
+      if (ok) break;
+      if (attempt >= 40) throw new Error('extension service worker did not become ready');
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  } catch (e) {
+    // A browser left open here kept the test process alive until the CI
+    // timeout (seen in a CI log): close it before reporting the failure.
+    await Promise.race([ctx.close(), new Promise((r) => setTimeout(r, 15_000))]);
+    throw e;
+  }
+  return { context: ctx, sw };
+}
+
+/**
+ * MV3 service workers stop when idle (older Chromium, e.g. 116, does so even
+ * while tests run). This handle wakes the extension's worker again when the
+ * previous one has already closed – it never retries a call that failed,
+ * so a call that itself stops the worker (runtime.reload) is not repeated.
+ */
+function liveWorker(ctx, first) {
+  const id = new URL(first.url()).host;
+  let current = first;
+  let closed = false;
+  const track = (w) => w.once('close', () => (closed = w === current ? true : closed));
+  track(first);
+  async function ensure() {
+    if (!closed) return current;
+    const fresh = () => ctx.serviceWorkers().find((w) => w !== current && w.url().includes(id));
+    let next = fresh();
+    if (!next) {
+      const waiter = ctx.waitForEvent('serviceworker', { predicate: (w) => w.url().includes(id), timeout: 15_000 });
+      const page = await ctx.newPage();
+      await page.goto(`chrome-extension://${id}/options.html`).catch(() => {});
+      next = fresh() ?? (await waiter);
+      await page.close();
+    }
+    current = next;
+    closed = false;
+    track(next);
+    return current;
+  }
+  return {
+    url: () => current.url(),
+    evaluate: async (fn, arg) => (await ensure()).evaluate(fn, arg),
+    /** Startup probe only: treat the current worker as gone and find the live one. */
+    reacquire: async () => {
+      await new Promise((r) => setTimeout(r, 500));
+      const live = ctx.serviceWorkers().filter((w) => w.url().includes(id));
+      if (live.length > 0 && live.at(-1) !== current) {
+        current = live.at(-1);
+        closed = false;
+        track(current);
+      } else if (live.length === 0) {
+        closed = true;
+        await ensure();
+      }
+    },
+  };
 }
 
 after(async () => {
-  await context?.close();
+  // Never let a broken browser keep the run alive until the CI timeout (a
+  // failed startup once hung the job for 20 minutes).
+  await Promise.race([context?.close(), new Promise((r) => setTimeout(r, 15_000))]);
+  server?.closeAllConnections?.();
   server?.close();
+  httpsServer?.closeAllConnections?.();
+  httpsServer?.close();
   if (userDataDir) rmSync(userDataDir, { recursive: true, force: true });
 });
 
@@ -435,13 +599,13 @@ describe('Experimental mode (strip query parameters)', () => {
     await setSettings({ mode: 'experimental' });
     const page = await context.newPage();
     await page.goto(`http://news.test:${port}/a?x=1&y=2#section`);
-    assert.equal(page.url(), `http://news.test:${port}/a#section`);
+    assert.equal(urlOf(page), `http://news.test:${port}/a#section`);
     await page.goto(`http://news.test:${port}/plain`);
-    assert.equal(page.url(), `http://news.test:${port}/plain`);
+    assert.equal(urlOf(page), `http://news.test:${port}/plain`);
     await page.goto(`http://news.test:${port}/empty?`);
-    assert.equal(page.url(), `http://news.test:${port}/empty?`);
+    assert.equal(page.url(), `http://news.test:${port}/empty?`, 'an existing empty query is left alone');
     await page.goto(`http://news.test:${port}/amp?&&`);
-    assert.equal(page.url(), `http://news.test:${port}/amp?&&`);
+    assert.equal(urlOf(page), `http://news.test:${port}/amp?&&`);
     await page.close();
   });
 
@@ -477,6 +641,15 @@ describe('Experimental mode (strip query parameters)', () => {
     });
   }
 
+  test('sign-in and payment hosts keep their query (host label signal)', async () => {
+    await setSettings({ mode: 'experimental' });
+    assert.equal(await visit('/x?y=1', 'login.example.test'), '/x?y=1');
+    assert.equal(await visit('/start?x=1', 'secure.bank.test'), '/start?x=1');
+    assert.equal(await visit('/x?y=1', 'www.login.test'), '/x', 'only the first label counts');
+    await setSettings({ mode: 'clean' });
+    assert.equal(await visit('/x?y=1&utm_source=z', 'login.example.test'), '/x?y=1', 'Clean is unaffected');
+  });
+
   test('domain exceptions, global off, timed pause and tab pause still apply', async () => {
     await setSettings({ mode: 'experimental', exceptions: ['news.test'] });
     assert.equal(await visit('/a?id=1', 'eu.news.test'), '/a?id=1');
@@ -495,10 +668,10 @@ describe('Experimental mode (strip query parameters)', () => {
     const ext = await extensionPage('options.html');
     await ext.evaluate((id) => chrome.runtime.sendMessage({ type: 'setTabPaused', tabId: id, paused: true }), tabId);
     await page.goto(`http://news.test:${port}/a?id=1`);
-    assert.match(page.url(), /\/a\?id=1$/);
+    assert.match(urlOf(page), /\/a\?id=1$/);
     await ext.evaluate((id) => chrome.runtime.sendMessage({ type: 'setTabPaused', tabId: id, paused: false }), tabId);
     await page.goto(`http://news.test:${port}/b?id=1`);
-    assert.match(page.url(), /\/b$/);
+    assert.match(urlOf(page), /\/b$/);
     await ext.close();
     await page.close();
   });
@@ -513,14 +686,14 @@ describe('Experimental mode (strip query parameters)', () => {
       'tab opened without cleaning',
       15_000,
     );
-    assert.match(tab.url(), /\/once-exp\?id=1&utm_source=x$/);
+    assert.match(urlOf(tab), /\/once-exp\?id=1&utm_source=x$/);
     assert.equal(seen.filter((u) => u.startsWith('/once-exp')).length, 1, 'requested exactly once');
     await waitFor(
       async () => (await sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length === 0,
       'bypass rule removal',
     );
     await tab.goto(`http://news.test:${port}/again?id=1`);
-    assert.match(tab.url(), /\/again$/);
+    assert.match(urlOf(tab), /\/again$/);
     await tab.close();
     await ext.close();
   });
@@ -564,7 +737,7 @@ describe('Experimental mode (strip query parameters)', () => {
     );
     const tab = await waitFor(() => context.pages().find((p) => p.url().includes('/opened')), 'stripped tab', 10_000);
     await tab.waitForLoadState();
-    assert.equal(tab.url(), `http://news.test:${port}/opened#frag`);
+    assert.equal(urlOf(tab), `http://news.test:${port}/opened#frag`);
     assert.deepEqual(
       seen.filter((u) => u.startsWith('/opened')),
       ['/opened'],
@@ -696,9 +869,9 @@ describe('robustness of mode handling (v0.2)', () => {
       assert.deepEqual(stored.exceptions, ['keep.test']);
       const page = await b.context.newPage();
       await page.goto(`http://news.test:${port}/after-restart?id=1`);
-      assert.match(page.url(), /\/after-restart$/);
+      assert.match(urlOf(page), /\/after-restart$/);
       await page.goto(`http://keep.test:${port}/x?id=1`);
-      assert.match(page.url(), /\/x\?id=1$/);
+      assert.match(urlOf(page), /\/x\?id=1$/);
       // No session state survives: no tab pause or one-time bypass rules.
       assert.equal((await b.sw.evaluate(() => chrome.declarativeNetRequest.getSessionRules())).length, 0);
       await b.context.close();
@@ -706,6 +879,164 @@ describe('robustness of mode handling (v0.2)', () => {
       rmSync(profile, { recursive: true, force: true });
     }
   });
+});
+
+describe('upgrades from published releases', () => {
+  // Release ZIPs as published on GitHub (checked against the published SHA-256).
+  const releases = [
+    {
+      version: '0.1.0',
+      sha256: 'ee29d0c4f5db146d41609a135ae8a0baef2d2969e249092c061da1cd8d7baaea',
+      settings: { mode: 'strict', exceptions: ['keep.test'], copyCleaning: false },
+      check: { path: '/u?id=1&ref=a&utm_source=x', expected: '/u?id=1' },
+    },
+    {
+      version: '0.2.0',
+      sha256: 'd3b4dca2fc9fc7948401e123c4b756653081dd616c256c74695eef04d5f62a65',
+      settings: { mode: 'experimental', exceptions: ['keep.test'] },
+      check: { path: '/u?id=1&ref=a', expected: '/u' },
+    },
+  ];
+  const menuIds = [
+    'copy-clean-link',
+    'open-link-unmodified',
+    'copy-clean-page-link',
+    'copy-link-without-query',
+    'open-link-without-query',
+  ];
+
+  /**
+   * The documented update path is "replace the folder, then reload the
+   * extension in chrome://extensions". A browser launched with
+   * --enable-unsafe-extension-debugging can do exactly that over CDP
+   * (Extensions.loadUnpacked on the same folder = reload). (Merely restarting a
+   * browser launched with --load-extension keeps running the previously
+   * registered service worker, so it does not model an update.)
+   */
+  async function launchForUpdates(profile) {
+    const exe = process.env.CHROMIUM_PATH ?? chromium.executablePath();
+    const proc = spawn(
+      exe,
+      [
+        '--headless=new',
+        '--no-sandbox',
+        '--no-first-run',
+        '--remote-debugging-port=0',
+        `--user-data-dir=${profile}`,
+        '--enable-unsafe-extension-debugging',
+        '--host-resolver-rules=MAP * 127.0.0.1',
+        '--disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable',
+        '--no-proxy-server',
+        'about:blank',
+      ],
+      { stdio: 'ignore' },
+    );
+    const portFile = join(profile, 'DevToolsActivePort');
+    await waitFor(() => existsSync(portFile) && readFileSync(portFile, 'utf8').includes('\n'), 'DevTools port', 15_000);
+    const devtoolsPort = readFileSync(portFile, 'utf8').split('\n')[0];
+    const browser = await chromium.connectOverCDP(`http://127.0.0.1:${devtoolsPort}`);
+    const cdp = await browser.newBrowserCDPSession();
+    return { browser, cdp, context: browser.contexts()[0], proc };
+  }
+
+  async function extensionState(context, id) {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${id}/options.html`);
+    const state = await page.evaluate(async (ids) => {
+      const menus = {};
+      for (const mid of ids) {
+        menus[mid] = await new Promise((res) =>
+          chrome.contextMenus.update(mid, {}, () => res(chrome.runtime.lastError ? 'missing' : 'ok')),
+        );
+      }
+      return {
+        version: chrome.runtime.getManifest().version,
+        local: await chrome.storage.local.get(null),
+        rules: (await chrome.declarativeNetRequest.getDynamicRules()).map((r) => r.id),
+        stripsRef: (await chrome.declarativeNetRequest.getDynamicRules()).some((r) =>
+          r.action.redirect?.transform?.queryTransform?.removeParams?.includes('ref'),
+        ),
+        menus,
+      };
+    }, menuIds);
+    await page.close();
+    return state;
+  }
+
+  for (const release of releases) {
+    test(`${release.version} → current: settings, menus and rules survive an update`, async (t) => {
+      const zip = fileURLToPath(new URL(`./releases/untrackable-chromium-${release.version}.zip`, import.meta.url));
+      const digest = createHash('sha256').update(readFileSync(zip)).digest('hex');
+      assert.equal(digest, release.sha256, 'fixture is the published release asset');
+      const extDir = mkdtempSync(join(tmpdir(), `untrackable-upgrade-ext-${release.version}-`));
+      const profile = mkdtempSync(join(tmpdir(), `untrackable-upgrade-profile-${release.version}-`));
+      let b;
+      try {
+        execFileSync('unzip', ['-q', zip, '-d', extDir]);
+        b = await launchForUpdates(profile);
+        const loaded = await b.cdp.send('Extensions.loadUnpacked', { path: extDir }).catch((e) => e);
+        if (loaded instanceof Error && /wasn't found/.test(loaded.message)) {
+          t.skip('this browser version has no CDP Extensions domain to reload the extension');
+          return;
+        }
+        if (loaded instanceof Error) throw loaded;
+        const { id } = loaded;
+        await waitFor(async () => (await extensionState(b.context, id)).version === release.version, 'old version');
+        const setter = await b.context.newPage();
+        await setter.goto(`chrome-extension://${id}/options.html`);
+        await setter.evaluate((s) => chrome.storage.local.set(s), release.settings);
+        await setter.close();
+
+        // Update as documented: replace the folder contents, reload the extension.
+        for (const f of readdirSync(extDir)) rmSync(join(extDir, f), { recursive: true, force: true });
+        cpSync(dist, extDir, { recursive: true });
+        const reloaded = await b.cdp.send('Extensions.loadUnpacked', { path: extDir });
+        assert.equal(reloaded.id, id, 'same extension id (settings are tied to it)');
+        const current = JSON.parse(readFileSync(join(dist, 'manifest.json'), 'utf8')).version;
+        let state;
+        await waitFor(
+          async () => {
+            state = await extensionState(b.context, id);
+            const modeRules = release.settings.mode === 'experimental' ? state.rules.includes(50) : state.stripsRef;
+            return state.version === current && state.local.settingsVersion === 1 && modeRules;
+          },
+          'updated, migrated, rules for the stored mode installed',
+          10_000,
+        ).catch((e) => {
+          throw new Error(`${e.message}: ${JSON.stringify({ ...state, rules: state?.rules.length })}`);
+        });
+        for (const [k, v] of Object.entries(release.settings)) assert.deepEqual(state.local[k], v, `setting ${k} kept`);
+        assert.deepEqual(
+          state.menus,
+          Object.fromEntries(menuIds.map((m) => [m, 'ok'])),
+          'all context-menu items exist',
+        );
+        assert.ok(state.rules.length > 0, 'rules installed');
+        if (release.settings.mode === 'experimental') assert.ok(state.rules.includes(50), 'strip rule installed');
+        const page = await b.context.newPage();
+        await page.goto(`http://news.test:${port}${release.check.path}`);
+        assert.equal(urlOf(page), `http://news.test:${port}${release.check.expected}`);
+        await page.goto(`http://keep.test:${port}${release.check.path}`);
+        assert.equal(urlOf(page), `http://keep.test:${port}${release.check.path}`, 'exception kept');
+      } finally {
+        await b?.browser.close().catch(() => {});
+        if (b && b.proc.exitCode === null) {
+          await new Promise((r) => {
+            b.proc.once('exit', r);
+            b.proc.kill();
+          });
+        }
+        // Chromium's helper processes may still write briefly; temp dirs only.
+        for (const d of [extDir, profile]) {
+          try {
+            rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+          } catch {
+            /* left in the temp directory */
+          }
+        }
+      }
+    });
+  }
 });
 
 describe('per-tab controls', () => {
@@ -719,11 +1050,11 @@ describe('per-tab controls', () => {
       return tab.id;
     }, port);
     await target.goto(`http://news.test:${port}/a?utm_source=x`);
-    assert.match(target.url(), /\?utm_source=x$/);
+    assert.match(urlOf(target), /\?utm_source=x$/);
     assert.equal(await visit('/a?utm_source=x'), '/a', 'other tabs are still cleaned');
     await ext.evaluate((tabId) => chrome.runtime.sendMessage({ type: 'setTabPaused', tabId, paused: false }), tabId);
     await target.goto(`http://news.test:${port}/b?utm_source=x`);
-    assert.match(target.url(), /\/b$/);
+    assert.match(urlOf(target), /\/b$/);
     await target.close();
     await ext.close();
   });
@@ -751,16 +1082,20 @@ describe('per-tab controls', () => {
       'all bypass rules removed',
     );
     for (const p of pages.filter((x) => x.url().includes('/multi-'))) {
-      assert.match(p.url(), /utm_source=/, 'original link was opened');
+      assert.match(urlOf(p), /utm_source=/, 'original link was opened');
       await p.goto(`http://news.test:${port}/after?utm_source=x`);
-      assert.match(p.url(), /\/after$/, 'tab is cleaned again');
+      assert.match(urlOf(p), /\/after$/, 'tab is cleaned again');
       await p.close();
     }
     context.off('page', onPage);
     await ext.close();
   });
 
-  test('one-time bypass requests a download link exactly once (signed links stay valid)', async () => {
+  test('one-time bypass requests a download link exactly once (signed links stay valid)', async (t) => {
+    if (browserInfo.major < 120) {
+      t.skip('downloads hang headless Chrome 116 under automation (verified); covered on current Chromium');
+      return;
+    }
     const ext = await extensionPage('options.html');
     const url = `http://news.test:${port}/download-once?utm_source=x&sig=1`;
     await ext.evaluate((u) => chrome.runtime.sendMessage({ type: 'openUnmodified', url: u }), url);
@@ -778,7 +1113,7 @@ describe('per-tab controls', () => {
       `http://click.test:${port}/r?to=dest`,
     );
     const tab = await waitFor(() => context.pages().find((p) => p.url().includes('dest.test')), 'destination', 15_000);
-    assert.match(tab.url(), /\/landing\?mkt_tok=ABC$/);
+    assert.match(urlOf(tab), /\/landing\?mkt_tok=ABC$/);
     await tab.close();
     await ext.close();
   });
@@ -795,7 +1130,7 @@ describe('per-tab controls', () => {
       15_000,
     );
     await tab.waitForURL(/third\.test/);
-    assert.match(tab.url(), /\/landing\?id=1$/);
+    assert.match(urlOf(tab), /\/landing\?id=1$/);
     assert.ok(seen.includes('/slow-then-leak?utm_source=x'), 'original link opened uncleaned');
     await tab.close();
     await ext.close();
@@ -812,7 +1147,7 @@ describe('per-tab controls', () => {
       'tab opened without cleaning',
       15_000,
     );
-    assert.match(tab.url(), /\/once\?utm_source=x&id=1$/);
+    assert.match(urlOf(tab), /\/once\?utm_source=x&id=1$/);
     assert.ok(seen.includes('/once?utm_source=x&id=1'));
     // The bypass is consumed: the next navigation in the same tab is cleaned again.
     await waitFor(
@@ -820,7 +1155,7 @@ describe('per-tab controls', () => {
       'bypass rule removal',
     );
     await tab.goto(`http://news.test:${port}/again?utm_source=x`);
-    assert.match(tab.url(), /\/again$/);
+    assert.match(urlOf(tab), /\/again$/);
     await tab.close();
     await ext.close();
   });
@@ -1028,7 +1363,7 @@ describe('copy cleaning', () => {
     await page.close();
   });
 
-  test('clipboard-change notifications do not reveal settings', async () => {
+  test('clipboard-change notifications do not reveal settings', async (t) => {
     await setSettings({ exceptions: ['private.example'] });
     const page = await context.newPage();
     await page.goto(`http://localhost:${port}/copy`);
@@ -1052,6 +1387,10 @@ describe('copy cleaning', () => {
     const excepted = await countFor('https://private.example/?utm_source=x');
     const cleaned = await countFor('https://public.example/?utm_source=x');
     const protectedUrl = await countFor('https://public.example/oauth/authorize?utm_source=x');
+    if (cleaned === 0 && (await page.evaluate(() => !('onclipboardchange' in navigator.clipboard)))) {
+      t.skip('this browser has no clipboardchange event, so it cannot leak anything');
+      return;
+    }
     assert.ok(cleaned >= 1, 'clipboardchange events are observable in this browser (test is meaningful)');
     assert.equal(excepted, cleaned, `excepted ${excepted} vs cleaned ${cleaned}`);
     assert.equal(protectedUrl, cleaned, `protected ${protectedUrl} vs cleaned ${cleaned}`);
@@ -1282,7 +1621,7 @@ describe('popup for a real tab', () => {
     );
     await popup.close();
     await target.goto(`http://news.test:${port}/a?utm_source=x`);
-    assert.match(target.url(), /\?utm_source=x$/);
+    assert.match(urlOf(target), /\?utm_source=x$/);
     const { popup: again } = await popupFor(target);
     assert.equal(await again.isChecked('#tab-paused'), true);
     await again.uncheck('#tab-paused');
@@ -1383,7 +1722,7 @@ describe('e-mail deep links (regression: OpenAI "too many redirects" report)', (
       await setSettings({ mode });
       const page = await context.newPage();
       await page.goto(`http://r.openai.test:${port}/ls/click?upn=u001.abc`);
-      assert.match(page.url(), /^http:\/\/chatgpt\.test:\d+\/images\/\?/);
+      assert.match(urlOf(page), /^http:\/\/chatgpt\.test:\d+\/images\/\?/);
       // OIDC login_hint => protected: the deep link reaches the site unchanged.
       assert.ok(page.url().includes('login_hint=user%40example.com'));
       assert.ok(page.url().includes('entry_id=11111111-2222&deep_link_id=33333333-4444&auth_modal=1'));
@@ -1398,7 +1737,7 @@ describe('e-mail deep links (regression: OpenAI "too many redirects" report)', (
       await page.goto(
         `http://chatgpt.test:${port}/deeplink?auth_modal=1&login_hint=user%40example.com&utm_source=sendgrid&utm_medium=email`,
       );
-      assert.match(page.url(), /\/deeplink\?auth_modal=1&login_hint=/);
+      assert.match(urlOf(page), /\/deeplink\?auth_modal=1&login_hint=/);
       assert.ok(seen.filter((u) => u.startsWith('/deeplink')).length <= 2, `no loop: ${seen.length} requests`);
       await page.close();
     });
@@ -1503,7 +1842,7 @@ describe('redirect loops', () => {
         'retry forgotten after successful load',
       );
       await page.goto(`http://news.test:${port}/after-loop?utm_source=x`);
-      assert.match(page.url(), /\/after-loop$/);
+      assert.match(urlOf(page), browserInfo.emptyQuery ? /\/after-loop\??$/ : /\/after-loop$/);
 
       // A server that loops even without cleaning: a second retry within a minute is refused.
       const self = await second.context.newPage();
@@ -1542,7 +1881,7 @@ describe('redirect loops', () => {
       await waitFor(async () => (await offerFor(launderTab)).offered, 'offer');
       assert.equal(await retry(launderTab), true);
       await tab.waitForURL(/victim\.test/, { timeout: 10_000 });
-      assert.match(tab.url(), /\/landing\?id=1$/);
+      assert.match(urlOf(tab), /\/landing\?id=1$/);
       assert.ok(!seen.some((u) => u.startsWith('/landing') && u.includes('gclid')), 'tracker never reached victim');
     } finally {
       await second.context.close();
@@ -1557,7 +1896,11 @@ describe('redirect loops', () => {
 });
 
 describe('DNR model vs Chromium', () => {
-  test('the unit-test simulator predicts Chromium for generated URLs', async () => {
+  test('the unit-test simulator predicts Chromium for generated URLs', async (t) => {
+    if (browserInfo.emptyQuery) {
+      t.skip('the simulator models current Chromium; this older version keeps an empty "?"');
+      return;
+    }
     const bundle = await build({
       stdin: {
         contents: `export * from './packages/core/src/index.ts'; export { simulate } from './packages/core/test/dnr-simulator.ts';`,
@@ -1610,10 +1953,10 @@ describe('DNR model vs Chromium', () => {
         Array.from({ length: n }, () => pick(keys) + pick(vals.slice(0, 3))).join('&') + (rand() < 0.15 ? '&' : '');
       const host = pick(['news.test', 'www.youtube.com']);
       const path = `${pick(paths)}?${query}${rand() < 0.2 ? '#frag' : ''}`;
-      const predicted = mod.simulate(rules, `http://${host}:${port}${path}`).replace(`http://${host}:${port}`, '');
+      const predicted = mod.simulate(rules, `${origin(host)}${path}`).replace(origin(host), '');
       const page = await context.newPage();
-      await page.goto(`http://${host}:${port}${path}`).catch(() => {});
-      const actual = page.url().replace(`http://${host}:${port}`, '');
+      await page.goto(`${origin(host)}${path}`).catch(() => {});
+      const actual = page.url().replace(origin(host), '');
       await page.close();
       if (actual !== predicted) mismatches.push({ path, host, predicted, actual });
     }
@@ -1651,8 +1994,19 @@ describe('engine inside Chromium', () => {
   });
 
   test('navigation leaves percent-encoded protected paths and keys alone', async () => {
+    // Older Chromium versions decode unreserved characters in the path
+    // (/%6Fauth -> /oauth) before rules match; the URL must stay unchanged either way.
+    const decodeUnreserved = (x) =>
+      x.replace(/%([0-9a-f]{2})/gi, (m, h) =>
+        /[\w.~-]/.test(String.fromCharCode(parseInt(h, 16))) ? String.fromCharCode(parseInt(h, 16)) : m,
+      );
     for (const path of ['/%6Fauth/x?utm_source=a', '/my%2Dlogin?utm_source=a', '/dl?%73ig=abc&utm_source=a']) {
-      assert.equal(await visit(path), path);
+      const got = await visit(path);
+      assert.ok(
+        got === path ||
+          (browserInfo.major < 130 && got === decodeUnreserved(path.split('?')[0]) + '?' + path.split('?')[1]),
+        got,
+      );
     }
     assert.equal(await visit('/stra%C3%9Fe?utm_source=a'), '/stra%C3%9Fe');
   });
@@ -1671,7 +2025,16 @@ describe('privacy', () => {
     await setSettings({ mode: 'strict', exceptions: ['a.test'] });
     await visit('/article?utm_source=x');
     const after = await sw.evaluate(() => chrome.storage.local.get(null));
-    assert.deepEqual(Object.keys(after).sort(), ['exceptions', 'mode']);
+    assert.deepEqual(
+      Object.keys(after)
+        .filter((k) => k !== 'settingsVersion')
+        .sort(),
+      ['exceptions', 'mode'],
+    );
+    assert.ok(
+      Object.values(after).every((v) => !JSON.stringify(v).includes('http')),
+      'no URLs stored',
+    );
     const session = await sw.evaluate(() => chrome.storage.session.get(null));
     assert.ok(!JSON.stringify(session).includes('http'));
   });

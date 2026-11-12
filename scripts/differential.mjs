@@ -86,6 +86,9 @@ const neutralKeys = [
 ];
 const hostsBase = [
   'example.com',
+  'login.example.com',
+  'id.example.de',
+  'Secure.Bank.example',
   'shop.example',
   'news.example.org',
   'bücher.example',
@@ -185,6 +188,11 @@ for (const mode of ['clean', 'strict', 'experimental']) {
   }
   for (const d of p.domains) requests.push({ input: `https://sub.${d}/x?utm_source=1`, mode, exceptions: [] });
 }
+// 1b. Sensitive URL regression corpus, every mode and the explicit strip action.
+for (const { url: input } of JSON.parse(readFileSync(`${root}/tests/corpus/sensitive-urls.json`, 'utf8')).entries) {
+  for (const mode of ['clean', 'strict', 'experimental', 'bypass']) requests.push({ input, mode, exceptions: [] });
+  requests.push({ input, strip: true });
+}
 // 2. Random corpus.
 for (let i = 0; i < RANDOM_CASES; i++) {
   const exceptions = chance(0.1)
@@ -268,6 +276,7 @@ const mutations = [
       'paramSuffixes',
       'paramCombinations',
       'experimentalParams',
+      'experimentalHostLabels',
     ]);
     rs.protection = Object.fromEntries(Object.entries(rs.protection).filter(([k]) => k !== key));
   },
@@ -276,6 +285,8 @@ const mutations = [
   (rs) => (rs.protection.experimentalParams = 'code'),
   (rs) => (rs.protection.experimentalParams ??= []).push('UPPER'),
   (rs) => (rs.protection.experimentalParams ??= []).push(''),
+  (rs) => (rs.protection.experimentalHostLabels = null),
+  (rs) => (rs.protection.experimentalHostLabels ??= []).push('Login'),
   (rs) => (rs.schemaVersion = 2),
   (rs) => (rs.rules = {}),
   () => {},

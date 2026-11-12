@@ -1,0 +1,2399 @@
+{
+  "description": "Regression corpus of real-world URL shapes (synthetic values) for sign-in, password reset, payment, signed downloads, banking/government and similar flows, plus over-protection checks. For each mode, 'preserved' means: the engine returns the input unchanged AND navigation (DNR rules, via the simulator) leaves it unchanged; 'changed' means at least one of them modifies it. Entries marked 'changed' in experimental are accepted, documented risks (docs/architecture/overview.md) unless noted. Any change to an expectation must be deliberate and reviewed.",
+  "entries": [
+    {
+      "category": "oauth / oidc",
+      "url": "https://app.example.com/cb?code=abc&state=xyz",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://app.example.com/cb?error=access_denied&error_description=denied&state=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://app.example.com/?error_description=denied&error_uri=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://app.example.com/landing#access_token=a&token_type=bearer&state=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://github.com/login/device?user_code=ABCD-EFGH",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://microsoft.com/devicelogin?otc=ABCD",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://www.google.com/device?user_code=ABCD-EFGH",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://app.example.com/?iss=https%3A%2F%2Fidp&code=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://www.figma.com/?code_challenge=x&code_challenge_method=S256&client_id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "oauth / oidc",
+      "url": "https://example.com/connect?client_id=abc&scope=read&response_mode=query",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://app.example.com/acs?SAMLResponse=xx&RelayState=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://sts.example.com/adfs/ls/?wa=wsignin1.0&wtrealm=urn:x&wctx=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://app.example.com/?wa=wsignin1.0&wresult=xx&wctx=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://app.example.com/?wa=wsignout1.0",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://cas.uni.de/cas/serviceValidate?service=https%3A%2F%2Fapp&ticket=ST-1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://app.uni.de/?ticket=ST-1-abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://cas.uni.de/cas/?service=https%3A%2F%2Fapp.uni.de%2F",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://idp.uni.de/idp/profile/SAML2/Redirect/SSO?execution=e1s1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://shib.uni.de/Shibboleth.sso/DS?entityID=x&return=https%3A%2F%2Fapp",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "saml / wsfed / cas",
+      "url": "https://app.uni.de/Shibboleth.sso/Session?target=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://slack.com/z-app-123-abc?x=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://myteam.slack.com/z-confirm?x=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://www.notion.so/loginwithemail?state=a&token=b",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://medium.com/m/callback/email?token=abc&operation=login&state=medium",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://example.substack.com/action/login?jwt=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://example.substack.com/p/post?token=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://www.figma.com/email_verification?email=a&key=b",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://dev-1.us.auth0.com/passwordless/verify_redirect?scope=openid&response_type=code&redirect_uri=x&verification_code=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://app.example.com/magic?t=abc123",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://app.example.com/l/abc?tk=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://app.example.com/e?link=abc&u=user",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://discord.com/verify#token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://app.clerk.com/v1/verify?_clerk_js_version=1&token=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://supabase.example.co/auth/v1/verify?token=x&type=magiclink&redirect_to=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://app.example.com/?__clerk_ticket=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "magic links",
+      "url": "https://www.instagram.com/accounts/password/reset/confirm/?uidb36=x&token=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://blog.example.com/wp-login.php?action=rp&key=abc&login=bob",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://blog.example.com/wp-login.php?action=resetpass",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://shop.example.com/my-account/lost-password/?key=abc&id=5",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://shop.example.com/my-account/?key=abc&login=bob&action=rp",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/reset/MQ/abc-123/",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/users/reset?reset_password_token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/users/confirmation?confirmation_token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/users/unlock?unlock_token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/email/verify/1/abc?expires=1&signature=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/download/1?expires=17&signature=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/invoice/1?expires=17&signature=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/reset?t=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/accept?inv=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/join?code=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/i/abc?ref_token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://discord.gg/abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://zoom.us/j/123456?pwd=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://us02web.zoom.us/j/123?pwd=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://meet.jit.si/room?jwt=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://teams.microsoft.com/l/meetup-join/19%3ameeting/0?context=%7b%7d",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "password reset",
+      "url": "https://app.example.com/rsvp?uid=1&k=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "unsubscribe / list",
+      "url": "https://list.example.com/u?id=abc&e=xyz",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "unsubscribe / list",
+      "url": "https://example.us1.list-manage.com/unsubscribe?u=1&id=2&e=3",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "unsubscribe / list",
+      "url": "https://example.us1.list-manage.com/profile?u=1&id=2&e=3",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "unsubscribe / list",
+      "url": "https://app.example.com/email/unsub?d=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "unsubscribe / list",
+      "url": "https://click.example.com/ls/click?upn=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "unsubscribe / list",
+      "url": "https://example.com/mailman/listinfo/x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "unsubscribe / list",
+      "url": "https://example.com/mailman/confirm/x/abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/success?session_id=cs_test_123",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?payment_intent=pi_1&payment_intent_client_secret=pi_1_secret&redirect_status=succeeded",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?setup_intent=x&setup_intent_client_secret=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/thanks?checkout_session_id=cs_1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?paymentId=PAYID-1&token=EC-1&PayerID=X",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?token=EC-123&PayerID=ABC",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/paypal/return?token=EC-123",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?subscription_id=I-1&ba_token=BA-1&token=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?redirectResult=xyz",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?payload=xyz&type=complete&resultCode=authorised",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?sessionId=x&sessionResult=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?authorization_token=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?order_id=1&klarna_order_id=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?sid=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/mollie/return?id=tr_abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/order/return?order=123",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?ec=1&trxid=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://acs.bank.com/3ds?PaReq=x&MD=y&TermUrl=z",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/3dsreturn?PaRes=x&MD=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?threeDSSessionData=x&cres=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://www.sofort.com/payment/go/abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?transaction_id=x&status=success&hash=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?trxid=abc&ec=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/ideal/return?trxid=1&ec=2",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?orderID=1&STATUS=9&PAYID=2&SHASIGN=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?Data=x&Seal=abc&InterfaceVersion=HP_2.0",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?vads_trans_id=1&signature=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?checkout_id=x&resourcePath=%2Fv1%2Fcheckouts%2Fx%2Fpayment",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?id=x&resourcePath=%2Fv1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?razorpay_payment_id=x&razorpay_order_id=y&razorpay_signature=z",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?reference=x&trxref=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?tx=abc&st=Completed&amt=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/return?transactionId=x&merchantReference=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://shop.example.com/cart?coupon=X",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://www.amazon.de/gp/buy/spc/handlers/display.html?hasWorkingJavascript=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://www.amazon.de/ap/signin?openid.return_to=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://bank.example.de/psd2/consent?consentId=x&code=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://app.example.com/plaid?oauth_state_id=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://link.tink.com/1.0/transactions/connect-accounts?client_id=x&redirect_uri=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://app.example.com/cb?code=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "payments",
+      "url": "https://app.example.com/cb?ref=x&consentId=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "changed",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://bucket.s3.amazonaws.com/f?X-Amz-Algorithm=a&X-Amz-Signature=b",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://bucket.s3.amazonaws.com/f?AWSAccessKeyId=a&Expires=1&Signature=b",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://storage.googleapis.com/b/f?GoogleAccessId=a&Expires=1&Signature=b",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://acct.blob.core.windows.net/c/f?sv=2020&se=2024&sr=b&sp=r&sig=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://d1.cloudfront.net/f?Expires=1&Signature=x&Key-Pair-Id=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://d1.cloudfront.net/f?Policy=x&Signature=y&Key-Pair-Id=z",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?hdnts=exp=1~acl=*~hmac=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?__token__=exp=1~hmac=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?verify=1700000000-abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?token=abc&expires=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?md5=abc&expires=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?st=abc&e=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?e=1&st=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?wmsAuthSign=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?auth_key=1-0-0-abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?sign=abc&t=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f?k=abc&exp=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://www.dropbox.com/s/abc/file.pdf?dl=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://www.dropbox.com/scl/fi/abc/file.pdf?rlkey=xyz&dl=0",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://www.dropbox.com/scl/fo/abc/def?rlkey=xyz&st=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://drive.google.com/uc?export=download&id=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://drive.google.com/file/d/abc/view?usp=sharing&resourcekey=0-xyz",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://docs.google.com/document/d/abc/edit?usp=sharing",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://docs.google.com/forms/d/e/abc/viewform?usp=pp_url&entry.1=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://onedrive.live.com/redir?resid=x&authkey=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://1drv.ms/u/s!abc?e=xyz",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://contoso.sharepoint.com/:w:/s/team/abc?e=XyZ",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://contoso-my.sharepoint.com/personal/x/_layouts/15/download.aspx?share=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://contoso.sharepoint.com/sites/x/_layouts/15/guestaccess.aspx?docid=1&authkey=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://we.tl/t-abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://wetransfer.com/downloads/abc/def",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://download.wetransfer.com/eu/abc?cf=y&token=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://www.icloud.com/iclouddrive/abc#file",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.discordapp.com/attachments/1/2/f.png?ex=abc&is=def&hm=ghi",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://media.licdn.com/dms/image/x?e=1700000000&v=beta&t=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://scontent.xx.fbcdn.net/v/t1/x.jpg?_nc_cat=1&oh=abc&oe=def",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://video.twimg.com/x.mp4?tag=12",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://pbs.twimg.com/media/x?format=jpg&name=large",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://i.ytimg.com/vi/x/hq.jpg?sqp=x&rs=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://rr1.googlevideo.com/videoplayback?expire=1&sig=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://github.com/user/repo/releases/download/v1/x.zip",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://objects.githubusercontent.com/x?X-Amz-Algorithm=a",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://raw.githubusercontent.com/u/r/main/f?token=ABC",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://gitlab.com/u/r/-/raw/main/f?inline=false",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://app.box.com/s/abc?dl=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://example.com/download.php?id=1&h=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://cdn.example.com/f.mp4?Expires=1&Signature=x&Key-Pair-Id=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://example.blob.core.windows.net/c/f?sp=r&st=2024&se=2025&spr=https&sv=2022&sr=b&sig=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://example.com/f?st=2024&se=2025&sig=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "signed downloads",
+      "url": "https://mega.nz/file/abc#key",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://www.elster.de/eportal/login/softpse?x=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://www.elster.de/eportal/start?x=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://id.bund.de/de/eID?x=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://www.ausweisapp.bund.de/?tcTokenURL=https%3A%2F%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "http://127.0.0.1:24727/eID-Client?tcTokenURL=https%3A%2F%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://app.bankid.com/?autostarttoken=x&redirect=null",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://banking.example.de/banking-private/entry?x=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://www.sparkasse.de/de/home.html?n=true&stref=logo",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://meine.deutsche-bank.de/trxm/db/init.do?x=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://login.gov/?request_id=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://secure.login.gov/sign_up/email/confirm?_request_id=x&confirmation_token=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://idp.example.gov/?SAMLRequest=x&RelayState=y&SigAlg=z&Signature=w",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://app.example.com/do?_token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://app.example.com/do?authenticity_token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://app.example.com/do?csrfmiddlewaretoken=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://app.example.com/do?__RequestVerificationToken=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://app.example.com/do?csrf_token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://app.example.com/do?_wpnonce=abc&action=delete",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://blog.example.com/wp-admin/post.php?post=1&action=edit",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://blog.example.com/wp-admin/edit.php?post_type=page",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/login?next=%2Fdash",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?redirect_uri=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?returnUrl=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?ReturnUrl=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?return=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?from=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?goto=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?target=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?dest=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?destination=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?r=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?service=https%3A%2F%2Fapp",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?url=https%3A%2F%2Fapp",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      }
+    },
+    {
+      "category": "csrf / misc",
+      "url": "https://example.com/?back=%2Fx",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "otp / 2fa",
+      "url": "https://example.com/two_factor?challenge=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "otp / 2fa",
+      "url": "https://example.com/challenge?c=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "otp / 2fa",
+      "url": "https://example.com/a?pin=1234",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "otp / 2fa",
+      "url": "https://example.com/a?passcode=1234",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "otp / 2fa",
+      "url": "https://example.com/webauthn?challenge=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "otp / 2fa",
+      "url": "https://example.com/u?uid=1&k=abc&ts=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "otp / 2fa",
+      "url": "https://example.com/a?access=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      }
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://www.youtube.com/watch?v=abc&si=xyz",
+      "expect": {
+        "clean": "changed",
+        "strict": "changed",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://www.amazon.de/dp/B0?tag=x&linkCode=y&ref_=z",
+      "expect": {
+        "clean": "preserved",
+        "strict": "changed",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://shop.example.com/product?key=abc&utm_source=x",
+      "expect": {
+        "clean": "changed",
+        "strict": "changed",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://www.example.com/article?next=2&utm_source=x",
+      "expect": {
+        "clean": "changed",
+        "strict": "changed",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://shop.example.com/product?id=1&expires=x&utm_source=y",
+      "expect": {
+        "clean": "changed",
+        "strict": "changed",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://www.example.com/search?q=hi&state=CA",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://www.zillow.com/homes/?state=CA",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://www.example.com/?code=SUMMER10&utm_source=x",
+      "expect": {
+        "clean": "changed",
+        "strict": "changed",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://news.example.com/a?exp=1&utm_campaign=x",
+      "expect": {
+        "clean": "changed",
+        "strict": "changed",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/a?md=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/a?error=0&fbclid=x",
+      "expect": {
+        "clean": "changed",
+        "strict": "changed",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/a?continue=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://mail.example.com/a?redirect=1&utm_source=x",
+      "expect": {
+        "clean": "changed",
+        "strict": "changed",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/__/auth/action?mode=signIn&oobCode=abc&apiKey=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/action?mode=resetPassword&oobCode=abc&apiKey=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/finish?oobCode=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/confirm-signup?token_hash=abc&type=email",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/?token_hash=abc&type=recovery",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/account/reset?k=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/?code=x&scope=openid&authuser=0&prompt=consent",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/?error=access_denied",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://shop.example.com/return?merchantSig=abc&authResult=AUTHORISED",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://shop.example.com/return?PayerID=X",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://shop.example.com/return?paymentId=X",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://shop.example.com/cancel?token=EC-1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://shop.example.com/return?orderId=abc&status=paid&checksum=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://shop.example.com/return?mac=abc&order=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://checkout.example.com/pay?invoice=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://invoice.stripe.com/i/acct_1/live_abc?s=ap",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://pay.stripe.com/receipts/payment/abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://buy.stripe.com/abc?prefilled_email=x&client_reference_id=y",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://billing.stripe.com/p/session/live_abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://billing.stripe.com/p/login/abc?prefilled_email=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/?sharedkey=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/doc?access_key=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/s/abc?pwd=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/f?secret=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/f?h=abc&e=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/f?hm=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/u?__clerk_status=sign_in",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://zoom.us/rec/share/abc?pwd=x&startTime=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://docs.google.com/spreadsheets/d/abc/edit?gid=0#gid=0",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://www.figma.com/file/abc?node-id=1&t=xyz",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://app.example.com/accept-invite?token=abc",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/d?dl=1&rlkey=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/unsub?uid=1&sig=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/u/abc?upn=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/?action=lostpassword",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://mail.google.com/mail/u/0/?ui=2&ik=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/?wtrealm=urn",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/a?id_token=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/a?access_token=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/a?refresh_token=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/a?user_code=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/a?device_code=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://login.example.com/x?y=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/eid?SAMLart=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/acs?SAMLart=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://example.com/?logintoken=x",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Protection must not keep trackers in ordinary links; Clean/Strict are expected to clean these."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://login.x@news.example/?id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Host-label protection (Experimental) must apply to the real host only: userinfo or a single-label host must not trigger it (DNR and engine agree)."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://login.x:pw@news.example/?id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Host-label protection (Experimental) must apply to the real host only: userinfo or a single-label host must not trigger it (DNR and engine agree)."
+    },
+    {
+      "category": "over-protection check",
+      "url": "https://login./?id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "changed"
+      },
+      "note": "Host-label protection (Experimental) must apply to the real host only: userinfo or a single-label host must not trigger it (DNR and engine agree)."
+    },
+    {
+      "category": "gov/bank",
+      "url": "https://login.example.com.:8443/start?id=1",
+      "expect": {
+        "clean": "preserved",
+        "strict": "preserved",
+        "experimental": "preserved"
+      },
+      "note": "Host label with trailing dot and port."
+    }
+  ]
+}

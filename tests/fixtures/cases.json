@@ -1596,6 +1596,85 @@
       "expected": "https://shop.example/stores",
       "status": "cleaned",
       "removed": ["state", "gclid"]
+    },
+    {
+      "name": "experimental: sign-in/payment host label protects (host:login)",
+      "input": "https://login.example.com/x?y=1",
+      "mode": "experimental",
+      "expected": "https://login.example.com/x?y=1",
+      "status": "protected",
+      "reason": "host:login"
+    },
+    {
+      "name": "experimental: sign-in/payment host label protects (host:id)",
+      "input": "https://id.bund.de/de/eID?x=1",
+      "mode": "experimental",
+      "expected": "https://id.bund.de/de/eID?x=1",
+      "status": "protected",
+      "reason": "host:id"
+    },
+    {
+      "name": "experimental: sign-in/payment host label protects (host:secure)",
+      "input": "https://secure.bank.example/start?session=1&x=2",
+      "mode": "experimental",
+      "expected": "https://secure.bank.example/start?session=1&x=2",
+      "status": "protected",
+      "reason": "host:secure"
+    },
+    {
+      "name": "experimental: sign-in/payment host label protects (host:pay)",
+      "input": "https://user@pay.shop.example/p?order=1",
+      "mode": "experimental",
+      "expected": "https://user@pay.shop.example/p?order=1",
+      "status": "protected",
+      "reason": "host:pay"
+    },
+    {
+      "name": "experimental: host label is only the first label",
+      "input": "https://www.login.example/x?y=1",
+      "mode": "experimental",
+      "expected": "https://www.login.example/x",
+      "status": "cleaned",
+      "removed": ["y"]
+    },
+    {
+      "name": "experimental: a single-label host is not a host label",
+      "input": "http://login/x?y=1",
+      "mode": "experimental",
+      "expected": "http://login/x",
+      "status": "cleaned",
+      "removed": ["y"]
+    },
+    {
+      "name": "host label does not protect in clean mode",
+      "input": "https://login.example.com/x?y=1&utm_source=z",
+      "expected": "https://login.example.com/x?y=1",
+      "status": "cleaned",
+      "removed": ["utm_source"]
+    },
+    {
+      "name": "experimental: OAuth client_id is protected",
+      "input": "https://www.example.com/connect?client_id=abc&scope=read",
+      "mode": "experimental",
+      "expected": "https://www.example.com/connect?client_id=abc&scope=read",
+      "status": "protected",
+      "reason": "param:client_id"
+    },
+    {
+      "name": "experimental: PKCE code_challenge is protected",
+      "input": "https://www.example.com/?code_challenge=x&code_challenge_method=S256",
+      "mode": "experimental",
+      "expected": "https://www.example.com/?code_challenge=x&code_challenge_method=S256",
+      "status": "protected",
+      "reason": "param:code_challenge"
+    },
+    {
+      "name": "experimental: Microsoft device login otc is protected",
+      "input": "https://microsoft.com/devicelogin?otc=ABCD",
+      "mode": "experimental",
+      "expected": "https://microsoft.com/devicelogin?otc=ABCD",
+      "status": "protected",
+      "reason": "param:otc"
     }
   ]
 }

@@ -44,6 +44,7 @@ struct CompiledProtection {
     param_suffixes: Vec<String>,
     param_combinations: Vec<Vec<String>>,
     experimental_params: HashSet<String>,
+    experimental_host_labels: HashSet<String>,
 }
 
 /// `rule_id` reported for parameters removed by experimental query stripping
@@ -198,6 +199,7 @@ impl Engine {
                 param_suffixes: p.param_suffixes,
                 param_combinations: p.param_combinations,
                 experimental_params: p.experimental_params.into_iter().collect(),
+                experimental_host_labels: p.experimental_host_labels.into_iter().collect(),
             },
         })
     }
@@ -321,6 +323,14 @@ impl Engine {
         // 1. Domain.
         if let Some(d) = p.domains.iter().find(|d| domain_matches(host, d)) {
             return Some(format!("domain:{d}"));
+        }
+        // 1b. Experimental only: a sign-in/payment host label (`login.example.com`).
+        if experimental {
+            if let Some((label, _)) = host.split_once('.') {
+                if !label.is_empty() && p.experimental_host_labels.contains(label) {
+                    return Some(format!("host:{label}"));
+                }
+            }
         }
 
         // 2. Path keyword (first keyword in file order).

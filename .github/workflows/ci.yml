@@ -98,6 +98,46 @@ jobs:
           }
       - run: npm run test:e2e
 
+  compat:
+    # The full end-to-end suite against Chrome for Testing: the minimum version
+    # declared in manifest.json (116) and a recent stable release. Branded
+    # Google Chrome no longer loads extensions from the command line, Chrome
+    # for Testing does. Archives are pinned by version and SHA-256.
+    name: Browser compatibility (Chrome ${{ matrix.chrome.version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        chrome:
+          - version: 116.0.5845.96
+            sha256: 5d8ab1f999071b213d85e46ea4505d99df818b6fd0f8449e79710cb5403ba858
+          - version: 157.0.8103.50
+            sha256: d17167bc092eb495a3b768c7467f27e35f625aa03834233a1663af67dcb668c9
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install system dependencies (fonts are optional)
+        run: npx playwright install-deps chromium || echo "::warning::system dependencies could not be installed"
+      - name: Download Chrome for Testing ${{ matrix.chrome.version }}
+        env:
+          VERSION: ${{ matrix.chrome.version }}
+          SHA256: ${{ matrix.chrome.sha256 }}
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 4 --retry-delay 5 -o chrome.zip \
+            "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/linux64/chrome-linux64.zip"
+          echo "${SHA256}  chrome.zip" | sha256sum -c -
+          unzip -q chrome.zip -d "$RUNNER_TEMP/cft"
+          echo "CHROMIUM_PATH=$RUNNER_TEMP/cft/chrome-linux64/chrome" >> "$GITHUB_ENV"
+      - run: npm run test:e2e
+
   conformance:
     name: TS vs Rust engine conformance (differential)
     runs-on: ubuntu-24.04
