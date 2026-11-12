@@ -627,15 +627,16 @@ let statsQueue: Promise<void> = Promise.resolve();
 const MAX_COUNT_PER_EVENT = 20;
 
 /**
- * Incognito tabs only reach the extension when the user allowed it there
- * (Chromium restarts the extension when that switch changes).
+ * Incognito tabs only reach the extension when the user allowed it there.
+ * Asked on every use – correctness must not depend on Chromium restarting the
+ * extension when that switch changes (found in review); unknown = allowed.
  */
-const incognitoAllowed: Promise<boolean> = chrome.extension.isAllowedIncognitoAccess().catch(() => true);
+const incognitoAllowed = (): Promise<boolean> => chrome.extension.isAllowedIncognitoAccess().catch(() => true);
 /** Tab id → incognito, learnt when a page load starts (the tab may be closed by the time it is counted). */
 const tabIncognito = new Map<number, boolean>();
 
 async function isIncognito(tab: chrome.tabs.Tab | number | undefined): Promise<boolean | undefined> {
-  if (!(await incognitoAllowed)) return false;
+  if (!(await incognitoAllowed())) return false;
   if (typeof tab !== 'number') return tab?.incognito;
   const known = tabIncognito.get(tab);
   if (known !== undefined) return known;
@@ -700,7 +701,7 @@ function onStatsBeforeRequest(d: chrome.webRequest.OnBeforeRequestDetails): unde
   requested.set(d.requestId, d.url);
   const tabId = d.tabId;
   if (!tabIncognito.has(tabId)) {
-    void incognitoAllowed.then(async (allowed) => {
+    void incognitoAllowed().then(async (allowed) => {
       if (!allowed) return;
       const tab = await chrome.tabs.get(tabId).catch(() => undefined);
       if (tab === undefined) return;
@@ -774,7 +775,9 @@ function registerStatsSoon(attempt = 0): void {
 }
 
 registerStats();
-chrome.permissions.onAdded.addListener(() => registerStatsSoon());
+chrome.permissions.onAdded.addListener((added) => {
+  if (added.permissions?.includes('webRequest') === true) registerStatsSoon();
+});
 function deleteStatsIfOff(): void {
   void chrome.permissions.contains(STATS_PERMISSION).then((granted) => {
     if (granted) return;
