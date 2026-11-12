@@ -56,3 +56,7 @@ Build release candidates from a fresh clone with its own `npm ci` (never via a
 resolve there).
 Phase 2 (desktop) and Phase 3 not started – see `docs/roadmap/roadmap.md`.
 Not published to any store – Chrome Web Store submission and future releases need maintainer approval.
+Project identity: `Untrackable <untrackable@estefano.me>` (project contact and
+tagger of release tags); security contact `security-untrackable@estefano.me`
+(SECURITY.md, after GitHub private vulnerability reporting). Never put personal
+names or addresses into tags, commits or docs.

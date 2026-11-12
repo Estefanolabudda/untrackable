@@ -42,7 +42,7 @@ keeps everything else, so the page still works.
 - [Known limitations](#known-limitations)
 - [Documentation](#documentation)
 - [Development](#development)
-- [Roadmap](#roadmap) · [Security](#security) · [License](#license)
+- [Roadmap](#roadmap) · [Security](#security) · [Contact](#contact) · [License](#license)
 
 ## Screenshots
 
@@ -370,6 +370,10 @@ See [docs/development.md](docs/development.md) and
 | `tests/fixtures/cases.json` | Shared conformance cases for both engines                |
 | `docs/`                     | Architecture, engine spec, security, privacy, roadmap    |
 
+Contributions are welcome – see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Please use the issue templates and never
+post real sign-in, payment or personal links.
+
 ## Roadmap
 
 1. **Chromium extension** – current phase (v0.1, v0.2 with Experimental mode).
@@ -382,6 +386,12 @@ See [docs/roadmap](docs/roadmap/roadmap.md).
 
 Please report vulnerabilities privately as described in
 [SECURITY.md](SECURITY.md).
+
+## Contact
+
+Project contact: **untrackable@estefano.me** (questions, privacy, press).
+Security reports: see [SECURITY.md](SECURITY.md). Bugs and suggestions: please
+use the issue tracker.
 
 ## License
 
