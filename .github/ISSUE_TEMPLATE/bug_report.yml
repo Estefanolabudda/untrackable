@@ -1,0 +1,42 @@
+name: Bug report
+description: A link was changed that should not have been, a tracker was missed, or something else does not work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Privacy first:** never paste real sign-in, payment, password-reset, unsubscribe or e-mail links, tokens or
+        anything that identifies you. Replace private parts with placeholders, e.g.
+        `https://shop.example/checkout?session=REDACTED&utm_source=newsletter`.
+
+        Security problems (e.g. a web page influencing the extension, data leaving the device): please use
+        private vulnerability reporting as described in SECURITY.md instead of this form.
+  - type: input
+    id: version
+    attributes:
+      label: Untrackable version
+      description: Shown in chrome://extensions.
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 157 on macOS 26
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options: [Clean, Strict, Experimental, Off / paused]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the link before and after (redacted), and how you opened it (click, typed, copied).
+    validations:
+      required: true

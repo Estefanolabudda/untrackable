@@ -1,0 +1,30 @@
+name: Tracking parameter request
+description: Suggest a tracking parameter that Untrackable should remove.
+labels: [rules]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Only parameters that are demonstrably used for tracking and never needed for a site to work can be added
+        (see CONTRIBUTING.md). Use synthetic example links – no real tokens or personal links.
+  - type: input
+    id: parameter
+    attributes:
+      label: Parameter name(s)
+      placeholder: e.g. mc_eid
+    validations:
+      required: true
+  - type: input
+    id: sites
+    attributes:
+      label: Where does it appear?
+      placeholder: e.g. newsletter links from a mailing service, on any domain
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence that it is used for tracking only
+      description: Documentation links or observations. Does the page still work without it?
+    validations:
+      required: true

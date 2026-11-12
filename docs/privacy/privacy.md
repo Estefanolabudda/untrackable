@@ -91,3 +91,8 @@ Websites can notice that their own tracking parameters arrive stripped and
 may infer that a cleaner is in use.
 
 **Untrackable does not make you anonymous.**
+
+## Contact
+
+Questions about privacy: **untrackable@estefano.me**. Security problems:
+see [SECURITY.md](../../SECURITY.md).

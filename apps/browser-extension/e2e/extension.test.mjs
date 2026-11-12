@@ -1891,7 +1891,13 @@ describe('redirect loops', () => {
       assert.equal(await retry(selfTab), false, 'only one retry per tab per minute');
       // A stale offer disappears once the tab successfully loads something else.
       await waitFor(async () => (await offerFor(selfTab)).offered, 'offer present again', 10_000).catch(() => {});
-      await self.goto(`http://other.test:${port}/unrelated`);
+      // The tab may still be finishing the looping load (its error page can
+      // commit after this navigation starts – seen once on Chrome 116 in CI).
+      // Retry only that case; the target is a harmless page, not a one-time link.
+      await self.goto(`http://other.test:${port}/unrelated`).catch(async (e) => {
+        if (!/interrupted by another navigation to "chrome-error:/.test(String(e))) throw e;
+        await self.goto(`http://other.test:${port}/unrelated`);
+      });
       await waitFor(async () => !(await offerFor(selfTab)).offered, 'stale offer cleared');
 
       // A redirector cannot use the retry to forward trackers to another site.
