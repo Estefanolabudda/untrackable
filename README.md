@@ -29,6 +29,10 @@ keeps everything else, so the page still works.
 > **Current release: [v0.2.0](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.2.0)**
 > – available as a ZIP on GitHub Releases for manual installation. Untrackable
 > is **not** available in the Chrome Web Store.
+>
+> The `main` branch already contains the upcoming **v0.3** (redesigned popup and
+> settings, optional local statistics). The screenshots show v0.3; it is not
+> released yet.
 
 ## Contents
 
@@ -119,8 +123,10 @@ At installation Chrome shows two warnings:
 | _Read and change all your data on all websites_ | Rewriting navigation URLs requires host access, and copy cleaning runs on every page. When you copy with the keyboard, Untrackable only checks whether the copied text is a single link; it does not read other page content. |
 | _Modify data you copy and paste_                | Writing the clean link to the clipboard when you copy a link or use "Copy clean link".                                                                                                                                        |
 
-The redirect-loop helper uses the optional `webNavigation` permission. It is
-off by default and only requested when you enable it in the settings. Details:
+Two optional permissions are only requested when you switch the feature on,
+and neither adds an install warning: `webNavigation` for the redirect-loop
+helper and, from v0.3, `webRequest` (read-only) for the local statistics. Both
+are off by default. Details:
 [threat model – permissions](docs/security/threat-model.md#permissions-and-justification).
 
 ## Cleaning modes
@@ -216,7 +222,7 @@ Right-click a page for **Copy clean page link**, or press
 <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>C</kbd> (or <kbd>Ctrl</kbd>+<kbd>Insert</kbd>):
 the clipboard receives the clean link. You can switch this off in the settings.
 
-**Statistics (optional, off by default).** Turn them on in the popup or the
+**Statistics (from v0.3, optional, off by default).** Turn them on in the popup or the
 settings to see how many tracking parameters Untrackable removed on this
 device – today, in the last 7 days and in total. Only removals Untrackable can
 confirm are counted (page loads and links you copy with it), and only numbers
@@ -384,7 +390,9 @@ See [docs/development.md](docs/development.md) and
 
 ## Roadmap
 
-1. **Chromium extension** – current phase (v0.1, v0.2 with Experimental mode).
+1. **Chromium extension** – current phase (v0.1, v0.2 with Experimental mode;
+   v0.3 with a redesigned interface and optional local statistics in
+   preparation).
 2. **macOS and Linux** – desktop URL handler built on the Rust engine.
 3. **Advanced privacy** – redirect tracking, custom rules, Firefox.
 
