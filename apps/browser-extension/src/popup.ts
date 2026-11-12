@@ -28,6 +28,9 @@ const loopSection = $('loop-section');
 const loopHostEl = $('loop-host');
 const loopRetry = $('loop-retry') as HTMLButtonElement;
 const siteNote = $('site-note');
+const siteNoteText = $('site-note-text');
+const exceptionHint = $('l-exception-d');
+const heroResume = $('hero-resume') as HTMLButtonElement;
 const statsEnable = $('stats-enable') as HTMLButtonElement;
 
 let tab: chrome.tabs.Tab | undefined;
@@ -50,10 +53,11 @@ function coveringException(s: Settings): string | undefined {
   return s.exceptions.find((d) => host === d || host.endsWith(`.${d}`));
 }
 
+/** The hero names the mode; the selected mode row below explains it (no repetition). */
 const MODE_DETAIL = {
-  clean: 'Clean · removes known trackers',
-  strict: 'Strict · also removes referral and analytics tags',
-  experimental: 'Experimental · removes all after “?”',
+  clean: 'Clean mode · cleaning links automatically',
+  strict: 'Strict mode · cleaning links automatically',
+  experimental: 'Experimental mode',
 } as const;
 
 function render(s: Settings): void {
@@ -74,7 +78,7 @@ function render(s: Settings): void {
   } else if (paused) {
     const until = new Date(s.pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     status = `Paused until ${until}`;
-    detail = 'Resumes automatically, or choose Resume.';
+    detail = 'Cleaning resumes automatically.';
     tone = 'off';
   } else {
     status = 'On';
@@ -85,13 +89,16 @@ function render(s: Settings): void {
       detail = 'Other tabs are still cleaned';
       tone = 'off';
     } else if (covering !== undefined) {
-      detail = 'This site is never cleaned (exception)';
+      status = 'Not cleaned on this site';
+      detail = 'Exception · other sites are still cleaned';
+      tone = 'off';
     }
   }
   statusEl.textContent = status;
   statusDetail.textContent = detail;
   hero?.classList.toggle('is-off', tone === 'off');
   hero?.classList.toggle('is-warn', tone === 'warn');
+  heroResume.hidden = !paused;
 
   pauseLabel.textContent = paused ? 'Resume' : `Pause all · ${PAUSE_MINUTES} min`;
   pauseIcon.setAttribute('href', paused ? '#i-play' : '#i-pause');
@@ -106,8 +113,14 @@ function render(s: Settings): void {
   // removed from here (found in review).
   const byParent = covering !== undefined && covering !== host;
   siteException.disabled = byParent;
-  siteNote.textContent = byParent ? `Covered by the exception for ${covering} (change it in Settings).` : '';
+  siteNoteText.textContent = byParent ? `Covered by the exception for ${covering}.` : '';
+  siteNote.hidden = !byParent;
+  // "Includes subdomains" means nothing for IP addresses and single-label hosts.
+  exceptionHint.hidden = !host.includes('.') || /^[\d.]+$|^\[/.test(host);
   copyBtn.disabled = tab?.url === undefined || hostOf(tab.url) === '';
+  copyBtn.title = copyBtn.disabled ? 'This tab shows no web page' : '';
+  if (copyBtn.disabled && copyResult.textContent === '')
+    copyResult.textContent = 'Open a web page to copy its clean link.';
 }
 
 async function init(): Promise<void> {
@@ -125,7 +138,7 @@ async function init(): Promise<void> {
       loopHostEl.textContent = state.loopHost;
       if (state.loopNotOurs === true) {
         $('loop-text').textContent =
-          'still fails with cleaning turned off for this site – the loop is probably not caused by Untrackable. If it involves another site, use “Pause in this tab” and reload; otherwise try again later or contact the site.';
+          'still fails without cleaning – probably not caused by Untrackable. If another site is involved, try “Pause in this tab” and reload.';
         loopRetry.hidden = true;
       }
       loopSection.hidden = false;
@@ -171,6 +184,8 @@ loopRetry.addEventListener('click', async () => {
   else if (loopHostEl.parentElement)
     loopHostEl.parentElement.textContent = 'Not possible right now – at most one reload per minute.';
 });
+heroResume.addEventListener('click', () => void saveSettings({ pausedUntil: 0 }));
+$('site-note-settings').addEventListener('click', () => void chrome.runtime.openOptionsPage());
 statsEnable.addEventListener('click', () => void setStatsEnabled(true).then(() => renderStats()));
 $('open-options').addEventListener('click', () => void chrome.runtime.openOptionsPage());
 $('stats-about').addEventListener('click', () => {

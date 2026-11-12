@@ -88,7 +88,7 @@
                 aria-describedby="m-exp-d"
               />
               <span id="exp-desc"
-                ><strong id="m-exp">Experimental – strip query parameters</strong
+                ><strong id="m-exp">Experimental</strong
                 ><small id="m-exp-d"
                   >Removes the whole query string (<code>?…</code>) of the pages you open, known tracker or not (links
                   you copy with Ctrl/Cmd+C get the Strict rules). Links Untrackable recognises as sign-in, payment,
@@ -156,7 +156,7 @@
               <dd id="stats-week">0</dd>
             </div>
             <div>
-              <dt>Since turned on</dt>
+              <dt title="Since statistics were turned on or last reset">Total</dt>
               <dd id="stats-total">0</dd>
             </div>
           </dl>
@@ -178,6 +178,10 @@
               Parameters left in place – protected links, your exceptions, while paused – are not counted. Removals the
               browser does not report may be missed. If another extension removes the very same parameters first, its
               removals can be counted too.
+            </li>
+            <li>
+              “Today” and “Last 7 days” follow your local calendar; “Total” counts since statistics were turned on or
+              last reset.
             </li>
             <li>
               Stored on this device only: one number per day for the last 7 days and a total. No addresses, sites,

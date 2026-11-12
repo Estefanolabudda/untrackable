@@ -187,7 +187,7 @@ runs when a redirect or rewrite is observed.
 | Trackers removed on this device     | verified removals of tracking parameters from page loads and copies, on this browser profile |
 | Today                               | counts filed under today's local date                                                        |
 | Last 7 days                         | today and the six previous local dates                                                       |
-| Total / Since turned on             | since statistics were turned on or last reset                                                |
+| Total                               | since statistics were turned on or last reset                                                |
 | + N other parameters (Experimental) | non-tracking parameters removed in Experimental mode, total                                  |
 
 The settings page explains the limits ("What is counted and stored").

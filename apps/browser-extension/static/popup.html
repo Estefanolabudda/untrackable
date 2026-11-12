@@ -59,6 +59,7 @@
             <svg class="icon" aria-hidden="true"><use href="#i-warn" /></svg><span>Sites may break.</span>
             <button type="button" class="quiet" id="exp-back">Back to Clean</button>
           </p>
+          <p class="hero-action"><button type="button" class="quiet" id="hero-resume" hidden>Resume now</button></p>
         </div>
         <input type="checkbox" class="switch" role="switch" id="enabled" aria-label="Clean links automatically" />
       </section>
@@ -97,7 +98,7 @@
             ><input type="radio" name="mode" value="experimental" aria-labelledby="m-exp" aria-describedby="exp-hint" />
             <span
               ><strong id="m-exp">Experimental <span class="tag pending-tag">Not active yet</span></strong
-              ><small id="exp-hint">Removes everything after “?”. Sites may break.</small></span
+              ><small id="exp-hint">Removes everything after “?”.</small></span
             ></label
           >
         </div>
@@ -112,9 +113,8 @@
           <svg class="icon" aria-hidden="true"><use href="#i-warn" /></svg>
           <div class="body">
             <p id="exp-confirm-text">
-              <strong>Experimental removes every query parameter</strong>, not only trackers. Searches, filters, carts,
-              sign-ins and other features may break. Recognised sign-in, payment and signed links are left alone – but
-              not every one is recognised.
+              <strong>Experimental removes every query parameter</strong>, not only trackers – searches, filters, carts
+              or sign-ins may break. Recognised sign-in, payment and signed links are left alone.
             </p>
             <div class="row">
               <button type="button" class="primary" id="exp-enable">Use Experimental</button>
@@ -138,7 +138,10 @@
             aria-labelledby="l-exception"
             aria-describedby="l-exception-d site-note"
         /></label>
-        <p id="site-note" class="note muted"></p>
+        <p id="site-note" class="note muted" hidden>
+          <span id="site-note-text"></span>
+          <button type="button" class="quiet small" id="site-note-settings">Change in Settings</button>
+        </p>
         <label class="setting"
           ><span
             ><span id="l-tab">Pause in this tab</span
@@ -180,14 +183,14 @@
               <dd id="stats-week">0</dd>
             </div>
             <div>
-              <dt>Total</dt>
+              <dt title="Since statistics were turned on or last reset">Total</dt>
               <dd id="stats-total">0</dd>
             </div>
           </dl>
           <p id="stats-other" class="muted fine" hidden></p>
         </div>
         <div id="stats-off" class="stats-off" hidden>
-          <p class="muted fine">Off. Only numbers would be stored – no links.</p>
+          <p class="muted fine">Off · would store numbers only, no links</p>
           <button type="button" class="quiet" id="stats-enable">Turn on</button>
         </div>
       </section>

@@ -165,6 +165,35 @@ fieldset.card .mode {
   justify-content: space-between;
   gap: 0.5rem;
 }
+/* Not cleaning here (off, paused, exception): the selected mode is not "live". */
+.hero.is-off ~ .modes .mode:has(input:checked) {
+  background: transparent;
+  border-color: var(--border);
+}
+/* Experimental keeps the warning colour in the mode list too. */
+.hero.is-warn ~ .modes .mode:has(input[value='experimental']:checked) {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+/* A notice needs the room: the numbers can wait. */
+main:has(#loop-section:not([hidden])) #stats,
+main:has(#exp-confirm:not([hidden])) #stats {
+  display: none;
+}
+.hero-action:has(button[hidden]) {
+  display: none;
+}
+.hero-action button {
+  min-height: 28px;
+  margin: 0.15rem 0 0 -0.45rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 13px;
+}
+.note button {
+  display: inline;
+  vertical-align: baseline;
+  margin-left: 0.15rem;
+}
 .hero-warn {
   display: flex;
   align-items: center;
