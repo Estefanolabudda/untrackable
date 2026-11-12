@@ -299,17 +299,24 @@ async function launchWith(extensionDir, profileDir) {
   const ready = () =>
     typeof chrome.storage?.local?.get === 'function' &&
     typeof chrome.declarativeNetRequest?.getDynamicRules === 'function';
-  for (let attempt = 1; ; attempt++) {
-    let ok = false;
-    try {
-      ok = await sw.evaluate(ready);
-    } catch (e) {
-      if (!/restarted|closed|Target/i.test(String(e))) throw e;
-      await sw.reacquire();
+  try {
+    for (let attempt = 1; ; attempt++) {
+      let ok = false;
+      try {
+        ok = await sw.evaluate(ready);
+      } catch (e) {
+        if (!/restarted|closed|Target/i.test(String(e))) throw e;
+        await sw.reacquire();
+      }
+      if (ok) break;
+      if (attempt >= 40) throw new Error('extension service worker did not become ready');
+      await new Promise((r) => setTimeout(r, 250));
     }
-    if (ok) break;
-    if (attempt >= 40) throw new Error('extension service worker did not become ready');
-    await new Promise((r) => setTimeout(r, 250));
+  } catch (e) {
+    // A browser left open here kept the test process alive until the CI
+    // timeout (seen in a CI log): close it before reporting the failure.
+    await Promise.race([ctx.close(), new Promise((r) => setTimeout(r, 15_000))]);
+    throw e;
   }
   return { context: ctx, sw };
 }
