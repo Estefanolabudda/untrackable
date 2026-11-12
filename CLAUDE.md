@@ -54,6 +54,8 @@ session cannot push tags (403), so the maintainer pushes it. See `docs/release/`
 Build release candidates from a fresh clone with its own `npm ci` (never via a
 `node_modules` symlink into another checkout – the workspace package would
 resolve there).
+v0.3.0 (public beta: redesign, optional statistics) prepared as a GitHub
+pre-release – see `docs/release/v0.3.0-beta-checklist.md`.
 Phase 2 (desktop) and Phase 3 not started – see `docs/roadmap/roadmap.md`.
 Not published to any store – Chrome Web Store submission and future releases need maintainer approval.
 Project identity: `Untrackable <untrackable@estefano.me>` (project contact and

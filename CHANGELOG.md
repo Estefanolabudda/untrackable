@@ -6,6 +6,11 @@ All notable changes are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] – 2026-11-12
+
+First public beta, published as a GitHub pre-release. The repository is now
+public and open source.
+
 ### Added
 
 - **Optional local statistics** (off by default): how many tracking
@@ -44,11 +49,27 @@ All notable changes are documented here. The format follows
   supported version) and 157 (stable); no functional differences found, only
   a harmless empty `?` that older versions leave after removal.
 
+### Project
+
+- Public repository with a Code of Conduct, issue forms that warn against
+  posting personal links, a pull-request template, a project contact
+  (`untrackable@estefano.me`) and a security contact
+  (`security-untrackable@estefano.me`, after GitHub private vulnerability
+  reporting).
+- Release tags are created with the project identity
+  `Untrackable <untrackable@estefano.me>`.
+
 ### Maintenance
 
 - Dependabot: `@types/node` majors (must match Node 22) and `playwright`
   (pinned to the development container's Chromium) are updated deliberately;
   `bit-vec` (dev-only) patch update.
+- Release workflow: no dependency cache in the only job with write access;
+  releases whose notes carry `<!-- release: prerelease -->` are published as
+  GitHub pre-releases.
+- CI: the compatibility jobs are named by major Chrome version, matching the
+  required status checks of the `main` ruleset; a timing race in the
+  redirect-loop end-to-end test was fixed.
 
 ## [0.2.0] – 2026-11-11
 
