@@ -291,7 +291,20 @@ async function launchWith(extensionDir, profileDir) {
   const ctx = await chromium.launchPersistentContext(profileDir, launch);
   let [worker] = ctx.serviceWorkers();
   worker ??= await ctx.waitForEvent('serviceworker');
-  return { context: ctx, sw: liveWorker(ctx, worker) };
+  const sw = liveWorker(ctx, worker);
+  // A freshly installed worker can be restarted by the browser once while it
+  // starts (seen on a slow CI runner with Chrome 116). Wait until a harmless
+  // call succeeds before any test uses it; only this probe is retried.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await sw.evaluate(() => chrome.runtime.id);
+      break;
+    } catch (e) {
+      if (attempt >= 5 || !/restarted|closed|Target/i.test(String(e))) throw e;
+      await sw.reacquire();
+    }
+  }
+  return { context: ctx, sw };
 }
 
 /**
@@ -325,12 +338,29 @@ function liveWorker(ctx, first) {
   return {
     url: () => current.url(),
     evaluate: async (fn, arg) => (await ensure()).evaluate(fn, arg),
+    /** Startup probe only: treat the current worker as gone and find the live one. */
+    reacquire: async () => {
+      await new Promise((r) => setTimeout(r, 500));
+      const live = ctx.serviceWorkers().filter((w) => w.url().includes(id));
+      if (live.length > 0 && live.at(-1) !== current) {
+        current = live.at(-1);
+        closed = false;
+        track(current);
+      } else if (live.length === 0) {
+        closed = true;
+        await ensure();
+      }
+    },
   };
 }
 
 after(async () => {
-  await context?.close();
+  // Never let a broken browser keep the run alive until the CI timeout (a
+  // failed startup once hung the job for 20 minutes).
+  await Promise.race([context?.close(), new Promise((r) => setTimeout(r, 15_000))]);
+  server?.closeAllConnections?.();
   server?.close();
+  httpsServer?.closeAllConnections?.();
   httpsServer?.close();
   if (userDataDir) rmSync(userDataDir, { recursive: true, force: true });
 });
