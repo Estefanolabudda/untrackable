@@ -2144,6 +2144,79 @@ describe('local statistics (opt-in)', () => {
   });
 });
 
+describe('incognito (real incognito window, extension allowed there)', () => {
+  test('cleans in incognito, but never counts incognito page loads or copies', async () => {
+    const profile = mkdtempSync(join(tmpdir(), 'untrackable-e2e-incognito-'));
+    const second = await launchWith(dist, profile);
+    const id = new URL(second.sw.url()).host;
+    try {
+      // What a user does in chrome://extensions: developer mode (needed for an
+      // unpacked extension to survive the reload) and "Allow in Incognito".
+      const ext = await second.context.newPage();
+      await ext.goto('chrome://extensions');
+      await ext.evaluate(async (extId) => {
+        await chrome.developerPrivate.updateProfileConfiguration({ inDeveloperMode: true });
+        await chrome.developerPrivate.updateExtensionConfiguration({ extensionId: extId, incognitoAccess: true });
+      }, id);
+      await waitFor(
+        async () =>
+          (await ext.evaluate((extId) => chrome.developerPrivate.getExtensionInfo(extId).then((i) => i.state), id)) ===
+          'ENABLED',
+        'extension enabled again after the incognito switch',
+      );
+      await ext.close();
+      assert.equal(await second.sw.evaluate(() => chrome.extension.isAllowedIncognitoAccess()), true);
+      await waitFor(
+        async () => (await second.sw.evaluate(() => chrome.declarativeNetRequest.getDynamicRules())).length > 0,
+        'rules',
+      );
+      // Statistics on, through the real opt-in click.
+      const options = await second.context.newPage();
+      await options.goto(`chrome-extension://${id}/options.html`);
+      await options.click('#stats-enabled');
+      await waitFor(
+        () => second.sw.evaluate(() => chrome.webRequest?.onBeforeRequest.hasListeners() === true),
+        'statistics listeners',
+      );
+      const stored = () => second.sw.evaluate(async () => (await chrome.storage.local.get('stats')).stats);
+
+      // An incognito window: the link is cleaned, nothing is counted.
+      const target = `${origin('news.test')}/incognito?id=1&utm_source=x&fbclid=y`;
+      const win = await second.sw.evaluate((u) => chrome.windows.create({ incognito: true, url: u }), target);
+      assert.equal(win.incognito, true);
+      const tab = await waitFor(
+        () =>
+          second.sw.evaluate(async (w) => {
+            const [t] = await chrome.tabs.query({ windowId: w });
+            return t?.status === 'complete' && t.url?.includes('/incognito') ? t : undefined;
+          }, win.id),
+        'incognito page loaded',
+      );
+      assert.equal(tab.incognito, true);
+      assert.equal(tab.url.replace(/\?$/, ''), `${origin('news.test')}/incognito?id=1`, 'cleaned in incognito');
+      // An explicit copy in the incognito tab works, but is not counted either.
+      const copy = await options.evaluate(
+        (t) => chrome.runtime.sendMessage({ type: 'copyCleanTab', tabId: t }),
+        tab.id,
+      );
+      assert.equal(copy.ok, true);
+      await second.sw.evaluate((w) => chrome.windows.remove(w), win.id);
+      await new Promise((r) => setTimeout(r, 1000));
+      assert.equal(await stored(), undefined, 'incognito never counted');
+
+      // The same in a normal tab is counted – statistics were really on.
+      const page = await second.context.newPage();
+      await page.goto(`${origin('news.test')}/normal?id=1&utm_source=x&fbclid=y`);
+      await page.close();
+      await waitFor(async () => (await stored())?.total?.trackers === 2, 'normal tab counted');
+      await options.close();
+    } finally {
+      await Promise.race([second.context.close(), new Promise((r) => setTimeout(r, 15_000))]);
+      rmSync(profile, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('privacy', () => {
   test('storage contains only settings – no URLs or browsing data', async () => {
     await visit('/article?utm_source=x');
