@@ -1,6 +1,8 @@
 # Contributing
 
-Thanks for helping make the web a little less trackable.
+Thanks for helping make the web a little less trackable. By participating you
+agree to the [Code of Conduct](CODE_OF_CONDUCT.md). Security problems go through
+[SECURITY.md](SECURITY.md), never a public issue.
 
 ## Principles
 
