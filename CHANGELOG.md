@@ -8,7 +8,7 @@ All notable changes are documented here. The format follows
 
 ### Security and reliability
 
-- Regression corpus of 255 sensitive real-world URL shapes (sign-in, reset,
+- Regression corpus of 259 sensitive real-world URL shapes (sign-in, reset,
   payment, signed downloads, banking/government, CSRF), checked per mode in
   both engines and against the navigation rules.
 - Experimental mode keeps the query of sign-in and payment hosts (first host
@@ -19,7 +19,8 @@ All notable changes are documented here. The format follows
 - Settings carry a format version and are migrated conservatively on install,
   update and browser start; context menus are refreshed on every update.
 - Upgrade tests install the published 0.1.0 and 0.2.0 releases (checksums
-  verified), update them in place as documented and check settings, menus,
+  verified), update them in place as documented (replace the folder, reload)
+  and check settings, menus,
   rules and navigation.
 - The full end-to-end suite also runs on Chrome for Testing 116 (minimum
   supported version) and 157 (stable); no functional differences found, only
