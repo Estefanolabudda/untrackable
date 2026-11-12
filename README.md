@@ -25,6 +25,8 @@ keeps everything else, so the page still works.
 
 Both are installed manually from GitHub Releases and **do not update
 automatically**. Untrackable is **not** available in the Chrome Web Store.
+Security fixes are only published in new versions, not backported to v0.2.0 –
+see [SECURITY.md](SECURITY.md#supported-versions).
 
 **[Download the v0.3.0 beta](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.3.0)**
 · [installation steps](#installation)
