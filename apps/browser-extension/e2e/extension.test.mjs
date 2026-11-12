@@ -292,17 +292,24 @@ async function launchWith(extensionDir, profileDir) {
   let [worker] = ctx.serviceWorkers();
   worker ??= await ctx.waitForEvent('serviceworker');
   const sw = liveWorker(ctx, worker);
-  // A freshly installed worker can be restarted by the browser once while it
-  // starts (seen on a slow CI runner with Chrome 116). Wait until a harmless
-  // call succeeds before any test uses it; only this probe is retried.
+  // A freshly installed worker can be restarted by the browser while it starts,
+  // and its extension APIs can appear a moment after the worker (both seen on
+  // a slow CI runner with Chrome 116). Wait until the APIs the tests use are
+  // there before any test runs; only this read-only probe is retried.
+  const ready = () =>
+    typeof chrome.storage?.local?.get === 'function' &&
+    typeof chrome.declarativeNetRequest?.getDynamicRules === 'function';
   for (let attempt = 1; ; attempt++) {
+    let ok = false;
     try {
-      await sw.evaluate(() => chrome.runtime.id);
-      break;
+      ok = await sw.evaluate(ready);
     } catch (e) {
-      if (attempt >= 5 || !/restarted|closed|Target/i.test(String(e))) throw e;
+      if (!/restarted|closed|Target/i.test(String(e))) throw e;
       await sw.reacquire();
     }
+    if (ok) break;
+    if (attempt >= 40) throw new Error('extension service worker did not become ready');
+    await new Promise((r) => setTimeout(r, 250));
   }
   return { context: ctx, sw };
 }
