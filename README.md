@@ -16,6 +16,10 @@ Marketing links often carry identifiers such as `utm_*`, `fbclid` or `gclid`
 that tell a site where you came from. Untrackable strips the ones it knows and
 keeps everything else, so the page still works.
 
+<p align="center">
+  <img src="docs/images/popup.png" width="280" alt="Untrackable popup: switched on in Clean mode, with mode choice, controls for the current site and optional statistics">
+</p>
+
 ## Which version should I use?
 
 | Version                                                                          | Status                               | Choose it if …                                                                                                                         |
@@ -28,27 +32,38 @@ automatically**. Untrackable is **not** available in the Chrome Web Store.
 Security fixes are only published in new versions, not backported to v0.2.0 –
 see [SECURITY.md](SECURITY.md#supported-versions).
 
-**[Download the v0.3.0 beta](https://github.com/Estefanolabudda/untrackable/releases/tag/v0.3.0)**
-· [installation steps](#installation)
+## Quick start
+
+1. Download
+   [`untrackable-chromium-0.3.0.zip`](https://github.com/Estefanolabudda/untrackable/releases/download/v0.3.0/untrackable-chromium-0.3.0.zip)
+   (v0.3.0 beta) and unzip it into a folder you will keep.
+2. Open `chrome://extensions` and turn on **Developer mode** (top right).
+3. Click **Load unpacked** and choose the unzipped folder.
+4. Done – links are now cleaned automatically. Pin Untrackable via the
+   puzzle-piece menu to reach the popup quickly.
+
+Prefer the previous version, want to verify the download or need to update?
+See [Installation](#installation). Something not working? See
+[If a site does not work](#if-a-site-does-not-work).
 
 ## Contents
 
-- [Which version should I use?](#which-version-should-i-use)
-- [Why Untrackable?](#why-untrackable)
-- [What it can and cannot do](#what-it-can-and-cannot-do)
-- [What's new in v0.3.0 (beta)](#whats-new-in-v030-beta)
-- [Screenshots](#screenshots)
-- [Installation](#installation)
-- [Cleaning modes](#cleaning-modes)
-- [Experimental mode](#experimental-mode)
-- [Using Untrackable](#using-untrackable)
-- [How links are protected](#how-links-are-protected)
-- [Privacy](#privacy)
-- [Known limitations](#known-limitations)
-- [Reporting bugs and vulnerabilities](#reporting-bugs-and-vulnerabilities)
-- [Documentation](#documentation)
-- [Development](#development)
-- [Roadmap](#roadmap) · [Security](#security) · [Contact](#contact) · [License](#license)
+- **Getting started:** [Which version?](#which-version-should-i-use) ·
+  [Quick start](#quick-start) · [Installation](#installation) ·
+  [What's new in v0.3.0](#whats-new-in-v030-beta)
+- **About:** [Why Untrackable?](#why-untrackable) ·
+  [What it can and cannot do](#what-it-can-and-cannot-do) ·
+  [Screenshots](#screenshots) · [Privacy](#privacy)
+- **Using it:** [Cleaning modes](#cleaning-modes) ·
+  [Using Untrackable](#using-untrackable) ·
+  [If a site does not work](#if-a-site-does-not-work) · [FAQ](#faq) ·
+  [Experimental mode](#experimental-mode)
+- **Details:** [How links are protected](#how-links-are-protected) ·
+  [Known limitations](#known-limitations) ·
+  [Documentation](#documentation)
+- **Help and project:** [Reporting bugs and vulnerabilities](#reporting-bugs-and-vulnerabilities) ·
+  [Development](#development) · [Roadmap](#roadmap) · [Contact](#contact) ·
+  [License](#license)
 
 ## Why Untrackable?
 
@@ -150,7 +165,8 @@ download the new ZIP, replace the contents of the same folder and click the
 reload icon on Untrackable's card in `chrome://extensions`. Loading from the
 same folder normally keeps your settings.
 
-#### Verify the download (optional)
+<details>
+<summary><strong>Verify the download (optional)</strong></summary>
 
 Each release lists the SHA-256 checksum of the ZIP in its notes and in the
 attached `SHA256SUMS` file:
@@ -170,7 +186,10 @@ The ZIP is built reproducibly by the release workflow from the tagged commit,
 so you can also rebuild it from source and compare (see
 [docs/development.md](docs/development.md)).
 
-### From source
+</details>
+
+<details>
+<summary><strong>Build from source</strong></summary>
 
 ```sh
 git clone https://github.com/Estefanolabudda/untrackable.git
@@ -183,6 +202,8 @@ Then load `apps/browser-extension/dist` as an unpacked extension (steps 3–5
 above). `npm run package -w apps/browser-extension` writes the same ZIP as the
 release to `artifacts/`. The `main` branch may contain changes that are not
 released yet.
+
+</details>
 
 ### Permissions
 
@@ -330,6 +351,46 @@ removed and why – nothing is sent anywhere.
 | `!`   | The browser could not install the cleaning or protection rules – navigation cleaning is disabled |
 | `↻`   | This tab hit a redirect loop (only with the optional redirect-loop helper)                       |
 
+## If a site does not work
+
+Untrackable is designed to leave links alone when in doubt, but no list of
+patterns is perfect. If a page breaks after Untrackable cleaned its link:
+
+| Problem                                                    | What to do                                                                                                                                                |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A page is broken once                                      | Open the popup, switch on **Pause in this tab**, then go back and open the link again – or right-click the link and choose **Open link without cleaning** |
+| A site is always broken                                    | Open the popup on that site and switch on **Never clean links to this site**                                                                              |
+| Problems started after switching to Strict or Experimental | Switch back to **Clean** (the recommended default)                                                                                                        |
+| "Too many redirects"                                       | Turn on the redirect-loop helper in the settings and click **Reload once without cleaning** in the popup, or add a site exception                         |
+| A copied link still has trackers                           | Copy cleaning only works for exactly one selected link copied with the keyboard – use **Copy clean link** in the popup or the right-click menu instead    |
+| The toolbar badge shows `!`                                | The browser could not install the cleaning rules, so navigation cleaning is off. Reload Untrackable in `chrome://extensions`; if it stays, report a bug   |
+| You need everything unchanged for a while                  | **Pause all · 15 min** in the popup, or turn off **Clean links automatically**                                                                            |
+
+Still broken? Please [report it](#reporting-bugs-and-vulnerabilities) – with a
+placeholder instead of the real link if it contains anything personal.
+
+## FAQ
+
+**Does Untrackable make me anonymous?** No. It removes tracking parameters
+from links. Cookies, your IP address, browser fingerprinting and tracking
+scripts are not affected – combine it with your browser's privacy settings or
+a content blocker if you need more.
+
+**Does it send or collect any data?** No. Cleaning happens on your device,
+there is no telemetry, and Untrackable makes no network requests of its own.
+The optional statistics store numbers only, locally.
+
+**Why do I need Developer mode?** Untrackable is not in the Chrome Web Store
+yet, so it is loaded as an unpacked extension, which requires Developer mode.
+
+**Will it update itself?** No. Check the
+[releases page](https://github.com/Estefanolabudda/untrackable/releases) and
+update manually (see [Installation](#installation)).
+
+**Which mode should I use?** **Clean** for everyday browsing. Strict removes
+more and may occasionally affect a site; Experimental removes the whole query
+string and will break some sites.
+
 ## How links are protected
 
 Removing a parameter can break a link that depends on it. Untrackable
@@ -389,6 +450,9 @@ See the [privacy statement](docs/privacy/privacy.md) and the
 - Redirect-based click tracking (`tracker.example/click?u=…`) is not unwrapped
   yet.
 
+<details>
+<summary><strong>Technical details: navigation cleaning, copy cleaning and Experimental mode</strong></summary>
+
 **Navigation cleaning** (Chromium `declarativeNetRequest`)
 
 - Mixed-case spellings (`Utm_Source`) and unlisted `utm_*` names are handled.
@@ -430,6 +494,8 @@ See the [privacy statement](docs/privacy/privacy.md) and the
 - A server that insists on its query parameters ends with "too many
   redirects".
 - Sites can tell that their own links arrive without query parameters.
+
+</details>
 
 **v0.3.0 beta**
 
